@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet } from 'lucide-vue-next'
+import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download } from 'lucide-vue-next'
 import { fetchTransactions, fetchTransactionSummary, deleteTransaction, updateTransaction } from '../utils/api'
 import type { Transaction, TransactionSummary } from '../types'
+import { useExport } from '../composables/useExport'
 
 const props = defineProps<{
   transactions?: Transaction[]
@@ -14,10 +15,13 @@ const emit = defineEmits<{
   (e: 'transactionUpdated', tx: Transaction): void
 }>()
 
+const { exportTransactionsCSV } = useExport()
+
 const currentDate = ref(new Date())
 const transactionsList = ref<Transaction[]>([])
 const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
+const selectedCategoryFilter = ref<string>('')
 
 // 编辑态
 const editingTx = ref<Transaction | null>(null)
@@ -70,9 +74,21 @@ interface DayGroup {
   dayTotalExpense: number
 }
 
+const toggleCategoryFilter = (cat: string) => {
+  if (selectedCategoryFilter.value === cat) {
+    selectedCategoryFilter.value = ''
+  } else {
+    selectedCategoryFilter.value = cat
+  }
+}
+
 const dayGroups = computed(() => {
   const map = new Map<string, Transaction[]>()
-  transactionsList.value.forEach((tx) => {
+  const listToGroup = selectedCategoryFilter.value
+    ? transactionsList.value.filter((t) => t.category === selectedCategoryFilter.value)
+    : transactionsList.value
+
+  listToGroup.forEach((tx) => {
     const d = new Date(tx.occurred_at)
     const key = !isNaN(d.getTime())
       ? `${d.getMonth() + 1}月${d.getDate()}日`
@@ -172,7 +188,7 @@ const spectrumItems = computed(() => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-5 sm:px-8 py-20 sm:py-28 text-left">
+  <div class="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
     
     <!-- 标头与月度切换器 -->
     <header class="pb-10 border-b border-[var(--border-subtle)] mb-12 space-y-4">
@@ -181,18 +197,29 @@ const spectrumItems = computed(() => {
           <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
             记账
           </h1>
-          <span class="font-mono-archive text-xs uppercase tracking-widest text-[var(--ink-muted)]">
-            // BOOKKEEPING
+          <span class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
+            生活收支与记账
           </span>
         </div>
 
-        <button
-          @click="emit('openAdd')"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          <span>记一笔</span>
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            @click="exportTransactionsCSV(transactionsList)"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+            title="导出当前月份账目 CSV 表格"
+          >
+            <Download class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">导出月度 CSV</span>
+          </button>
+
+          <button
+            @click="emit('openAdd')"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+          >
+            <Plus class="w-3.5 h-3.5" />
+            <span>记一笔</span>
+          </button>
+        </div>
       </div>
 
       <!-- 月度指示器 -->
@@ -226,21 +253,21 @@ const spectrumItems = computed(() => {
     <!-- 月度核心收支概览 (Editorial 优雅排版，非粗笨 SaaS 卡片) -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 pb-12 mb-14 border-b border-[var(--border-subtle)] font-serif-editorial">
       <div class="space-y-1">
-        <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">// 本月支出</span>
+        <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">本月支出</span>
         <div class="text-3xl font-medium tracking-tight text-[var(--ink-primary)]">
           ¥{{ formatMoney(summary?.total_expense || 0) }}
         </div>
       </div>
 
       <div class="space-y-1">
-        <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">// 本月收入</span>
+        <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">本月收入</span>
         <div class="text-3xl font-medium tracking-tight text-[var(--accent-moss)]">
           ¥{{ formatMoney(summary?.total_income || 0) }}
         </div>
       </div>
 
       <div class="space-y-1">
-        <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">// 结余</span>
+        <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">当月结余</span>
         <div
           class="text-3xl font-medium tracking-tight"
           :class="(summary?.balance || 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'"
@@ -256,7 +283,7 @@ const spectrumItems = computed(() => {
       class="pb-10 mb-14 border-b border-[var(--border-subtle)] space-y-4"
     >
       <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-        <span class="tracking-wider">// 支出光谱分布 · SPECTRUM</span>
+        <span class="tracking-wider">支出光谱分布</span>
         <span>{{ spectrumItems.length }} 个支出类目</span>
       </div>
 
@@ -271,18 +298,31 @@ const spectrumItems = computed(() => {
         ></div>
       </div>
 
-      <!-- 类目图例与占比明细 -->
+      <!-- 类目图例与占比明细 (点击可按类目聚焦) -->
       <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono-archive">
-        <div
+        <button
           v-for="item in spectrumItems"
           :key="item.category"
-          class="flex items-center gap-2 text-[var(--ink-secondary)]"
+          @click="toggleCategoryFilter(item.category)"
+          class="flex items-center gap-2 py-0.5 px-1.5 rounded-xs transition-colors cursor-pointer border"
+          :class="selectedCategoryFilter === item.category
+            ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold'
+            : 'border-transparent text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
+          :title="selectedCategoryFilter === item.category ? '点击取消类目过滤' : `点击仅看【${item.category}】流水`"
         >
           <span class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: item.color }"></span>
           <span>{{ item.category }}</span>
           <span class="text-[var(--ink-muted)]">{{ item.percentage }}%</span>
           <span class="font-mono-archive text-[var(--ink-primary)]">¥{{ formatMoney(item.amount) }}</span>
-        </div>
+        </button>
+
+        <button
+          v-if="selectedCategoryFilter"
+          @click="selectedCategoryFilter = ''"
+          class="text-[11px] text-[var(--accent-warm)] hover-underline cursor-pointer ml-auto"
+        >
+          清空类目筛选（显示全部）
+        </button>
       </div>
     </div>
 
@@ -351,7 +391,7 @@ const spectrumItems = computed(() => {
                 {{ tx.type === 'expense' ? '-' : '+' }}¥{{ formatMoney(tx.amount) }}
               </span>
 
-              <div class="hidden group-hover:flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
+              <div class="flex sm:hidden sm:group-hover:flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
                 <button
                   @click="startEdit(tx)"
                   class="p-1 hover:text-[var(--ink-primary)] cursor-pointer"

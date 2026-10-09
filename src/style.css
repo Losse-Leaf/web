@@ -11,6 +11,30 @@
     --border-divider: rgba(24, 23, 22, 0.12);
     --accent-warm: #a24f2b;
     --accent-moss: #3f5a4a;
+    --activity-empty: rgba(24, 23, 22, 0.08);
+    --activity-l1: #8faea0;
+    --activity-l2: #658c74;
+    --activity-l3: #426a51;
+    --activity-l4: #234633;
+  }
+
+  /* 暗房安全灯调色板 (Darkroom Mode) */
+  html.darkroom,
+  html.dark {
+    --bg-archive: #141312;
+    --bg-subtle: #1d1b19;
+    --ink-primary: #ede8e1;
+    --ink-secondary: #a8a399;
+    --ink-muted: #6e6a62;
+    --border-subtle: rgba(237, 232, 225, 0.08);
+    --border-divider: rgba(237, 232, 225, 0.14);
+    --accent-warm: #c85635;
+    --accent-moss: #507661;
+    --activity-empty: rgba(237, 232, 225, 0.08);
+    --activity-l1: #2d4c38;
+    --activity-l2: #3f684e;
+    --activity-l3: #5c8f6f;
+    --activity-l4: #84bfa6;
   }
 
   body {
@@ -23,6 +47,7 @@
     overflow-x: hidden;
     line-height: 1.7;
     letter-spacing: -0.01em;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   /* 优雅衬线排版字体 (Serif Editorial) */
@@ -97,8 +122,29 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
+html.darkroom .paper-grain-overlay,
+html.dark .paper-grain-overlay {
+  opacity: 0.045;
+  filter: invert(1);
+}
+
+html.darkroom ::-webkit-scrollbar-thumb,
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(237, 232, 225, 0.18);
+}
+
+html.darkroom ::-webkit-scrollbar-thumb:hover,
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(237, 232, 225, 0.32);
+}
+
 /* 胶片暗房装裱底片框 */
 .film-frame {
   box-shadow: 0 2px 12px rgba(24, 23, 22, 0.04), 0 1px 3px rgba(24, 23, 22, 0.03);
+}
+
+html.darkroom .film-frame,
+html.dark .film-frame {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 

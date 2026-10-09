@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import type { LifeEntry } from '../types'
 
 const props = defineProps<{
@@ -11,14 +11,19 @@ const emit = defineEmits<{
   (e: 'selectDate', date: string): void
 }>()
 
+const scrollContainer = ref<HTMLElement | null>(null)
+
+// 悬停气泡信息
 const hoveredDay = ref<{
   date: string
   dayOfWeek: string
   entries: LifeEntry[]
   count: number
+  x: number
+  y: number
 } | null>(null)
 
-// 规范化日期格式辅助函数：确保 "2026.10.09" 或 "2026-10-09" 统一匹配
+// 规范化日期格式辅助函数：确保 "2026.10.09" 或 "2026-10-09" 统一为 "YYYY.MM.DD"
 const normalizeDate = (d: string) => {
   return d.replace(/-/g, '.').trim()
 }
@@ -37,16 +42,22 @@ const entryMap = computed(() => {
   return map
 })
 
-// 周几名称
-const weekDays = ['一', '二', '三', '四', '五', '六', '日']
-const weekDayLabels = ['一', '', '三', '', '五', '', '日']
+// 星期几定义（GitHub 规范：第 0 行周日，第 6 行周六）
+const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+// GitHub 风格左侧只标记周一、周三、周五
+const weekLabels = [
+  { index: 1, label: '周一' },
+  { index: 3, label: '周三' },
+  { index: 5, label: '周五' },
+]
 
-interface DayCell {
+export interface DayCell {
   date: string
   displayDate: string
   dayOfWeekStr: string
+  dayOfWeek: number
   month: number
-  inYear: boolean
+  year: number
   isToday: boolean
   isFuture: boolean
   entries: LifeEntry[]
@@ -54,49 +65,63 @@ interface DayCell {
   level: number
 }
 
-// 生成 2026 年完整 52~53 周的刻度网格
+// 今天日期基准
+const today = new Date()
+today.setHours(0, 0, 0, 0)
+const pad = (n: number) => String(n).padStart(2, '0')
+const todayStr = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(today.getDate())}`
+
+const todayDisplay = computed(() => todayStr)
+
+// 生成对齐 GitHub 的完整 53 周矩阵（最近整整 1 年，最新时间就是今天）
 const calendarWeeks = computed(() => {
   const weeks: DayCell[][] = []
-  
-  // 2026年1月1日是周四，当前周的周一为 2025年12月29日；补齐到2026年最后一周周日 (2027-01-03)
-  const startDate = new Date(2025, 11, 29) // 2025-12-29 (周一)
-  const finalDate = new Date(2027, 0, 3)
 
-  const realNow = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const todayStr = `${realNow.getFullYear()}.${pad(realNow.getMonth() + 1)}.${pad(realNow.getDate())}`
+  // 今天的星期 (0=Sun, 6=Sat)
+  const todayDayOfWeek = today.getDay()
 
-  let current = new Date(startDate)
+  // GitHub 热力图规范：从今天往前推 52 周，并对齐到周日
+  // 52 周 * 7 天 = 364 天。起始周的第一天(周日) 为：
+  const startDate = new Date(today)
+  startDate.setDate(today.getDate() - 52 * 7 - todayDayOfWeek)
+  startDate.setHours(0, 0, 0, 0)
+
+  // 终点日期：当前周的周六（或者今天之后的本周余下天数被标记为 isFuture）
+  const endDate = new Date(today)
+  endDate.setDate(today.getDate() + (6 - todayDayOfWeek))
+  endDate.setHours(0, 0, 0, 0)
+
+  let cur = new Date(startDate)
   let currentWeek: DayCell[] = []
 
-  while (current <= finalDate) {
-    const y = current.getFullYear()
-    const m = current.getMonth() + 1
-    const d = current.getDate()
-    
-    const mStr = m < 10 ? `0${m}` : `${m}`
-    const dStr = d < 10 ? `0${d}` : `${d}`
-    const dateStr = `${y}.${mStr}.${dStr}`
-    
-    const dayOfWeek = (current.getDay() + 6) % 7 // 0=周一, 6=周日
-    const inYear = y === 2026
-    const isToday = dateStr === todayStr
-    const isFuture = dateStr > todayStr
+  while (cur <= endDate) {
+    const y = cur.getFullYear()
+    const m = cur.getMonth() + 1
+    const d = cur.getDate()
 
-    const matchedEntries = entryMap.value.get(dateStr) || []
+    const dateStr = `${y}.${pad(m)}.${pad(d)}`
+    const dayOfWeek = cur.getDay() // 0=Sun, ..., 6=Sat
+
+    const isToday = dateStr === todayStr
+    const isFuture = cur.getTime() > today.getTime()
+
+    const matchedEntries = !isFuture ? (entryMap.value.get(dateStr) || []) : []
     const count = matchedEntries.length
 
+    // GitHub 4级色阶
     let level = 0
     if (count === 1) level = 1
     else if (count === 2) level = 2
-    else if (count >= 3) level = 3
+    else if (count === 3) level = 3
+    else if (count >= 4) level = 4
 
     currentWeek.push({
       date: dateStr,
       displayDate: `${m}月${d}日`,
       dayOfWeekStr: `周${weekDays[dayOfWeek]}`,
+      dayOfWeek,
       month: m,
-      inYear,
+      year: y,
       isToday,
       isFuture,
       entries: matchedEntries,
@@ -109,139 +134,234 @@ const calendarWeeks = computed(() => {
       currentWeek = []
     }
 
-    current.setDate(current.getDate() + 1)
+    cur.setDate(cur.getDate() + 1)
   }
 
   return weeks
 })
 
-// 计算月份标签在横坐标的位置
+// 月份横向标签（GitHub 风格：按周计算月份变化）
 const monthLabels = computed(() => {
-  const months: { label: string; weekIndex: number }[] = []
+  const labels: { label: string; weekIndex: number }[] = []
   let lastMonth = -1
 
   calendarWeeks.value.forEach((week, wIdx) => {
-    // 以本周第一天判断月份切换
-    const firstDay = week.find(d => d.inYear)
-    if (firstDay && firstDay.month !== lastMonth) {
-      lastMonth = firstDay.month
-      const chineseMonths = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
-      months.push({
-        label: chineseMonths[lastMonth - 1],
-        weekIndex: wIdx,
-      })
+    // 查看本周是否有发生月份转换的日子，优先取周内靠前的日子
+    const firstNonFutureDay = week.find(d => !d.isFuture) || week[0]
+    if (firstNonFutureDay && firstNonFutureDay.month !== lastMonth) {
+      // 避免首尾相隔过近（至少间隔 2 周才渲染下一个标签）
+      if (labels.length === 0 || wIdx - labels[labels.length - 1].weekIndex >= 2) {
+        lastMonth = firstNonFutureDay.month
+        const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+        labels.push({
+          label: monthNames[lastMonth - 1],
+          weekIndex: wIdx,
+        })
+      }
     }
   })
 
-  return months
+  return labels
 })
 
-// 活跃总统计
-const totalEntriesCount = computed(() => {
-  return props.entries.length
+// 最近一年的全部有效天数集合
+const pastYearDays = computed(() => {
+  const list: DayCell[] = []
+  calendarWeeks.value.forEach(w => {
+    w.forEach(d => {
+      if (!d.isFuture) list.push(d)
+    })
+  })
+  return list
 })
 
+// 统计：过去一年印记总数
+const totalPastYearEntries = computed(() => {
+  return pastYearDays.value.reduce((acc, d) => acc + d.count, 0)
+})
+
+// 统计：过去一年活跃天数
 const activeDaysCount = computed(() => {
-  return entryMap.value.size
+  return pastYearDays.value.filter(d => d.count > 0).length
+})
+
+// 统计：连续记录 Streak 计算（当前连续 & 最长连续）
+const streaks = computed(() => {
+  const days = pastYearDays.value
+  let maxStreak = 0
+  let curRunning = 0
+
+  days.forEach(d => {
+    if (d.count > 0) {
+      curRunning++
+      if (curRunning > maxStreak) maxStreak = curRunning
+    } else {
+      curRunning = 0
+    }
+  })
+
+  // 计算当前连续天数（从今天往回倒推）
+  let currentStreak = 0
+  for (let i = days.length - 1; i >= 0; i--) {
+    if (days[i].count > 0) {
+      currentStreak++
+    } else {
+      // 如果今天是 0，允许从昨天看起
+      if (i === days.length - 1 && days[i].count === 0) {
+        continue
+      }
+      break
+    }
+  }
+
+  return {
+    longest: maxStreak,
+    current: currentStreak,
+  }
 })
 
 const onCellClick = (cell: DayCell) => {
-  if (!cell.inYear || cell.count === 0) return
+  if (cell.isFuture || cell.count === 0) return
   if (props.selectedDate === cell.date) {
     emit('selectDate', '')
   } else {
     emit('selectDate', cell.date)
   }
 }
+
+const onCellHover = (cell: DayCell, event: MouseEvent) => {
+  if (cell.isFuture) {
+    hoveredDay.value = null
+    return
+  }
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  hoveredDay.value = {
+    date: cell.date,
+    dayOfWeek: cell.dayOfWeekStr,
+    entries: cell.entries,
+    count: cell.count,
+    x: rect.left + rect.width / 2,
+    y: rect.top,
+  }
+}
+
+const onCellLeave = () => {
+  hoveredDay.value = null
+}
+
+const getCellClass = (day: DayCell) => {
+  if (day.isFuture) return 'opacity-0 pointer-events-none'
+  const classes: string[] = []
+  if (day.level === 0) {
+    classes.push('bg-[var(--activity-empty)] hover:bg-[var(--border-divider)] cursor-default')
+  } else if (day.level === 1) {
+    classes.push('bg-[var(--activity-l1)] hover:opacity-85 cursor-pointer shadow-xs')
+  } else if (day.level === 2) {
+    classes.push('bg-[var(--activity-l2)] hover:opacity-85 cursor-pointer shadow-xs')
+  } else if (day.level === 3) {
+    classes.push('bg-[var(--activity-l3)] hover:opacity-85 cursor-pointer shadow-xs')
+  } else if (day.level >= 4) {
+    classes.push('bg-[var(--activity-l4)] hover:opacity-85 cursor-pointer shadow-xs')
+  }
+  if (day.isToday) {
+    classes.push('ring-1.5 ring-[var(--ink-primary)] ring-offset-1 z-10')
+  }
+  if (props.selectedDate === day.date) {
+    classes.push('ring-2 ring-[var(--accent-warm)] ring-offset-1 scale-125 z-20')
+  }
+  return classes.join(' ')
+}
+
+onMounted(() => {
+  nextTick(() => {
+    if (!scrollContainer.value) return
+    const container = scrollContainer.value
+    // 自动平滑滚动到最右侧（今天所在的位置）
+    if (container.scrollWidth > container.clientWidth) {
+      container.scrollTo({ left: container.scrollWidth, behavior: 'smooth' })
+    }
+  })
+})
 </script>
 
 <template>
-  <section class="py-12 border-b border-[var(--border-subtle)] text-left select-none">
+  <section class="py-10 border-b border-[var(--border-subtle)] text-left select-none relative">
     
-    <!-- 标头与副标：自然出版物美学，拒绝 SaaS 卡片 -->
+    <!-- 标头与指标：对齐 GitHub Contribution 氛围并融入纸本刊印质感 -->
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6">
       <div class="space-y-1.5">
         <div class="flex items-center gap-3">
           <h2 class="font-serif-editorial text-2xl sm:text-3xl font-medium tracking-tight text-[var(--ink-primary)]">
-            2026 生活刻度
+            生活刻度
           </h2>
-          <span class="font-mono-archive text-[11px] uppercase tracking-widest text-[var(--ink-muted)]">
-            // LIFE IN 2026
+          <span class="font-mono-archive text-[11px] tracking-widest text-[var(--ink-muted)]">
+            编年生活刻度 · 最近一年
           </span>
         </div>
         <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)]">
-          时间的刻度与日常印记。每一格，都是真实度过的一天。
+          参考 GitHub 图谱，记录截至今日（{{ todayDisplay }}）最近一年的生活印记。
         </p>
       </div>
 
-      <!-- 右侧轻量统计指标 -->
-      <div class="font-mono-archive text-xs text-[var(--ink-muted)] flex items-center gap-4">
-        <span>已记录 <strong class="text-[var(--ink-primary)] font-medium">{{ totalEntriesCount }}</strong> 个生活瞬间</span>
+      <!-- 右侧多维统计指标 -->
+      <div class="font-mono-archive text-xs text-[var(--ink-muted)] flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span>已记录 <strong class="text-[var(--ink-primary)] font-medium">{{ totalPastYearEntries }}</strong> 个瞬间</span>
         <span>·</span>
         <span>覆盖 <strong class="text-[var(--ink-primary)] font-medium">{{ activeDaysCount }}</strong> 天</span>
+        <span v-if="streaks.longest > 0">·</span>
+        <span v-if="streaks.longest > 0">最长连续 <strong class="text-[var(--accent-warm)] font-medium">{{ streaks.longest }}</strong> 天</span>
       </div>
     </div>
 
-    <!-- 热力图本体容器 (支持横向自然滑动) -->
-    <div class="overflow-x-auto pb-3 pt-2 scrollbar-none">
-      <div class="min-w-[760px] max-w-full">
+    <!-- 热力图网格滚动区域 (最新时间在最右侧，自动对齐今天) -->
+    <div ref="scrollContainer" class="overflow-x-auto pb-2 pt-1 scrollbar-none">
+      <div class="inline-block min-w-full">
         
-        <!-- 月份标头 -->
-        <div class="relative h-5 mb-2 font-mono-archive text-[11px] text-[var(--ink-muted)]">
+        <!-- 月份标头行 -->
+        <div class="relative h-5 mb-1.5 font-mono-archive text-[11px] text-[var(--ink-muted)]">
           <span
             v-for="m in monthLabels"
-            :key="m.label"
+            :key="m.label + m.weekIndex"
             class="absolute top-0 transform"
-            :style="{ left: `${m.weekIndex * 14.5 + 24}px` }"
+            :style="{ left: `${m.weekIndex * 15 + 28}px` }"
           >
             {{ m.label }}
           </span>
         </div>
 
-        <!-- 网格主体：左侧周几 + 右侧 53 列 -->
+        <!-- 网格主体：左侧星期标记 + 右侧 53 列 -->
         <div class="flex gap-2 items-start">
           
-          <!-- 周几列 -->
-          <div class="flex flex-col gap-[3.5px] pt-[1px] font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0 w-4">
-            <span v-for="(lbl, idx) in weekDayLabels" :key="idx" class="h-[11px] leading-[11px] block">
-              {{ lbl }}
+          <!-- 左侧星期标签 (周一、周三、周五) -->
+          <div class="relative w-6 h-[98px] font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0 select-none">
+            <span
+              v-for="lbl in weekLabels"
+              :key="lbl.index"
+              class="absolute left-0 leading-none"
+              :style="{ top: `${lbl.index * 14 + 1}px` }"
+            >
+              {{ lbl.label }}
             </span>
           </div>
 
-          <!-- 53周刻度方格 -->
-          <div class="flex gap-[3.5px]">
+          <!-- 53 周方格矩阵 (每列 7 天：周日到周六) -->
+          <div class="flex gap-[3px]">
             <div
               v-for="(week, wIdx) in calendarWeeks"
               :key="wIdx"
-              class="flex flex-col gap-[3.5px]"
+              class="flex flex-col gap-[3px]"
             >
               <button
                 v-for="(day, dIdx) in week"
                 :key="dIdx"
-                @mouseenter="hoveredDay = { date: day.date, dayOfWeek: day.dayOfWeekStr, entries: day.entries, count: day.count }"
-                @mouseleave="hoveredDay = null"
+                @mouseenter="onCellHover(day, $event)"
+                @mouseleave="onCellLeave"
                 @click="onCellClick(day)"
-                :disabled="!day.inYear || day.count === 0"
-                class="w-[11px] h-[11px] rounded-[1.5px] transition-all duration-150 relative cursor-default"
-                :class="[
-                  // 不属于2026年
-                  !day.inYear ? 'opacity-0 pointer-events-none' : '',
-                  // 未来日期微弱留白
-                  day.inYear && day.isFuture ? 'bg-[var(--border-subtle)]/30' : '',
-                  // 过去日期但无记录
-                  day.inYear && !day.isFuture && day.level === 0 ? 'bg-[var(--border-subtle)]/60 hover:bg-[var(--border-divider)]' : '',
-                  // 等级 1: 柔和苔绿 / 暖墨色
-                  day.level === 1 ? 'bg-[#5b7a66] hover:opacity-85 cursor-pointer shadow-xs' : '',
-                  // 等级 2: 中度苔绿
-                  day.level === 2 ? 'bg-[#3b5946] hover:opacity-85 cursor-pointer shadow-xs' : '',
-                  // 等级 3+: 浓郁沉稳墨绿
-                  day.level >= 3 ? 'bg-[#22392b] hover:opacity-85 cursor-pointer shadow-xs' : '',
-                  // 今日高亮圆圈
-                  day.isToday ? 'outline-1 outline-[var(--ink-primary)] outline-offset-1' : '',
-                  // 选中当前日期
-                  selectedDate === day.date ? 'ring-2 ring-[var(--accent-warm)] ring-offset-1 scale-125 z-10' : '',
-                ]"
-                :title="day.inYear ? `${day.date} (${day.dayOfWeekStr}): ${day.count} 条记录` : ''"
+                :disabled="day.isFuture || day.count === 0"
+                class="w-[11px] h-[11px] rounded-[1.5px] transition-all duration-100 relative focus:outline-none"
+                :class="getCellClass(day)"
+                :aria-label="!day.isFuture ? `${day.date} (${day.dayOfWeekStr}): ${day.count} 条记录` : ''"
               />
             </div>
           </div>
@@ -251,14 +371,14 @@ const onCellClick = (cell: DayCell) => {
       </div>
     </div>
 
-    <!-- 底部状态与图例解释 (纯文字排版，无 AI 卡片与渐变) -->
+    <!-- 底部状态栏与图例解释 (GitHub 规范：Less ⬜ 🟩 🟩 🟩 🟩 More) -->
     <div class="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono-archive text-[var(--ink-muted)]">
       
-      <!-- 动态悬浮/选中提示 -->
-      <div class="flex items-center gap-3">
+      <!-- 动态悬浮或筛选提示 -->
+      <div class="flex items-center gap-3 min-h-[20px]">
         <template v-if="selectedDate">
           <span class="text-[var(--accent-warm)] font-medium">
-            正在查看 {{ selectedDate }} 的生活印记
+            已筛选：{{ selectedDate }} 的生活印记
           </span>
           <button
             @click="emit('selectDate', '')"
@@ -269,25 +389,32 @@ const onCellClick = (cell: DayCell) => {
         </template>
         <template v-else-if="hoveredDay && hoveredDay.count > 0">
           <span class="text-[var(--ink-primary)]">
-            {{ hoveredDay.date }} ({{ hoveredDay.dayOfWeek }}) · {{ hoveredDay.count }} 条生活印记：
-            <span class="font-serif-editorial text-[var(--ink-secondary)]">
-              {{ hoveredDay.entries.map(e => e.title).join('、') }}
+            {{ hoveredDay.date }} ({{ hoveredDay.dayOfWeek }}) · <strong>{{ hoveredDay.count }}</strong> 条印记
+            <span v-if="hoveredDay.entries.length > 0" class="font-serif-editorial text-[var(--ink-secondary)] ml-1">
+              — {{ hoveredDay.entries.map(e => e.title).slice(0, 3).join('、') }}
+              <span v-if="hoveredDay.entries.length > 3">等</span>
             </span>
           </span>
         </template>
+        <template v-else-if="hoveredDay && hoveredDay.count === 0">
+          <span class="text-[var(--ink-muted)]">
+            {{ hoveredDay.date }} ({{ hoveredDay.dayOfWeek }}) · 暂无记录
+          </span>
+        </template>
         <template v-else>
-          <span>点击有记录的日期，可直接跳转/筛选当天时间线</span>
+          <span>点击任意有记录的格块，可向下筛选当天的生活时间线</span>
         </template>
       </div>
 
-      <!-- 刻度图例 (纯中文无 emoji) -->
-      <div class="flex items-center gap-2 text-[11px] self-end sm:self-auto">
-        <span>留白</span>
-        <span class="w-2.5 h-2.5 rounded-[1px] bg-[var(--border-subtle)]/60 inline-block"></span>
-        <span class="w-2.5 h-2.5 rounded-[1px] bg-[#5b7a66] inline-block"></span>
-        <span class="w-2.5 h-2.5 rounded-[1px] bg-[#3b5946] inline-block"></span>
-        <span class="w-2.5 h-2.5 rounded-[1px] bg-[#22392b] inline-block"></span>
-        <span>饱满</span>
+      <!-- GitHub 经典四级色阶图例 -->
+      <div class="flex items-center gap-1.5 text-[11px] self-end sm:self-auto select-none">
+        <span class="text-[var(--ink-muted)] mr-1">少</span>
+        <span class="w-[11px] h-[11px] rounded-[1.5px] bg-[var(--activity-empty)] inline-block" title="0 条"></span>
+        <span class="w-[11px] h-[11px] rounded-[1.5px] bg-[var(--activity-l1)] inline-block" title="1 条"></span>
+        <span class="w-[11px] h-[11px] rounded-[1.5px] bg-[var(--activity-l2)] inline-block" title="2 条"></span>
+        <span class="w-[11px] h-[11px] rounded-[1.5px] bg-[var(--activity-l3)] inline-block" title="3 条"></span>
+        <span class="w-[11px] h-[11px] rounded-[1.5px] bg-[var(--activity-l4)] inline-block" title="4+ 条"></span>
+        <span class="text-[var(--ink-muted)] ml-1">多</span>
       </div>
 
     </div>

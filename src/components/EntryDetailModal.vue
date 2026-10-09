@@ -136,7 +136,7 @@ const getKindLabel = (type: string) => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-xs p-6 sm:p-10 text-left relative transition-all"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-10 text-left relative transition-all"
     >
       <!-- 顶部关闭与操作工具栏 -->
       <div class="flex items-center justify-between pb-6 border-b border-[var(--border-subtle)] mb-8">

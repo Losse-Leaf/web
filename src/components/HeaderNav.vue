@@ -7,13 +7,19 @@ import {
   Menu,
   X,
   Plus,
+  Search,
+  Moon,
+  Sun,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
-import type { ArchiveCategory } from '../types'
+import type { ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 
 const props = defineProps<{
   currentView: string
   currentCategory: ArchiveCategory
+  theme?: 'paper' | 'darkroom'
+  config?: SiteConfig | null
+  profile?: CuratorProfile | null
 }>()
 
 const emit = defineEmits<{
@@ -22,7 +28,10 @@ const emit = defineEmits<{
   (e: 'openAdd'): void
   (e: 'openStats'): void
   (e: 'openStorage'): void
-  (e: 'openAuth'): void
+  (e: 'openSearch'): void
+  (e: 'openExport'): void
+  (e: 'openPairing'): void
+  (e: 'toggleTheme'): void
 }>()
 
 const mobileMenuOpen = ref(false)
@@ -35,29 +44,30 @@ const navItems = [
   { key: 'home', label: '时间流' },
   { key: 'transactions', label: '记账' },
   { key: 'projects', label: '项目' },
-  { key: 'now', label: '当下' },
   { key: 'archive', label: '归档' },
   { key: 'about', label: '主理人' },
 ]
 
-// 辅助工具与设置
+// 辅助工具与设置（纯净无赘述）
 const toolOptions = computed(() => [
   {
-    key: 'auth',
-    label: '暗房钥匙',
-    desc: '管理员写操作密钥',
-    action: () => emit('openAuth'),
+    key: 'pair',
+    label: '设备配对',
+    action: () => emit('openPairing'),
+  },
+  {
+    key: 'export',
+    label: '数据备份',
+    action: () => emit('openExport'),
   },
   {
     key: 'stats',
     label: '生活统计',
-    desc: '印记总数与年度概览',
     action: () => emit('openStats'),
   },
   {
     key: 'storage',
     label: '存储设置',
-    desc: 'Cloudflare R2 对象存储',
     action: () => emit('openStorage'),
   },
 ])
@@ -94,29 +104,42 @@ const handleDocumentClick = (e: MouseEvent) => {
   }
 }
 
+const handleGlobalKeyDown = (e: KeyboardEvent) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    audio.playTink()
+    emit('openSearch')
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
+  window.addEventListener('keydown', handleGlobalKeyDown)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick)
+  window.removeEventListener('keydown', handleGlobalKeyDown)
 })
 </script>
 
 <template>
-  <header class="sticky top-0 z-50 w-full bg-[var(--bg-archive)]/92 backdrop-blur-md border-b border-[var(--border-subtle)] transition-colors duration-300">
-    <div class="max-w-5xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
+  <header
+    class="sticky top-0 z-50 w-full bg-[var(--bg-archive)]/92 backdrop-blur-md border-b border-[var(--border-subtle)] transition-colors duration-300"
+    style="padding-top: env(safe-area-inset-top, 0px);"
+  >
+    <div class="max-w-5xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
       
-      <!-- 极简出版标识：散页 · LOOSE LEAF · 迟暮 -->
+      <!-- 极简出版标识：动态从后端配置与主理人档案中驱动 -->
       <button
         @click="setView('home')"
         class="text-left group cursor-pointer"
       >
         <span class="font-serif-editorial text-xl font-medium tracking-wider text-[var(--ink-primary)]">
-          散页
+          {{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}
         </span>
-        <span class="text-xs text-[var(--ink-muted)] ml-2.5 hidden sm:inline tracking-wider font-mono-archive">
-          LOOSE LEAF · 迟暮
+        <span class="text-xs text-[var(--ink-muted)] ml-2.5 hidden sm:inline tracking-wider font-serif-editorial">
+          时光手账与生活档案
         </span>
       </button>
 
@@ -135,9 +158,20 @@ onUnmounted(() => {
         </button>
       </nav>
 
-      <!-- 右上角：[＋ 记录] + [我的生活⌄] + 雨声 + GitHub -->
-      <div class="hidden sm:flex items-center gap-3 text-xs font-mono-archive text-[var(--ink-muted)]">
+      <!-- 右上角：[搜索] + [＋ 记录] + [设置⌄] + [暗房模式] + 雨声 + GitHub -->
+      <div class="hidden md:flex items-center gap-2.5 text-xs font-mono-archive text-[var(--ink-muted)]">
         
+        <!-- 全局搜索入口 (支持 Cmd+K) -->
+        <button
+          @click="emit('openSearch')"
+          class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
+          title="全局即时搜索 (快捷键 ⌘K)"
+        >
+          <Search class="w-3.5 h-3.5" />
+          <span class="font-serif-editorial text-[13px] hidden lg:inline">搜索</span>
+          <kbd class="text-[10px] bg-[var(--bg-subtle)] px-1 rounded-xs border border-[var(--border-subtle)] opacity-70">⌘K</kbd>
+        </button>
+
         <!-- 全局「＋」新增入口 (负责添加东西) -->
         <button
           @click="handleOpenAdd"
@@ -148,12 +182,12 @@ onUnmounted(() => {
           <span class="font-serif-editorial text-[13px]">记录</span>
         </button>
 
-        <!-- 设置/工具 ⌄ 二级轻量浮层 (生活统计 / 存储设置) -->
+        <!-- 设置/工具 ⌄ 二级轻量浮层 (数据备份 / 生活统计 / 存储设置) -->
         <div class="relative" ref="dropdownRef">
           <button
             @click.stop="isDropdownOpen = !isDropdownOpen"
             class="flex items-center gap-1 text-xs tracking-wider transition-colors cursor-pointer py-1 px-2 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-            title="生活统计与设置"
+            title="数据备份、生活统计与设置"
           >
             <span class="font-serif-editorial text-[13px]">设置</span>
             <ChevronDown class="w-3 h-3 opacity-60 transition-transform duration-200" :class="{ 'rotate-180': isDropdownOpen }" />
@@ -162,11 +196,11 @@ onUnmounted(() => {
           <!-- 简洁、精致、克制的二级浮层菜单 -->
           <div
             v-if="isDropdownOpen"
-            class="absolute right-0 top-full mt-2 w-44 bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] py-1.5 z-50 rounded-xs animate-in fade-in duration-150"
+            class="absolute right-0 top-full mt-2 w-32 bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] py-1.5 z-50 rounded-xs animate-in fade-in duration-150"
             @click.stop
           >
             <div class="px-3 pb-1 mb-1 text-[10px] font-mono-archive tracking-widest text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/60">
-              设置 // TOOLS
+              系统与工具
             </div>
 
             <div class="space-y-0.5">
@@ -176,14 +210,21 @@ onUnmounted(() => {
                 @click="handleToolClick(opt)"
                 class="w-full text-left px-3 py-1.5 text-xs font-serif-editorial transition-colors flex items-center justify-between cursor-pointer group hover:bg-[var(--bg-subtle)]/60 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
               >
-                <div>
-                  <div class="text-xs">{{ opt.label }}</div>
-                  <div class="text-[10px] text-[var(--ink-muted)] font-mono-archive mt-0.5">{{ opt.desc }}</div>
-                </div>
+                <span>{{ opt.label }}</span>
               </button>
             </div>
           </div>
         </div>
+
+        <!-- 纸张 / 暗房模式切换 -->
+        <button
+          @click="emit('toggleTheme')"
+          class="p-1 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] cursor-pointer transition-colors"
+          :title="theme === 'darkroom' ? '切换为暖色棉纸模式' : '切换为胶片暗房模式'"
+        >
+          <Moon v-if="theme === 'paper'" class="w-3.5 h-3.5" />
+          <Sun v-else class="w-3.5 h-3.5 text-amber-500" />
+        </button>
 
         <span class="text-[var(--border-divider)]">/</span>
 
@@ -195,14 +236,14 @@ onUnmounted(() => {
           title="自然雨声白噪音"
         >
           <CloudRain class="w-3.5 h-3.5" :class="{ 'animate-pulse': isRainPlaying }" />
-          <span class="text-xs">{{ isRainPlaying ? '雨声 · 开' : '雨声' }}</span>
+          <span class="text-xs">{{ isRainPlaying ? '雨声' : '雨声' }}</span>
         </button>
 
         <span class="text-[var(--border-divider)]">/</span>
 
         <!-- 外部代码仓 -->
         <a
-          href="https://github.com/YN1753"
+          :href="profile?.social_links?.github || profile?.github || 'https://github.com/YN1753'"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-1 hover:text-[var(--ink-primary)] transition-colors"
@@ -212,8 +253,23 @@ onUnmounted(() => {
         </a>
       </div>
 
-      <!-- 移动端右上角：＋ 与 菜单按钮 -->
-      <div class="flex items-center gap-2 md:hidden">
+      <!-- 移动端右上角：搜索 + 暗房 + ＋ 与 菜单按钮 -->
+      <div class="flex items-center gap-1 sm:gap-2 md:hidden">
+        <button
+          @click="emit('openSearch')"
+          class="p-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
+          title="搜索"
+        >
+          <Search class="w-4 h-4" />
+        </button>
+        <button
+          @click="emit('toggleTheme')"
+          class="p-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
+          title="主题模式"
+        >
+          <Moon v-if="theme === 'paper'" class="w-4 h-4" />
+          <Sun v-else class="w-4 h-4 text-amber-500" />
+        </button>
         <button
           @click="handleOpenAdd"
           class="p-1.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer shadow-xs"
@@ -251,7 +307,7 @@ onUnmounted(() => {
       <!-- 导航栏目 -->
       <div class="space-y-2">
         <span class="text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] block">
-          页面导航 //
+          页面导航
         </span>
         <div class="grid grid-cols-2 gap-2 text-sm font-serif-editorial">
           <button
@@ -271,7 +327,7 @@ onUnmounted(() => {
       <!-- 工具选项 -->
       <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
         <span class="text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] block">
-          设置与工具 //
+          设置与工具
         </span>
         <div class="grid grid-cols-2 gap-2 text-xs font-serif-editorial">
           <button
@@ -290,7 +346,7 @@ onUnmounted(() => {
           <CloudRain class="w-3.5 h-3.5" />
           <span>{{ isRainPlaying ? '雨声：开' : '雨声：关' }}</span>
         </button>
-        <a href="https://github.com/YN1753" target="_blank" class="flex items-center gap-1">
+        <a :href="profile?.social_links?.github || profile?.github || 'https://github.com/YN1753'" target="_blank" class="flex items-center gap-1">
           <span>GitHub</span>
           <ArrowUpRight class="w-3 h-3" />
         </a>

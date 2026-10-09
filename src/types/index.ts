@@ -195,10 +195,15 @@ export interface YearArchiveStat {
 
 export interface SiteConfig {
   site_name: string
-  site_desc: string
+  site_subtitle?: string
+  site_desc?: string
+  curator_name?: string
+  default_location?: string
   domain: string
-  icp_number: string
-  icp_link: string
+  icp_number?: string
+  icp_link?: string
+  police_number?: string
+  police_code?: string
 }
 
 export interface GearItem {
@@ -211,14 +216,99 @@ export interface GearItem {
   link?: string
 }
 
+export interface UnifiedUploadResult {
+  object_key: string
+  url: string
+  filename?: string
+  mime_type?: string
+  size?: number
+  attachment_id?: number
+  expires_in?: number
+}
+
+export interface CuratorProfile {
+  name: string
+  title: string
+  bio: string
+  location: string
+  current_city?: string
+  avatar_url?: string
+  avatar?: string
+  avatar_key?: string
+  motto?: string
+  philosophy?: string
+  manifesto?: string
+  social_links?: Record<string, string>
+  email?: string
+  github?: string
+  edc_gear?: GearItem[]
+  gearList?: GearItem[]
+  updated_at?: string
+}
+
 export interface UserProfile {
   name: string
   title: string
   avatar: string
+  avatar_key?: string
   location: string
+  current_city?: string
   bio: string
   philosophy: string
+  motto?: string
   email: string
   github: string
   gearList: GearItem[]
 }
+
+export interface TrustedDevice {
+  id: number
+  device_id: string
+  name: string
+  platform: 'ios' | 'macos' | 'android' | 'web' | string
+  device_model?: string
+  paired_at: string
+  last_active_at: string
+  status: 'active' | 'revoked' | string
+}
+
+export interface PairingTicketResult {
+  ticket: string
+  pin_code: string
+  expires_at: string
+  expires_in_seconds: number
+  qr_payload: string
+}
+
+export interface SystemStatus {
+  initialized: boolean
+  site_name: string
+  curator_name?: string
+  has_master_key_configured?: boolean
+}
+
+export interface BootstrapPayload {
+  curator_name: string
+  location?: string
+  master_passcode: string
+  master_key?: string
+}
+
+export interface BootstrapResult {
+  token: string
+  curator_name: string
+  location: string
+}
+
+export interface QRLoginSession {
+  session_id: string
+  qr_payload: string
+  expires_in_seconds: number
+}
+
+export interface QRLoginPollResult {
+  status: 'pending' | 'authorized' | 'expired'
+  token?: string
+}
+
+

@@ -1,4 +1,4 @@
-// Web Audio API 动态合成微音效与自然白噪音，零外部资源依赖
+const SOUND_PREF_KEY = 'chimu_sound_enabled'
 
 class AudioEngine {
   private ctx: AudioContext | null = null
@@ -6,6 +6,41 @@ class AudioEngine {
   private rainGain: GainNode | null = null
   public soundEnabled: boolean = true
   public ambientRainEnabled: boolean = false
+
+  constructor() {
+    try {
+      const saved = localStorage.getItem(SOUND_PREF_KEY)
+      if (saved !== null) {
+        this.soundEnabled = saved === 'true'
+      }
+    } catch {}
+
+    // 移动端 Safari 初次点击解锁 AudioContext
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {})
+        }
+        window.removeEventListener('pointerdown', unlockAudio)
+        window.removeEventListener('keydown', unlockAudio)
+      }
+      window.addEventListener('pointerdown', unlockAudio, { passive: true })
+      window.addEventListener('keydown', unlockAudio, { passive: true })
+    }
+  }
+
+  public setSoundEnabled(val: boolean) {
+    this.soundEnabled = val
+    try {
+      localStorage.setItem(SOUND_PREF_KEY, String(val))
+    } catch {}
+  }
+
+  public toggleSound(): boolean {
+    const next = !this.soundEnabled
+    this.setSoundEnabled(next)
+    return next
+  }
 
   private initContext() {
     if (!this.ctx) {

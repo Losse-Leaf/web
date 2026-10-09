@@ -6,6 +6,17 @@ import type {
   StorageStatus,
   GlobalStats,
   Project,
+  NowStatus,
+  TrustedDevice,
+  PairingTicketResult,
+  SiteConfig,
+  CuratorProfile,
+  SystemStatus,
+  BootstrapPayload,
+  BootstrapResult,
+  QRLoginSession,
+  QRLoginPollResult,
+  UnifiedUploadResult,
 } from '../types'
 
 const API_BASE = '/api/v1'
@@ -42,6 +53,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      'X-Client-Platform': 'web',
+      'X-Client-Version': '1.1.0',
       ...authHeaders,
       ...options?.headers,
     },
@@ -226,6 +239,63 @@ export async function fetchStorageStatus(): Promise<StorageStatus> {
   return request<StorageStatus>(`${API_BASE}/storage/status`)
 }
 
+// 统一文件上传接口：上传物理文件至后端 POST /api/v1/files/upload，返回相对路径 object_key 与临时签名 URL
+export async function uploadUnifiedFile(
+  file: File,
+  folder: string = 'avatar',
+  onProgress?: (percent: number) => void
+): Promise<UnifiedUploadResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folder', folder)
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100)
+          onProgress(percent)
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText)
+          if (res.data) {
+            resolve(res.data)
+          } else {
+            resolve(res)
+          }
+        } catch {
+          reject(new Error('解析上传响应失败'))
+        }
+      } else {
+        try {
+          const errRes = JSON.parse(xhr.responseText)
+          reject(new Error(errRes.message || `上传失败 (HTTP ${xhr.status})`))
+        } catch {
+          reject(new Error(`上传失败 (HTTP ${xhr.status})`))
+        }
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error('网络中断，上传请求失败'))
+    }
+
+    xhr.open('POST', `${API_BASE}/files/upload`, true)
+    const token = getAdminToken()
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      xhr.setRequestHeader('X-Admin-Key', token)
+    }
+    xhr.send(formData)
+  })
+}
+
 // 3. Transactions (记账)
 export async function fetchTransactions(params?: {
   year?: number
@@ -305,3 +375,147 @@ export async function createProject(data: {
 export async function fetchGlobalStats(): Promise<GlobalStats> {
   return request<GlobalStats>(`${API_BASE}/stats`)
 }
+
+// 6. Device Pairing & Trusted Devices (设备免密配对与管理)
+export async function initPairingTicket(): Promise<PairingTicketResult> {
+  return request<PairingTicketResult>(`${API_BASE}/auth/pair/init`, {
+    method: 'POST',
+  })
+}
+
+export async function fetchTrustedDevices(): Promise<TrustedDevice[]> {
+  try {
+    return await request<TrustedDevice[]>(`${API_BASE}/auth/devices`)
+  } catch {
+    return []
+  }
+}
+
+export async function revokeTrustedDevice(id: number): Promise<boolean> {
+  await request(`${API_BASE}/auth/devices/${id}`, {
+    method: 'DELETE',
+  })
+  return true
+}
+
+// 7. Now Status Live Update (现场更新此刻的我)
+export async function updateNowStatus(data: Partial<NowStatus>): Promise<NowStatus> {
+  try {
+    return await request<NowStatus>(`${API_BASE}/now`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  } catch {
+    // 降级兼容 /api/now
+    return request<NowStatus>('/api/now', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+}
+
+// 8. Site Config (站点配置，全端动态驱动)
+export async function fetchSiteConfig(): Promise<SiteConfig> {
+  try {
+    return await request<SiteConfig>(`${API_BASE}/config`)
+  } catch {
+    try {
+      return await request<SiteConfig>('/api/config')
+    } catch {
+      return {
+        site_name: '散页',
+        site_subtitle: '时光手账与生活档案',
+        curator_name: '迟暮',
+        default_location: '中国 · 杭州',
+        domain: 'codeactivityhub.top',
+        icp_number: '浙ICP备2026081664号',
+        icp_link: 'https://beian.miit.gov.cn',
+      }
+    }
+  }
+}
+
+// 9. Curator Profile (主理人身份档案中枢，全端动态驱动)
+export async function fetchCuratorProfile(): Promise<CuratorProfile | null> {
+  try {
+    return await request<CuratorProfile>(`${API_BASE}/profile`)
+  } catch {
+    return null
+  }
+}
+
+export async function updateCuratorProfile(data: Partial<CuratorProfile>): Promise<CuratorProfile> {
+  return request<CuratorProfile>(`${API_BASE}/profile`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+// 10. 系统生命周期与冷启动装帧 (System Lifecycle & Bootstrap)
+export async function fetchSystemStatus(): Promise<SystemStatus> {
+  try {
+    return await request<SystemStatus>(`${API_BASE}/system/status`)
+  } catch {
+    // 降级兜底：若后端未实现该探针，视为已初始化
+    return {
+      initialized: true,
+      site_name: '散页 · Living Archive',
+      curator_name: '迟暮',
+      has_master_key_configured: false,
+    }
+  }
+}
+
+export async function bootstrapSystem(data: BootstrapPayload): Promise<BootstrapResult> {
+  const result = await request<BootstrapResult>(`${API_BASE}/system/bootstrap`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  if (result.token) {
+    setAdminToken(result.token)
+  }
+  return result
+}
+
+// 11. 网页反向扫码与口令快速登入 (Reverse QR Login & Passcode Verify)
+export async function createQRLoginSession(): Promise<QRLoginSession> {
+  try {
+    return await request<QRLoginSession>(`${API_BASE}/auth/qr/create`, {
+      method: 'POST',
+    })
+  } catch {
+    // 降级模拟 session
+    const mockId = `qr_sess_${Date.now().toString(36)}`
+    return {
+      session_id: mockId,
+      qr_payload: `looseleaf://login?session_id=${mockId}`,
+      expires_in_seconds: 120,
+    }
+  }
+}
+
+export async function pollQRLoginSession(sessionId: string): Promise<QRLoginPollResult> {
+  try {
+    const res = await request<QRLoginPollResult>(`${API_BASE}/auth/qr/poll/${sessionId}`)
+    if (res.status === 'authorized' && res.token) {
+      setAdminToken(res.token)
+    }
+    return res
+  } catch {
+    return { status: 'pending' }
+  }
+}
+
+export async function verifyMasterPasscode(passcode: string): Promise<{ token: string }> {
+  const res = await request<{ token: string }>(`${API_BASE}/auth/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ passcode }),
+  })
+  if (res.token) {
+    setAdminToken(res.token)
+  }
+  return res
+}
+
+
+

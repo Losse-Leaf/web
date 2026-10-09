@@ -82,7 +82,7 @@ const getMonthFull = (m: string) => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-5 sm:px-8 py-20 sm:py-28 text-left">
+  <div class="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
     
     <!-- 标头 -->
     <header class="pb-10 border-b border-[var(--border-subtle)] mb-12 space-y-3">
@@ -90,8 +90,8 @@ const getMonthFull = (m: string) => {
         <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
           归档
         </h1>
-        <span class="font-mono-archive text-xs uppercase tracking-widest text-[var(--ink-muted)]">
-          // ARCHIVE
+        <span class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
+          编年史归档
         </span>
       </div>
       <p class="font-serif-editorial text-sm sm:text-base text-[var(--ink-secondary)]">
@@ -116,7 +116,7 @@ const getMonthFull = (m: string) => {
 
     <!-- 极轻量文本统计（非 Dashboard，纯文字注脚） -->
     <div class="font-mono-archive text-xs text-[var(--ink-muted)] pb-8 mb-12 border-b border-[var(--border-subtle)] flex flex-wrap items-center gap-y-1">
-      <span>{{ selectedYear }}年 // </span>
+      <span>{{ selectedYear }}年 · </span>
       <span class="text-[var(--ink-secondary)] font-medium ml-1">共 {{ yearEntries.length }} 条生活记录</span>
       <span class="mx-2">·</span>
       <span v-for="(count, type) in yearStats" :key="type" class="mr-3">
@@ -144,7 +144,7 @@ const getMonthFull = (m: string) => {
           >
             <div class="flex items-baseline gap-4">
               <span class="font-mono-archive text-xs text-[var(--ink-muted)] shrink-0 w-12">
-                {{ item.month }}.{{ item.day }}
+                {{ item.month && item.day ? `${item.month}.${item.day}` : (item.date ? item.date.slice(5) : '近期') }}
               </span>
               <span class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors">
                 {{ item.title }}

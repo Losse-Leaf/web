@@ -33,7 +33,7 @@ const isCodeRepo = (proj: Project) => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-5 sm:px-8 py-20 sm:py-28 text-left">
+  <div class="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
     
     <!-- 标头 -->
     <header class="pb-12 border-b border-[var(--border-subtle)] mb-10 space-y-4">
@@ -41,11 +41,11 @@ const isCodeRepo = (proj: Project) => {
         <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
           造物
         </h1>
-        <span class="font-mono-archive text-xs uppercase tracking-widest text-[var(--ink-muted)]">
-          // THINGS I MADE
+        <span class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
+          造物工坊与实践
         </span>
       </div>
-      <p class="font-mono-archive text-xs uppercase tracking-widest text-[var(--ink-muted)]">
+      <p class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
         手艺、工具与好奇心驱动的尝试。
       </p>
       <p class="text-base sm:text-lg text-[var(--ink-secondary)] font-serif-editorial max-w-2xl leading-relaxed pt-2">
@@ -58,7 +58,7 @@ const isCodeRepo = (proj: Project) => {
       v-if="categories.length > 1"
       class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-14 text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)] pb-4"
     >
-      <span class="text-[var(--ink-secondary)] mr-1">分类 //</span>
+      <span class="text-[var(--ink-secondary)] mr-1">分类：</span>
       <button
         @click="activeCategory = 'all'"
         class="transition-colors cursor-pointer py-1 hover:text-[var(--ink-primary)]"

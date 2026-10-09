@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'clearDateFilter'): void
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'selectEntry', entry: LifeEntry): void
+  (e: 'selectTag', tag: string): void
   (e: 'openAdd'): void
 }>()
 
@@ -174,7 +175,7 @@ const getGapDays = (index: number): number => {
       v-if="showFilters"
       class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-12 text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)] pb-4"
     >
-      <span class="text-[var(--ink-secondary)] mr-1">视角 //</span>
+      <span class="text-[var(--ink-secondary)] mr-1">视角：</span>
       <button
         v-for="f in categoryFilters"
         :key="f.key"
@@ -245,7 +246,7 @@ const getGapDays = (index: number): number => {
           <!-- 标尺切线点 -->
           <div class="absolute -left-[30px] sm:-left-[46px] w-2.5 h-px bg-[var(--ink-muted)]/60"></div>
           <span class="tracking-widest text-[11px] text-[var(--ink-muted)]/80">
-            // 跨越 {{ getGapDays(index) }} 天的时光留白
+            跨越 {{ getGapDays(index) }} 天的时光留白
           </span>
           <span class="flex-grow h-px bg-[var(--border-subtle)]/70 max-w-xs"></span>
         </div>
@@ -367,7 +368,7 @@ const getGapDays = (index: number): number => {
               </div>
               <!-- 齿孔与冲印装裱条 -->
               <div class="pt-2 px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                <span class="tracking-widest uppercase">EXP. // {{ entry.meta || 'FILM ROLL' }}</span>
+                <span class="tracking-widest">EXP. · {{ entry.meta || '胶片装裱' }}</span>
                 <div class="flex items-center gap-2">
                   <span v-if="entry.location">{{ entry.location }}</span>
                   <span class="opacity-60 hidden sm:inline">[底片装裱]</span>
@@ -395,8 +396,8 @@ const getGapDays = (index: number): number => {
             class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 group-hover:border-[var(--border-divider)] transition-colors max-w-2xl"
           >
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)] uppercase">
-                // 造物经历 · PROJECT
+              <span class="text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
+                造物经历 · 亲手制作
               </span>
               <span v-if="entry.meta" class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
                 {{ entry.meta }}
@@ -433,18 +434,28 @@ const getGapDays = (index: number): number => {
               {{ entry.title }}
             </h3>
 
+            <!-- 胶片装裱暗房底片框 (支持 R2 附件与历史底片) -->
             <div
-              v-if="entry.images"
-              class="relative w-full overflow-hidden bg-[var(--bg-subtle)] rounded-xs border border-[var(--border-subtle)] max-w-2xl cursor-zoom-in group/img"
+              v-if="entry.images || (entry.attachments && entry.attachments.length > 0)"
+              class="film-frame bg-[var(--bg-subtle)]/80 p-2.5 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl cursor-zoom-in group/img space-y-2"
               @click.stop="openLightbox(entry)"
               title="点击在暗房灯箱中放大"
             >
-              <img
-                :src="entry.images"
-                :alt="entry.title"
-                class="w-full max-h-[500px] object-cover editorial-image group-hover/img:scale-[1.01] transition-transform duration-500"
-                loading="lazy"
-              />
+              <div class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)]">
+                <img
+                  :src="entry.images || entry.attachments?.[0]?.url"
+                  :alt="entry.title"
+                  class="w-full max-h-[500px] object-cover editorial-image group-hover/img:scale-[1.01] transition-transform duration-500"
+                  loading="lazy"
+                />
+              </div>
+
+              <!-- 暗房相纸底款：EXP 编号与拍摄底片/器材元数据 -->
+              <div class="px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
+                <span class="tracking-widest">EXP. {{ String(index + 1).padStart(2, '0') }} · 胶片底片</span>
+                <span v-if="entry.meta" class="truncate max-w-[70%] text-right">{{ entry.meta }}</span>
+                <span v-else-if="entry.location">{{ entry.location }}</span>
+              </div>
             </div>
 
             <p
@@ -474,9 +485,22 @@ const getGapDays = (index: number): number => {
             </div>
           </div>
 
+          <!-- 标签胶囊列表 -->
+          <div v-if="entry.tags" class="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              v-for="t in entry.tags.split(/[,，\s]+/).filter(Boolean)"
+              :key="t"
+              @click.stop="emit('selectTag', t.trim())"
+              class="text-[11px] font-mono-archive text-[var(--ink-muted)] hover:text-[var(--accent-warm)] transition-colors cursor-pointer hover-underline"
+              title="按标签检索"
+            >
+              #{{ t.trim() }}
+            </button>
+          </div>
+
           <!-- 悬浮显露轻量操作提示 -->
           <div
-            class="pt-2 text-[11px] font-mono-archive text-[var(--ink-muted)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
+            class="pt-1 text-[11px] font-mono-archive text-[var(--ink-muted)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
           >
             <span>查看详情 / 编辑 →</span>
           </div>

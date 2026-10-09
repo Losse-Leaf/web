@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { LifeEntry, NowStatus, ArchiveCategory } from '../types'
+import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeActivityMap from './LifeActivityMap.vue'
 import LifeStream from './LifeStream.vue'
 import { ArrowRight } from 'lucide-vue-next'
@@ -8,14 +8,16 @@ import { ArrowRight } from 'lucide-vue-next'
 const props = defineProps<{
   entries: LifeEntry[]
   allEntries?: LifeEntry[]
-  now?: NowStatus | null
   currentCategory?: ArchiveCategory
+  config?: SiteConfig | null
+  profile?: CuratorProfile | null
 }>()
 
 const emit = defineEmits<{
   (e: 'navigate', view: string): void
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'selectEntry', entry: LifeEntry): void
+  (e: 'selectTag', tag: string): void
   (e: 'openAdd'): void
 }>()
 
@@ -44,31 +46,31 @@ const currentCategoryInfo = computed(() => {
     case 'daily':
       return {
         label: '日常',
-        title: '日常 // 生活时间流',
+        title: '日常 · 生活时间流',
         desc: '现实生活足迹：出门、吃饭、旅行、手冲、行迹与身边小事',
       }
     case 'thought':
       return {
         label: '想法',
-        title: '想法 // 生活时间流',
+        title: '想法 · 生活时间流',
         desc: '思想与文字：随笔、感悟、计划与碎片化思索',
       }
     case 'project':
       return {
         label: '项目',
-        title: '项目 // 生活时间流',
+        title: '项目 · 生活时间流',
         desc: '创造与探索：ArchCanvas、Go 底层工具、开源服务与个人创作',
       }
     case 'collection':
       return {
         label: '收藏',
-        title: '收藏 // 生活时间流',
+        title: '收藏 · 生活时间流',
         desc: '喜爱与长伴：唱片、书籍、游戏、设备与值得保留之物',
       }
     default:
       return {
         label: '全部记录',
-        title: '全部记录 // 生活时间流',
+        title: '全部记录 · 生活时间流',
         desc: '完整生活时间线：日常、想法、项目与收藏自然相融',
       }
   }
@@ -77,43 +79,27 @@ const showHeatmap = ref(false)
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-5 sm:px-8 text-left">
+  <div class="max-w-4xl mx-auto px-4 sm:px-8 text-left">
     
     <!-- 开篇封面 (紧凑、静默、优雅的自白引言) -->
-    <section class="pt-12 sm:pt-16 pb-8 border-b border-[var(--border-subtle)]">
+    <section class="pt-10 sm:pt-16 pb-8 border-b border-[var(--border-subtle)]">
       <div class="space-y-4">
         <div class="flex items-baseline justify-between">
           <h1 class="font-serif-editorial text-3xl sm:text-5xl font-medium tracking-tight text-[var(--ink-primary)]">
-            散页
+            {{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}
           </h1>
           <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
-            杭州 · {{ todayDisplay }}
+            {{ profile?.current_city || profile?.location?.split('·')?.[1]?.trim() || config?.default_location?.split('·')?.[1]?.trim() || '杭州' }} · {{ todayDisplay }}
           </span>
         </div>
 
-        <p class="font-mono-archive text-xs sm:text-sm tracking-widest text-[var(--ink-muted)] uppercase">
-          // LOOSE LEAF · 迟暮的生活档案馆
+        <p class="font-serif-editorial text-xs sm:text-sm tracking-wider text-[var(--ink-muted)]">
+          {{ (config?.site_subtitle && !config.site_subtitle.includes('档案馆')) ? config.site_subtitle : '时光手账与生活档案 · 记录真实可感的日子' }}
         </p>
 
         <p class="font-serif-editorial text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed italic max-w-2xl pt-1">
-          “我做过的事，我看过的风景，我思考过的念头，和我不想遗忘的瞬间。”
+          “{{ profile?.motto || '我做过的事，我看过的风景，我思考过的念头，和我不想遗忘的瞬间。' }}”
         </p>
-
-        <!-- 当下切片微横幅 (NOW) -->
-        <div
-          v-if="now"
-          class="pt-3 border-t border-[var(--border-subtle)]/60 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs font-mono-archive text-[var(--ink-muted)]"
-        >
-          <span class="text-[var(--ink-primary)] font-medium">此刻 //</span>
-          <span>正在构建：{{ now.building }}</span>
-          <span>听：{{ now.listening }}</span>
-          <button
-            @click="emit('navigate', 'now')"
-            class="hover:text-[var(--ink-primary)] hover-underline cursor-pointer ml-auto hidden sm:inline"
-          >
-            完整当下状态 →
-          </button>
-        </div>
       </div>
     </section>
 
@@ -121,8 +107,8 @@ const showHeatmap = ref(false)
     <section class="py-4 border-b border-[var(--border-subtle)]">
       <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
         <div class="flex items-center gap-2">
-          <span class="text-[var(--ink-secondary)] font-medium">生活刻度 // 2026</span>
-          <span>全年在册 {{ heatmapEntries.length }} 条印记</span>
+          <span class="text-[var(--ink-secondary)] font-medium">生活刻度 · 最近一年</span>
+          <span>在册 {{ heatmapEntries.length }} 条印记</span>
         </div>
         <button
           @click="showHeatmap = !showHeatmap"
@@ -179,6 +165,7 @@ const showHeatmap = ref(false)
         @clearDateFilter="selectedDate = ''"
         @changeCategory="emit('changeCategory', $event)"
         @selectEntry="emit('selectEntry', $event)"
+        @selectTag="emit('selectTag', $event)"
         @openAdd="emit('openAdd')"
       />
 

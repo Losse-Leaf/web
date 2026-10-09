@@ -44,14 +44,15 @@ onBeforeUnmount(() => {
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-[100] flex flex-col justify-between p-4 sm:p-8 bg-[#121110]/95 backdrop-blur-md text-[#ece9e1] animate-in fade-in duration-200 select-none cursor-default"
+    class="fixed inset-0 z-[100] flex flex-col justify-between p-3 sm:p-8 bg-[#121110]/95 backdrop-blur-md text-[#ece9e1] animate-in fade-in duration-200 select-none cursor-default"
+    style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px)); padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));"
     @click.self="emit('close')"
   >
     <!-- 顶部暗房灯箱控制栏 -->
     <header class="w-full max-w-6xl mx-auto flex items-center justify-between py-2 border-b border-white/10 text-xs font-mono-archive text-[#98958c]">
       <div class="flex items-center gap-3">
-        <span class="text-[#d8764b] font-medium tracking-widest">// 暗房底片灯箱</span>
-        <span class="hidden sm:inline opacity-60">· DARKROOM LIGHTBOX</span>
+        <span class="text-[#d8764b] font-medium tracking-widest">暗房底片灯箱</span>
+        <span class="hidden sm:inline opacity-60">· 胶片原图查看</span>
       </div>
 
       <button
@@ -69,11 +70,11 @@ onBeforeUnmount(() => {
       class="flex-grow flex items-center justify-center p-2 sm:p-6 overflow-hidden"
       @click.self="emit('close')"
     >
-      <div class="relative max-w-5xl max-h-[76vh] flex flex-col items-center">
+      <div class="relative max-w-5xl max-h-[76dvh] sm:max-h-[76vh] flex flex-col items-center">
         <img
           :src="imageUrl"
           :alt="title || '底片装裱'"
-          class="max-w-full max-h-[76vh] object-contain rounded-xs shadow-[0_25px_60px_rgba(0,0,0,0.6)] ring-1 ring-white/10 select-none"
+          class="max-w-full max-h-[76dvh] sm:max-h-[76vh] object-contain rounded-xs shadow-[0_25px_60px_rgba(0,0,0,0.6)] ring-1 ring-white/10 select-none"
         />
       </div>
     </main>

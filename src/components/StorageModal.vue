@@ -19,13 +19,13 @@ const emit = defineEmits<{
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_40px_rgba(0,0,0,0.1)] w-full max-w-md rounded-xs p-6 sm:p-8 text-left space-y-6"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_40px_rgba(0,0,0,0.1)] w-full max-w-md rounded-xs p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto"
     >
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
         <div class="flex items-center gap-2.5">
           <Server class="w-4 h-4 text-[var(--ink-secondary)]" />
           <h2 class="font-serif-editorial text-xl font-medium text-[var(--ink-primary)]">
-            对象存储设置 // STORAGE
+            对象存储设置
           </h2>
         </div>
         <button

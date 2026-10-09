@@ -196,7 +196,7 @@ const handleSubmit = async () => {
     @click.self="handleClose"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-xs p-6 sm:p-8 text-left transition-all duration-200 relative"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative"
     >
       <!-- 顶部轻量标头 -->
       <div class="flex items-center justify-between pb-6 border-b border-[var(--border-subtle)] mb-6">

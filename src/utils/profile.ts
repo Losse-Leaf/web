@@ -6,10 +6,13 @@ export const DEFAULT_PROFILE: UserProfile = {
   name: '迟暮',
   title: '独立开发者 · 胶片摄影与手冲咖啡学徒 · 城市漫游者',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
+  avatar_key: '',
   location: '中国 · 杭州 (西湖区 / 余杭)',
+  current_city: '杭州',
   philosophy: '生活大于项目，真实大于表演。',
+  motto: '生活大于项目，真实大于表演。',
   bio: '我喜欢具体的、有体温的事物。清晨手冲咖啡时漫开的花果香气、骑着公路车穿过西湖杨公堤时迎面扑来的湿润晚风、老旁轴相机快门闭合时清脆的一声咔哒，以及在深夜书房里用 Go 雕琢出一套干净的并发状态机。生活终究是由一顿顿具体的饭、一趟趟具体的骑行、一次次真实的思索拼接而成的。',
-  email: 'chimu@codeactivityhub.top',
+  email: 'curator@looseleaf.me',
   github: 'https://github.com/YN1753',
   gearList: [
     // 1. 影像与暗房
