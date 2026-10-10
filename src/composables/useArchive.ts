@@ -10,7 +10,7 @@ export const DEFAULT_ENTRIES: LifeEntry[] = []
 
 function getInitialEntries(): LifeEntry[] {
   try {
-    const raw = localStorage.getItem(ENTRIES_CACHE_KEY) || localStorage.getItem('chimu_cached_entries')
+    const raw = localStorage.getItem(ENTRIES_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       const list = Array.isArray(parsed) ? parsed : parsed?.data

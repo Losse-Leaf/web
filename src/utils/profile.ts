@@ -21,7 +21,7 @@ export const DEFAULT_PROFILE: UserProfile = {
 
 export function loadCuratorProfile(): UserProfile {
   try {
-    const raw = localStorage.getItem(PROFILE_STORAGE_KEY) || localStorage.getItem('chimu_curator_profile')
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       const data = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed
@@ -50,7 +50,6 @@ export function loadCuratorProfile(): UserProfile {
 export function saveCuratorProfile(profile: UserProfile): void {
   try {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ cached_at: Date.now(), data: profile }))
-    localStorage.removeItem('chimu_curator_profile')
     window.dispatchEvent(new CustomEvent('looseleaf-profile-updated', { detail: profile }))
   } catch (err) {
     console.error('Failed to save curator profile to localStorage:', err)

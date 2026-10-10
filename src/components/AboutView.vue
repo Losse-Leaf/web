@@ -227,7 +227,7 @@ onMounted(() => {
           <!-- 胶片装裱边框底款参数 -->
           <div class="pt-3 px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span class="tracking-widest">EXP. 01 · 35mm 肖像</span>
-            <span class="text-[var(--ink-secondary)]">{{ cityDisplay }} · 档案馆收录</span>
+            <span class="text-[var(--ink-secondary)]">{{ cityDisplay }} · 档案收录</span>
           </div>
         </div>
 

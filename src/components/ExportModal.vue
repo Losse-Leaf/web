@@ -82,7 +82,7 @@ const flashSuccess = (type: string) => {
 
       <!-- 档案馆现状概览 -->
       <div class="p-3.5 bg-[var(--bg-subtle)]/70 rounded-xs border border-[var(--border-subtle)] text-xs font-mono-archive space-y-1 text-[var(--ink-secondary)]">
-        <div class="text-[var(--ink-primary)] font-medium">当前生活档案馆指标</div>
+        <div class="text-[var(--ink-primary)] font-medium">当前生活档案指标</div>
         <div class="grid grid-cols-3 gap-2 pt-1 text-center">
           <div class="p-2 border border-[var(--border-subtle)] rounded-xs bg-[var(--bg-archive)]">
             <div class="text-base text-[var(--accent-warm)] font-medium font-serif-editorial">{{ entries.length }}</div>

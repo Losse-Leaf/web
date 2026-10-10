@@ -39,13 +39,9 @@ const isRainPlaying = ref(false)
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
-// 刊物品牌名（保证纯净无 ChiMu 拼音，默认始终为典雅中文《散页》）
+// 刊物品牌名（由后端配置单一驱动 RC-40）
 const displaySiteName = computed(() => {
-  const raw = props.config?.site_name?.split('·')?.[0]?.trim()
-  if (!raw || /chimu/i.test(raw)) {
-    return '散页'
-  }
-  return raw
+  return props.config?.site_name?.split('·')?.[0]?.trim() || '散页'
 })
 
 // 核心导航栏目（单轨统一，消除双重导航冲突）

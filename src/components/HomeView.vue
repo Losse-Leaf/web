@@ -29,22 +29,14 @@ const todayDisplay = computed(() => {
   return `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`
 })
 
-// 刊物品牌名（保证纯净无 ChiMu 拼音，默认始终为典雅中文《散页》）
+// 刊物品牌名（由后端配置单一驱动 RC-40）
 const displaySiteName = computed(() => {
-  const raw = props.config?.site_name?.split('·')?.[0]?.trim()
-  if (!raw || /chimu/i.test(raw)) {
-    return '散页'
-  }
-  return raw
+  return props.config?.site_name?.split('·')?.[0]?.trim() || '散页'
 })
 
-// 刊物副标题（优雅稳健，消除 ChiMu 及生硬的个人档案馆拼凑）
+// 刊物副标题（由后端配置单一驱动 RC-40）
 const displaySubtitle = computed(() => {
-  const sub = props.config?.site_subtitle
-  if (!sub || /chimu/i.test(sub) || sub.includes('档案馆')) {
-    return '时光手账与生活档案 · 记录真实可感的日子'
-  }
-  return sub
+  return props.config?.site_subtitle || '时光手账与生活档案 · 记录真实可感的日子'
 })
 
 const heatmapEntries = computed(() => props.allEntries || props.entries)

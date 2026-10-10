@@ -413,10 +413,10 @@ onUnmounted(() => {
               “认认真真过好具体的生活，保持安宁与自洽。时间是这里唯一的刻度。”
             </blockquote>
 
-            <!-- 档案馆三大篇章导览 -->
+            <!-- 生活档案三大篇章导览 -->
             <div class="space-y-3 pt-2">
               <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                档案馆三大篇章
+                生活档案三大篇章
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div
@@ -464,7 +464,7 @@ onUnmounted(() => {
                   <div class="flex items-center gap-3">
                     <BookOpen class="w-5 h-5 text-[var(--accent-warm)]" />
                     <span class="font-serif-editorial text-2xl font-normal">
-                      静心翻阅 · 开启档案馆
+                      静心翻阅 · 翻开散页
                     </span>
                   </div>
                   <p class="font-mono-archive text-xs opacity-75 max-w-sm">

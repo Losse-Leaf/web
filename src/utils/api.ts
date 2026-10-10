@@ -22,7 +22,7 @@ const ADMIN_TOKEN_KEY = 'looseleaf_admin_token'
 
 export function getAdminToken(): string {
   try {
-    return localStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem('chimu_admin_token') || ''
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || ''
   } catch {
     return ''
   }
@@ -31,14 +31,12 @@ export function getAdminToken(): string {
 export function setAdminToken(token: string): void {
   try {
     localStorage.setItem(ADMIN_TOKEN_KEY, token.trim())
-    localStorage.removeItem('chimu_admin_token')
   } catch {}
 }
 
 export function removeAdminToken(): void {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
-    localStorage.removeItem('chimu_admin_token')
   } catch {}
 }
 

@@ -9,7 +9,7 @@ class AudioEngine {
 
   constructor() {
     try {
-      const saved = localStorage.getItem(SOUND_PREF_KEY) || localStorage.getItem('chimu_sound_enabled')
+      const saved = localStorage.getItem(SOUND_PREF_KEY)
       if (saved !== null) {
         this.soundEnabled = saved === 'true'
       }

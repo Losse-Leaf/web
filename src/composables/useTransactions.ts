@@ -9,7 +9,7 @@ export const DEFAULT_TRANSACTIONS: Transaction[] = []
 
 function getInitialTransactions(): Transaction[] {
   try {
-    const raw = localStorage.getItem(TX_CACHE_KEY) || localStorage.getItem('chimu_cached_transactions')
+    const raw = localStorage.getItem(TX_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       const list = Array.isArray(parsed) ? parsed : parsed?.data
