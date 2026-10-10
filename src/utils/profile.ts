@@ -23,16 +23,12 @@ export function loadCuratorProfile(): CuratorProfile {
     if (raw) {
       const parsed = JSON.parse(raw)
       const data = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed
-      const gears = Array.isArray(data.edc_gear)
-        ? data.edc_gear
-        : Array.isArray(data.gearList)
-        ? data.gearList
-        : []
+      const gears = Array.isArray(data.edc_gear) ? data.edc_gear : []
       return {
         ...DEFAULT_PROFILE,
         ...data,
-        motto: data.motto || data.philosophy || DEFAULT_PROFILE.motto,
-        avatar_url: data.avatar_url || data.avatar || '',
+        motto: data.motto || DEFAULT_PROFILE.motto,
+        avatar_url: data.avatar_url || '',
         edc_gear: gears,
       }
     }
