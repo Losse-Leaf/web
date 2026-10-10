@@ -4,6 +4,7 @@ import type { LifeEntry, ArchiveCategory } from '../types'
 import { getEntryCategory, entryMatchesCategory } from '../types'
 import { ArrowUpRight, Maximize2 } from 'lucide-vue-next'
 import EditorialLightbox from './EditorialLightbox.vue'
+import { formatMoney } from '../utils/format'
 
 const props = defineProps<{
   entries: LifeEntry[]
@@ -131,12 +132,6 @@ const formatEntryTime = (entry: LifeEntry) => {
   return ''
 }
 
-const formatMoney = (cents: number): string => {
-  return (cents / 100).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
 // 岁月留白刻度计算 (计算两篇相邻记录之间的空白跨度)
 const getEntryTimestamp = (entry: LifeEntry): number => {

@@ -4,6 +4,7 @@ import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download } from
 import { fetchTransactions, fetchTransactionSummary, deleteTransaction, updateTransaction } from '../utils/api'
 import type { Transaction, TransactionSummary } from '../types'
 import { useExport } from '../composables/useExport'
+import { formatMoney } from '../utils/format'
 
 const props = defineProps<{
   transactions?: Transaction[]
@@ -115,12 +116,6 @@ const dayGroups = computed(() => {
   return groups
 })
 
-const formatMoney = (cents: number): string => {
-  return (cents / 100).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
 const startEdit = (tx: Transaction) => {
   editingTx.value = tx

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { X, BarChart3 } from 'lucide-vue-next'
 import type { GlobalStats } from '../types'
+import { formatMoney } from '../utils/format'
 
 defineProps<{
   isOpen: boolean
@@ -10,13 +11,6 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
-
-const formatMoney = (cents: number): string => {
-  return (cents / 100).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 </script>
 
 <template>

@@ -2,6 +2,7 @@
 import { ref, onUnmounted } from 'vue'
 import { Plus, X, RotateCcw, AlertCircle } from 'lucide-vue-next'
 import { presignUpload, uploadDirectToR2, completeUpload, cleanupUploads } from '../utils/api'
+import { audio } from '../utils/audio'
 import type { Attachment } from '../types'
 
 const props = defineProps<{
@@ -113,6 +114,7 @@ const startUpload = async (item: UploadItem) => {
     item.attachmentId = att.id
     item.status = 'completed'
     item.progress = 100
+    audio.playShutter()
     notifyChange()
   } catch (err: any) {
     item.status = 'error'

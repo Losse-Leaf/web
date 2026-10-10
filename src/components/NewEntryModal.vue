@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import { createLifeEntry, createTransaction, createProject } from '../utils/api'
+import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project } from '../types'
 
 const props = defineProps<{
@@ -179,6 +180,7 @@ const handleSubmit = async () => {
       attachment_ids: attachmentIds.value,
     })
 
+    audio.playShutter()
     emit('entryCreated', created)
     handleClose()
   } catch (err: any) {
