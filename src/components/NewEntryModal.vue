@@ -30,6 +30,7 @@ const errorMsg = ref<string | null>(null)
 const title = ref('')
 const content = ref('')
 const location = ref('')
+const tags = ref('')
 const occurredAt = ref(getTodayDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const attachmentIds = ref<number[]>([])
@@ -71,6 +72,7 @@ const resetForm = () => {
   title.value = ''
   content.value = ''
   location.value = ''
+  tags.value = ''
   occurredAt.value = getTodayDateTimeString()
   selectedProjectId.value = null
   attachmentIds.value = []
@@ -176,6 +178,7 @@ const handleSubmit = async () => {
       content: content.value.trim() || (selectedKind.value === 'photo' ? '定格的照片。' : ''),
       occurred_at: occurredAt.value,
       location: location.value.trim(),
+      tags: tags.value.trim(),
       project_id: projId,
       attachment_ids: attachmentIds.value,
     })
@@ -410,6 +413,19 @@ const handleSubmit = async () => {
                 class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
+          </div>
+
+          <!-- 标签 (可选) -->
+          <div class="space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
+              标签 (可选，逗号分隔)
+            </label>
+            <input
+              v-model="tags"
+              type="text"
+              placeholder="例如：胶片, 摄影, 秋天, 漫游"
+              class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+            />
           </div>
 
           <!-- 项目关联 (可选) -->

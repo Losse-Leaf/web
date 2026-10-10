@@ -129,6 +129,7 @@ export async function createLifeEntry(data: {
   content: string
   occurred_at?: string
   location?: string
+  tags?: string
   project_id?: number | null
   attachment_ids?: number[]
 }): Promise<LifeEntry> {
@@ -146,6 +147,7 @@ export async function updateLifeEntry(
     content?: string
     occurred_at?: string
     location?: string
+    tags?: string
     project_id?: number | null
     attachment_ids?: number[]
   }
