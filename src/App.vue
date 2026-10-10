@@ -45,22 +45,14 @@ import {
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
 import { markEnteredArchive, clearEnteredArchive, hasEnteredArchiveSession } from './utils/auth'
 
-// 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32)
+// 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32, RC-47)
 const syncProfileCache = (profile: CuratorProfile) => {
   curatorProfile.value = profile
   saveCuratorProfile({
     ...DEFAULT_PROFILE,
-    name: profile.name || DEFAULT_PROFILE.name,
-    title: profile.title || DEFAULT_PROFILE.title,
-    avatar_url: profile.avatar_url || DEFAULT_PROFILE.avatar_url,
-    avatar_key: profile.avatar_key || '',
-    location: profile.location || DEFAULT_PROFILE.location,
-    current_city: profile.current_city || DEFAULT_PROFILE.current_city,
-    bio: profile.bio || DEFAULT_PROFILE.bio,
-    motto: profile.motto || DEFAULT_PROFILE.motto,
-    email: profile.email || DEFAULT_PROFILE.email,
-    github: profile.github || profile.social_links?.github || DEFAULT_PROFILE.github,
-    edc_gear: profile.edc_gear || DEFAULT_PROFILE.edc_gear,
+    ...profile,
+    github: profile.github || profile.social_links?.github || '',
+    edc_gear: profile.edc_gear || [],
   })
 }
 

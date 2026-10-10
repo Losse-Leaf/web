@@ -92,13 +92,6 @@ export interface LifeEntry {
   project?: Project
   attachments?: Attachment[]
 
-  // 兼容老版本
-  date?: string
-  year?: string
-  month?: string
-  day?: string
-  time?: string
-  images?: string
   meta?: string
   tags?: string
   link?: string
