@@ -374,19 +374,9 @@ export async function bootstrapSystem(data: BootstrapPayload): Promise<Bootstrap
 
 // 11. 网页反向扫码与口令快速登入 (Reverse QR Login & Passcode Verify)
 export async function createQRLoginSession(): Promise<QRLoginSession> {
-  try {
-    return await request<QRLoginSession>(`${API_BASE}/auth/qr/create`, {
-      method: 'POST',
-    })
-  } catch {
-    // 降级模拟 session
-    const mockId = `qr_sess_${Date.now().toString(36)}`
-    return {
-      session_id: mockId,
-      qr_payload: `looseleaf://login?session_id=${mockId}`,
-      expires_in_seconds: 120,
-    }
-  }
+  return request<QRLoginSession>(`${API_BASE}/auth/qr/create`, {
+    method: 'POST',
+  })
 }
 
 export async function pollQRLoginSession(sessionId: string): Promise<QRLoginPollResult> {

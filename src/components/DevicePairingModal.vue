@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import {
   X,
   Smartphone,
@@ -10,6 +10,7 @@ import {
   Copy,
   Check,
   Clock,
+  AlertCircle,
 } from 'lucide-vue-next'
 import type { TrustedDevice, PairingTicketResult } from '../types'
 import { initPairingTicket, fetchTrustedDevices, revokeTrustedDevice } from '../utils/api'
@@ -30,9 +31,11 @@ const isLoadingTicket = ref(false)
 const isLoadingDevices = ref(false)
 const countdownSeconds = ref(300)
 const copied = ref(false)
+const ticketError = ref('')
+const pairingSuccess = ref(false)
 let countdownTimer: number | null = null
-
-
+let pollTimer: number | null = null
+let initialDeviceCount = 0
 
 const startCountdown = (sec: number) => {
   if (countdownTimer) clearInterval(countdownTimer)
@@ -43,29 +46,61 @@ const startCountdown = (sec: number) => {
     } else {
       if (countdownTimer) clearInterval(countdownTimer)
       currentTicket.value = null
+      stopPairingPolling()
     }
   }, 1000)
 }
 
+// 补齐配对状态心跳轮询与快门音效自动刷新 (RG-06)
+const startPairingPolling = () => {
+  stopPairingPolling()
+  initialDeviceCount = devices.value.length
+  pollTimer = window.setInterval(async () => {
+    try {
+      const latestDevices = await fetchTrustedDevices()
+      if (latestDevices && latestDevices.length > initialDeviceCount) {
+        // 检测到新设备已完成配对握手
+        audio.playShutter()
+        devices.value = latestDevices
+        pairingSuccess.value = true
+        stopPairingPolling()
+        if (countdownTimer) {
+          clearInterval(countdownTimer)
+          countdownTimer = null
+        }
+        setTimeout(() => {
+          pairingSuccess.value = false
+          currentTicket.value = null
+        }, 5000)
+      }
+    } catch {
+      // 轮询偶发网络抖动忽略
+    }
+  }, 2500)
+}
+
+const stopPairingPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+// 移除假工单兜底，让错误真实抛出并呈现给用户 (RG-04)
 const generateTicket = async () => {
   audio.playTink()
   isLoadingTicket.value = true
+  ticketError.value = ''
+  pairingSuccess.value = false
   try {
     const res = await initPairingTicket()
     currentTicket.value = res
     startCountdown(res.expires_in_seconds || 300)
-  } catch {
-    // 降级为本地演示工单
-    const randomPin = String(Math.floor(100000 + Math.random() * 900000))
-    const mockTicket = `pair_tk_${Math.random().toString(36).substring(2, 10)}`
-    currentTicket.value = {
-      ticket: mockTicket,
-      pin_code: randomPin,
-      expires_at: new Date(Date.now() + 300000).toISOString(),
-      expires_in_seconds: 300,
-      qr_payload: `looseleaf://pair?ticket=${mockTicket}&hub=${window.location.origin}`,
-    }
-    startCountdown(300)
+    startPairingPolling()
+  } catch (err: any) {
+    ticketError.value = err?.message || '获取配对工单失败，请检查服务连接'
+    currentTicket.value = null
+    stopPairingPolling()
   } finally {
     isLoadingTicket.value = false
   }
@@ -120,11 +155,12 @@ watch(
   (open) => {
     if (open) {
       loadDevices()
-      if (!currentTicket.value) {
-        generateTicket()
-      }
+      generateTicket()
     } else {
       if (countdownTimer) clearInterval(countdownTimer)
+      stopPairingPolling()
+      ticketError.value = ''
+      pairingSuccess.value = false
     }
   }
 )
@@ -134,6 +170,11 @@ onMounted(() => {
     loadDevices()
     generateTicket()
   }
+})
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer)
+  stopPairingPolling()
 })
 </script>
 
@@ -192,6 +233,32 @@ onMounted(() => {
 
       <!-- 板块 1：生成配对 PIN 码与二维码 -->
       <div v-if="activeTab === 'pair'" class="space-y-6">
+        <!-- 配对成功横幅 (RG-06) -->
+        <div
+          v-if="pairingSuccess"
+          class="p-3 bg-[var(--accent-moss)]/10 border border-[var(--accent-moss)]/30 rounded-xs flex items-center gap-2 text-xs font-serif-editorial text-[var(--accent-moss)]"
+        >
+          <Check class="w-4 h-4 shrink-0" />
+          <span>新终端已成功握手并授信，散页已记录此设备。</span>
+        </div>
+
+        <!-- 错误提示横幅 (RG-04) -->
+        <div
+          v-if="ticketError"
+          class="p-3 bg-red-500/10 border border-red-500/30 rounded-xs flex items-center justify-between gap-2 text-xs font-mono-archive text-red-600 dark:text-red-400"
+        >
+          <div class="flex items-center gap-2">
+            <AlertCircle class="w-4 h-4 shrink-0" />
+            <span>{{ ticketError }}</span>
+          </div>
+          <button
+            @click="generateTicket"
+            class="underline hover:opacity-80 cursor-pointer text-[11px]"
+          >
+            重试
+          </button>
+        </div>
+
         <div class="p-4 bg-[var(--bg-subtle)]/70 rounded-xs border border-[var(--border-subtle)] space-y-4">
           <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
             <span>配对凭据有效期</span>
