@@ -61,8 +61,8 @@ const isLoggingIn = ref(false)
 const loginError = ref('')
 
 // 阶段判定 (RC-59 / RC-60)：
-// 当 status.initialized === false 且本地无管理员 Token 时，独占渲染阶段一「唯一首次装帧两步向导」
-const isBootstrapOnlyStage = computed(() => !status.value.initialized && !isCurator.value)
+// 当 status.initialized === false 时，无条件清空失效的本地残留 Token 并独占渲染阶段一「唯一首次装帧两步向导」
+const isBootstrapOnlyStage = computed(() => !status.value.initialized)
 
 // 阶段一：首次装帧两步闭环向导状态 (Step 1: 双次设密 -> Step 2: 散页风配对码与设备激活)
 const bootstrapStep = ref<1 | 2>(1)
@@ -84,6 +84,17 @@ let pollTimer: number | null = null
 
 const checkCuratorAuth = () => {
   isCurator.value = Boolean(getAdminToken())
+}
+
+const applySystemStatus = (s: SystemStatus) => {
+  status.value = s
+  if (!s.initialized) {
+    removeAdminToken()
+    clearEnteredArchive()
+    isCurator.value = false
+  } else {
+    checkCuratorAuth()
+  }
 }
 
 const onBootstrapCitySelect = (city: { code: string; name: string }) => {
@@ -341,7 +352,7 @@ watch(
   () => props.systemStatus,
   (newS) => {
     if (newS) {
-      status.value = newS
+      applySystemStatus(newS)
     }
   },
   { immediate: true }
@@ -351,7 +362,7 @@ onMounted(async () => {
   checkCuratorAuth()
   try {
     const s = await fetchSystemStatus()
-    status.value = s
+    applySystemStatus(s)
   } catch {}
 })
 

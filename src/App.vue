@@ -18,7 +18,7 @@ import ExportModal from './components/ExportModal.vue'
 import DevicePairingModal from './components/DevicePairingModal.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 import FloatingActionButton from './components/FloatingActionButton.vue'
-import { getAdminToken } from './utils/api'
+import { getAdminToken, removeAdminToken } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
 import { useTransactions } from './composables/useTransactions'
@@ -313,8 +313,9 @@ onMounted(async () => {
     }
     if (sysRes.status === 'fulfilled' && sysRes.value) {
       systemStatus.value = sysRes.value
-      // 若系统尚未初始化且本地无管理员 Token，必须停留在欢迎扉页首次装帧向导 (RC-59)
-      if (!sysRes.value.initialized && !getAdminToken()) {
+      // 若系统尚未初始化，无条件清空本地残留旧 Token 并停留在欢迎扉页首次装帧向导 (RC-59)
+      if (!sysRes.value.initialized) {
+        removeAdminToken()
         clearEnteredArchive()
         hasEnteredArchive.value = false
       } else if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
@@ -338,7 +339,7 @@ const checkHasEntered = (): boolean => {
 const hasEnteredArchive = ref<boolean>(checkHasEntered())
 
 const handleEnterArchive = () => {
-  if (systemStatus.value && !systemStatus.value.initialized && !getAdminToken()) {
+  if (systemStatus.value && !systemStatus.value.initialized) {
     return
   }
   hasEnteredArchive.value = true
