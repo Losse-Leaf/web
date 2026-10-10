@@ -4,6 +4,7 @@ import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle } from 'lucide-vue
 import ImageUploader from './ImageUploader.vue'
 import { updateLifeEntry, deleteLifeEntry } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
+import { parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   entry: LifeEntry | null
@@ -46,9 +47,11 @@ const startEdit = () => {
     if (!isNaN(d.getTime())) {
       const pad = (n: number) => String(n).padStart(2, '0')
       editOccurredAt.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    } else {
+      editOccurredAt.value = ''
     }
-  } else if (props.entry.date) {
-    editOccurredAt.value = `${props.entry.date.replace(/\./g, '-')}T${props.entry.time || '12:00'}`
+  } else {
+    editOccurredAt.value = ''
   }
 }
 
@@ -107,9 +110,6 @@ const displayImages = computed(() => {
   if (props.entry.attachments && props.entry.attachments.length > 0) {
     return props.entry.attachments.map((a) => a.url)
   }
-  if (props.entry.images) {
-    return props.entry.images.split(',').filter(Boolean)
-  }
   return []
 })
 
@@ -145,9 +145,9 @@ const getKindLabel = (type: string) => {
       <div class="flex items-center justify-between pb-6 border-b border-[var(--border-subtle)] mb-8">
         <div class="flex items-center gap-2 font-mono-archive text-xs text-[var(--ink-muted)]">
           <span class="text-[var(--ink-primary)] font-medium">
-            {{ entry.year || '2026' }}.{{ entry.month || '10' }}.{{ entry.day || '09' }}
+            {{ parseOccurredDate(entry.occurred_at).dotDate }}
           </span>
-          <span v-if="entry.time">· {{ entry.time }}</span>
+          <span v-if="parseOccurredDate(entry.occurred_at).time">· {{ parseOccurredDate(entry.occurred_at).time }}</span>
           <span>·</span>
           <span class="text-[var(--ink-secondary)]">{{ getKindLabel(entry.type) }}</span>
         </div>

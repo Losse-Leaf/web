@@ -32,6 +32,7 @@ import type {
   SystemStatus,
 } from './types'
 import { entryMatchesCategory } from './types'
+import { parseOccurredDate } from './utils/format'
 import {
   fetchEntryById,
   fetchStorageStatus,
@@ -113,16 +114,8 @@ const allTimelineEntries = computed(() => {
   const txEntries = transactionsList.value.map(txToEntry)
   const combined = [...entries.value, ...txEntries]
   combined.sort((a, b) => {
-    const timeA = a.occurred_at
-      ? new Date(a.occurred_at).getTime()
-      : a.date
-      ? new Date(a.date.replace(/\./g, '-')).getTime()
-      : 0
-    const timeB = b.occurred_at
-      ? new Date(b.occurred_at).getTime()
-      : b.date
-      ? new Date(b.date.replace(/\./g, '-')).getTime()
-      : 0
+    const timeA = parseOccurredDate(a.occurred_at).timestamp
+    const timeB = parseOccurredDate(b.occurred_at).timestamp
     return timeB - timeA
   })
   return combined

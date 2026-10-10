@@ -47,7 +47,7 @@ export const entryMatchesCategory = (entry: LifeEntry, category: ArchiveCategory
     return cat === 'transaction' || entry.type === 'transaction' || Boolean(entry.is_transaction)
   }
   if (category === 'photo') {
-    return cat === 'photo' || Boolean(entry.images) || Boolean(entry.attachments && entry.attachments.length > 0)
+    return cat === 'photo' || Boolean(entry.attachments && entry.attachments.length > 0)
   }
   if (category === 'daily') {
     return cat === 'daily' || cat === 'photo'

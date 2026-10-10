@@ -4,7 +4,7 @@ import type { LifeEntry, ArchiveCategory } from '../types'
 import { getEntryCategory, entryMatchesCategory } from '../types'
 import { ArrowUpRight, Maximize2 } from 'lucide-vue-next'
 import EditorialLightbox from './EditorialLightbox.vue'
-import { formatMoney } from '../utils/format'
+import { formatMoney, parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   entries: LifeEntry[]
@@ -38,7 +38,7 @@ const getEntryFirstImage = (entry: LifeEntry): string => {
   if (entry.attachments && entry.attachments.length > 0 && entry.attachments[0].url) {
     return entry.attachments[0].url
   }
-  return entry.images || ''
+  return ''
 }
 
 const openLightbox = (entry: LifeEntry, customUrl?: string) => {
@@ -75,10 +75,10 @@ const categoryFilters: { key: ArchiveCategory; label: string }[] = [
 const filteredEntries = computed(() => {
   let list = props.entries
 
-  // 1. 日期筛选
+  // 1. 日期筛选 (RC-48)
   if (props.dateFilter) {
     const target = props.dateFilter.replace(/-/g, '.').trim()
-    list = list.filter((e) => (e.date ? e.date.replace(/-/g, '.').trim() === target : true))
+    list = list.filter((e) => parseOccurredDate(e.occurred_at).dotDate === target)
   }
 
   // 2. 类别筛选
@@ -115,47 +115,17 @@ const getCategoryName = (entry: LifeEntry) => {
 }
 
 const formatEntryDate = (entry: LifeEntry) => {
-  if (entry.month && entry.day) {
-    return `${entry.month}月${entry.day}日`
-  }
-  if (entry.occurred_at) {
-    const d = new Date(entry.occurred_at)
-    if (!isNaN(d.getTime())) {
-      return `${d.getMonth() + 1}月${d.getDate()}日`
-    }
-  }
-  return entry.date || '近期'
+  const { month, day } = parseOccurredDate(entry.occurred_at)
+  return `${Number(month)}月${Number(day)}日`
 }
 
 const formatEntryTime = (entry: LifeEntry) => {
-  if (entry.time) return entry.time
-  if (entry.occurred_at) {
-    const d = new Date(entry.occurred_at)
-    if (!isNaN(d.getTime())) {
-      const pad = (n: number) => String(n).padStart(2, '0')
-      return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-    }
-  }
-  return ''
+  return parseOccurredDate(entry.occurred_at).time
 }
-
 
 // 岁月留白刻度计算 (计算两篇相邻记录之间的空白跨度)
 const getEntryTimestamp = (entry: LifeEntry): number => {
-  if (entry.occurred_at) {
-    const t = new Date(entry.occurred_at).getTime()
-    if (!isNaN(t)) return t
-  }
-  if (entry.date) {
-    const clean = entry.date.replace(/\./g, '-')
-    const t = new Date(clean).getTime()
-    if (!isNaN(t)) return t
-  }
-  if (entry.year && entry.month && entry.day) {
-    const t = new Date(`${entry.year}-${entry.month}-${entry.day}`).getTime()
-    if (!isNaN(t)) return t
-  }
-  return 0
+  return parseOccurredDate(entry.occurred_at).timestamp
 }
 
 const getGapDays = (index: number): number => {

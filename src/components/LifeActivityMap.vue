@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import type { LifeEntry } from '../types'
+import { parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   entries: LifeEntry[]
@@ -23,18 +24,11 @@ const hoveredDay = ref<{
   y: number
 } | null>(null)
 
-// 规范化日期格式辅助函数：确保 "2026.10.09" 或 "2026-10-09" 统一为 "YYYY.MM.DD"
-const normalizeDate = (d: string) => {
-  return d.replace(/-/g, '.').trim()
-}
-
 // 建立日期映射表
 const entryMap = computed(() => {
   const map = new Map<string, LifeEntry[]>()
   props.entries.forEach(e => {
-    const rawDate = e.date || (e.occurred_at ? e.occurred_at.slice(0, 10) : '')
-    if (!rawDate) return
-    const key = normalizeDate(rawDate)
+    const key = parseOccurredDate(e.occurred_at).dotDate
     const list = map.get(key) || []
     list.push(e)
     map.set(key, list)

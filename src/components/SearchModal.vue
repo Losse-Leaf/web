@@ -4,6 +4,7 @@ import { Search, X, Calendar, Tag, ArrowRight } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { audio } from '../utils/audio'
 import { extractAllTags, filterEntriesBySearch } from '../composables/useArchive'
+import { parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   isOpen: boolean
@@ -179,7 +180,7 @@ onUnmounted(() => {
             </span>
             <span class="flex items-center gap-1">
               <Calendar class="w-3 h-3" />
-              {{ item.date || item.occurred_at?.slice(0, 10) }}
+              {{ parseOccurredDate(item.occurred_at).dotDate }}
             </span>
           </div>
 

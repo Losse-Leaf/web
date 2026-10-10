@@ -1,26 +1,36 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { LifeEntry } from '../types'
+import { parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   entries: LifeEntry[]
 }>()
 
-const selectedYear = ref('2026')
+const currentYearStr = new Date().getFullYear().toString()
+const selectedYear = ref(currentYearStr)
 
-// 获取所有出现的年份
+// 获取所有出现的年份 (RC-48)
 const years = computed(() => {
   const set = new Set<string>()
   props.entries.forEach(e => {
-    if (e.year) set.add(e.year)
-    else set.add('2026')
+    const { year } = parseOccurredDate(e.occurred_at)
+    if (year) set.add(year)
   })
-  return Array.from(set).sort((a, b) => b.localeCompare(a))
+  const list = Array.from(set).sort((a, b) => b.localeCompare(a))
+  return list.length > 0 ? list : [currentYearStr]
 })
 
-// 当前年份的所有条目
+// 当年份列表更新且 selectedYear 不在列表中时，选中最新的一年
+watch(years, (newYears) => {
+  if (newYears.length > 0 && !newYears.includes(selectedYear.value)) {
+    selectedYear.value = newYears[0]
+  }
+}, { immediate: true })
+
+// 当前年份的所有条目 (RC-48)
 const yearEntries = computed(() => {
-  return props.entries.filter(e => (e.year || '2026') === selectedYear.value)
+  return props.entries.filter(e => parseOccurredDate(e.occurred_at).year === selectedYear.value)
 })
 
 const getTypeName = (type: string) => {
@@ -50,13 +60,13 @@ const yearStats = computed(() => {
   return counts
 })
 
-// 按月份分组
+// 按月份分组 (RC-48)
 const monthGroups = computed(() => {
   const map = new Map<string, LifeEntry[]>()
   const monthOrder = ['12', '11', '10', '09', '08', '07', '06', '05', '04', '03', '02', '01']
   
   monthOrder.forEach(m => {
-    const list = yearEntries.value.filter(e => e.month === m || e.month === parseInt(m, 10).toString())
+    const list = yearEntries.value.filter(e => parseOccurredDate(e.occurred_at).month === m)
     if (list.length > 0) {
       map.set(m, list)
     }
@@ -66,6 +76,8 @@ const monthGroups = computed(() => {
 
 const getMonthFull = (m: string) => {
   const names: Record<string, string> = {
+    '12': '十二月 · DECEMBER',
+    '11': '十一月 · NOVEMBER',
     '10': '十月 · OCTOBER',
     '09': '九月 · SEPTEMBER',
     '08': '八月 · AUGUST',
@@ -78,6 +90,11 @@ const getMonthFull = (m: string) => {
     '01': '一月 · JANUARY',
   }
   return names[m] || `${m}月`
+}
+
+const formatMonthDay = (occurredAt?: string) => {
+  const { month, day } = parseOccurredDate(occurredAt)
+  return `${month}.${day}`
 }
 </script>
 
@@ -144,7 +161,7 @@ const getMonthFull = (m: string) => {
           >
             <div class="flex items-baseline gap-4">
               <span class="font-mono-archive text-xs text-[var(--ink-muted)] shrink-0 w-12">
-                {{ item.month && item.day ? `${item.month}.${item.day}` : (item.date ? item.date.slice(5) : '近期') }}
+                {{ formatMonthDay(item.occurred_at) }}
               </span>
               <span class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors">
                 {{ item.title }}

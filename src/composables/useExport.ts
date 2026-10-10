@@ -1,5 +1,6 @@
 import type { LifeEntry, Transaction, Project, CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
+import { parseOccurredDate } from '../utils/format'
 
 export function useExport() {
   const triggerDownload = (filename: string, content: string, mime: string) => {
@@ -51,8 +52,9 @@ export function useExport() {
     lines.push('---\n')
 
     entries.forEach((e) => {
-      const dateStr = e.date || (e.occurred_at ? e.occurred_at.slice(0, 10) : '未知日期')
-      const timeStr = e.time || ''
+      const { dotDate, time } = parseOccurredDate(e.occurred_at)
+      const dateStr = dotDate
+      const timeStr = time
       const typeStr = e.type || 'life'
       const title = e.title || '无题'
 
@@ -70,9 +72,6 @@ export function useExport() {
         e.attachments.forEach((att) => {
           lines.push(`![${att.original_filename}](${att.url})`)
         })
-        lines.push('')
-      } else if (e.images) {
-        lines.push(`![照片](${e.images})`)
         lines.push('')
       }
 

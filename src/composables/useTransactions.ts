@@ -35,24 +35,12 @@ function throttledSaveTransactions(list: Transaction[]) {
 }
 
 export const txToEntry = (tx: Transaction): LifeEntry => {
-  const d = new Date(tx.occurred_at)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const year = !isNaN(d.getTime()) ? String(d.getFullYear()) : '2026'
-  const month = !isNaN(d.getTime()) ? pad(d.getMonth() + 1) : '10'
-  const day = !isNaN(d.getTime()) ? pad(d.getDate()) : '09'
-  const time = !isNaN(d.getTime()) ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : ''
-
   return {
     id: 100000 + tx.id,
     type: 'transaction',
     title: tx.title || tx.category || '记账',
     content: tx.note || '',
     occurred_at: tx.occurred_at,
-    date: `${year}.${month}.${day}`,
-    year,
-    month,
-    day,
-    time,
     amount: tx.amount,
     tx_type: tx.type,
     category: tx.category,
