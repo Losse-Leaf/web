@@ -1,26 +1,26 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2 } from 'lucide-vue-next'
-import type { UserProfile, GearItem } from '../types'
+import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2, User } from 'lucide-vue-next'
+import type { CuratorProfile, GearItem } from '../types'
 import { DEFAULT_PROFILE, saveCuratorProfile } from '../utils/profile'
 import { uploadUnifiedFile, updateCuratorProfile } from '../utils/api'
 
 const props = defineProps<{
   isOpen: boolean
-  profile: UserProfile
+  profile: CuratorProfile
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'updated', profile: UserProfile): void
+  (e: 'updated', profile: CuratorProfile): void
 }>()
 
-const cloneProfile = (p: UserProfile): UserProfile => ({
+const cloneProfile = (p: CuratorProfile): CuratorProfile => ({
   ...p,
-  gearList: p.gearList ? p.gearList.map((item) => ({ ...item })) : [],
+  edc_gear: p.edc_gear ? p.edc_gear.map((item) => ({ ...item })) : [],
 })
 
-const form = ref<UserProfile>(cloneProfile(props.profile))
+const form = ref<CuratorProfile>(cloneProfile(props.profile))
 const activeTab = ref<'base' | 'gear'>('base')
 
 // 头像上传与相对路径状态
@@ -99,14 +99,14 @@ const processAvatarUpload = async (file: File) => {
     })
     // 获得后端相对路径与有效访问 URL
     avatarKey.value = res.object_key
-    form.value.avatar = res.url
+    form.value.avatar_url = res.url
     form.value.avatar_key = res.object_key
   } catch (err: any) {
     // 离线/未配置存储时优雅降级：FileReader 本地暂存
     const reader = new FileReader()
     reader.onload = (ev) => {
       if (ev.target?.result) {
-        form.value.avatar = ev.target.result as string
+        form.value.avatar_url = ev.target.result as string
       }
     }
     reader.readAsDataURL(file)
@@ -120,14 +120,16 @@ const handleSave = async () => {
   isSaving.value = true
   saveError.value = ''
 
-  // 1. 规范清洗字段：彻底杜绝英文名，信条与座右铭合一，城市与坐标合一
-  form.value.motto = form.value.philosophy
+  // 1. 规范清洗字段：彻底杜绝英文名，信条与座右铭合一，城市与坐标合一 (RC-31)
+  if (!form.value.motto?.trim()) {
+    form.value.motto = DEFAULT_PROFILE.motto
+  }
   if (!form.value.location.trim()) {
     form.value.location = '中国 · 杭州'
   }
   form.value.current_city = form.value.location.split('·')[1]?.trim() || form.value.location.trim()
 
-  // 2. 尝试向后端更新持久化 (PUT /api/v1/profile)
+  // 2. 尝试向后端更新持久化 (PUT /api/v1/profile, RC-29, RC-31, RC-32)
   try {
     await updateCuratorProfile({
       name: form.value.name,
@@ -136,12 +138,11 @@ const handleSave = async () => {
       location: form.value.location,
       current_city: form.value.current_city,
       avatar_key: avatarKey.value || form.value.avatar_key || undefined,
-      avatar: avatarKey.value || form.value.avatar,
-      motto: form.value.philosophy,
-      philosophy: form.value.philosophy,
+      avatar_url: form.value.avatar_url,
+      motto: form.value.motto,
       email: form.value.email,
       github: form.value.github,
-      edc_gear: form.value.gearList,
+      edc_gear: form.value.edc_gear,
     })
   } catch (err: any) {
     console.warn('后端更新主理人档案失败，自动依赖本地缓存:', err)
@@ -169,7 +170,8 @@ const handleAddGear = () => {
     status: newGearStatus.value.trim(),
     note: newGearNote.value.trim(),
   }
-  form.value.gearList.push(item)
+  if (!form.value.edc_gear) form.value.edc_gear = []
+  form.value.edc_gear.push(item)
   newGearName.value = ''
   newGearSpec.value = ''
   newGearNote.value = ''
@@ -177,7 +179,7 @@ const handleAddGear = () => {
 }
 
 const removeGear = (idx: number) => {
-  form.value.gearList.splice(idx, 1)
+  form.value.edc_gear?.splice(idx, 1)
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -233,7 +235,7 @@ onMounted(() => {
           class="py-1 cursor-pointer transition-colors"
           :class="activeTab === 'gear' ? 'text-[var(--ink-primary)] font-semibold border-b-2 border-[var(--ink-primary)]' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
         >
-          随身与桌面设备 ({{ form.gearList.length }})
+          随身与桌面设备 ({{ (form.edc_gear || []).length }})
         </button>
       </div>
 
@@ -267,11 +269,18 @@ onMounted(() => {
               title="点击或拖拽本地照片更换肖像"
             >
               <img
-                :src="form.avatar"
+                v-if="form.avatar_url"
+                :src="form.avatar_url"
                 alt="头像预览"
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'"
               />
+              <div
+                v-else
+                class="w-full h-full flex flex-col items-center justify-center bg-[var(--bg-subtle)] text-[var(--ink-muted)] space-y-1 select-none"
+              >
+                <User class="w-8 h-8 stroke-1" />
+                <span class="text-[10px] font-mono-archive">选择肖像</span>
+              </div>
 
               <!-- 悬浮蒙版 -->
               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-mono-archive gap-1">
@@ -364,7 +373,7 @@ onMounted(() => {
           <div class="space-y-1">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">主理人生活信条</label>
             <input
-              v-model="form.philosophy"
+              v-model="form.motto"
               type="text"
               placeholder="例如: 生活大于项目，真实大于表演。"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
@@ -417,7 +426,7 @@ onMounted(() => {
         <!-- 顶部操作栏 -->
         <div class="flex items-center justify-between">
           <span class="text-xs font-mono-archive text-[var(--ink-muted)]">
-            已收录 {{ form.gearList.length }} 项设备器物
+            已收录 {{ (form.edc_gear || []).length }} 项设备器物
           </span>
 
           <button
@@ -501,7 +510,7 @@ onMounted(() => {
         <!-- 设备列表渲染 -->
         <div class="divide-y divide-[var(--border-subtle)]/70 max-h-[46vh] overflow-y-auto pr-1">
           <div
-            v-for="(item, idx) in form.gearList"
+            v-for="(item, idx) in (form.edc_gear || [])"
             :key="item.id || idx"
             class="py-3 flex items-start justify-between gap-4 group"
           >

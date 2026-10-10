@@ -13,7 +13,7 @@ import {
   Laptop,
   User,
 } from 'lucide-vue-next'
-import type { UserProfile, CuratorProfile } from '../types'
+import type { CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
 import ProfileEditModal from './ProfileEditModal.vue'
 import EditorialLightbox from './EditorialLightbox.vue'
@@ -23,11 +23,11 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'profileUpdated', profile: UserProfile): void
+  (e: 'profileUpdated', profile: CuratorProfile): void
 }>()
 
-// 内部编辑用的完整 UserProfile（合并 prop 与本地）
-const localProfile = ref<UserProfile>(loadCuratorProfile())
+// 内部编辑用的主理人档案 (RC-29)
+const localProfile = ref<CuratorProfile>(loadCuratorProfile())
 const isEditOpen = ref(false)
 const isLightboxOpen = ref(false)
 const selectedCategory = ref<string>('all')
@@ -43,14 +43,13 @@ watch(
         title: newP.title || localProfile.value.title,
         bio: newP.bio || localProfile.value.bio,
         location: newP.location || localProfile.value.location,
-        avatar: newP.avatar || newP.avatar_url || localProfile.value.avatar,
+        avatar_url: newP.avatar_url || localProfile.value.avatar_url,
         avatar_key: newP.avatar_key || localProfile.value.avatar_key,
-        philosophy: newP.philosophy || newP.motto || localProfile.value.philosophy,
+        motto: newP.motto || localProfile.value.motto,
         email: newP.email || localProfile.value.email,
         github: newP.github || newP.social_links?.github || localProfile.value.github,
         current_city: newP.current_city || localProfile.value.current_city,
-        motto: newP.motto || localProfile.value.motto,
-        gearList: newP.gearList || newP.edc_gear || localProfile.value.gearList,
+        edc_gear: newP.edc_gear || localProfile.value.edc_gear,
       }
     }
   },
@@ -59,18 +58,20 @@ watch(
 
 const categories = computed(() => {
   const set = new Set<string>()
-  localProfile.value.gearList.forEach((g) => {
+  const gears = localProfile.value.edc_gear || []
+  gears.forEach((g) => {
     if (g.category) set.add(g.category)
   })
   return Array.from(set)
 })
 
 const filteredGear = computed(() => {
-  if (selectedCategory.value === 'all') return localProfile.value.gearList
-  return localProfile.value.gearList.filter((g) => g.category === selectedCategory.value)
+  const gears = localProfile.value.edc_gear || []
+  if (selectedCategory.value === 'all') return gears
+  return gears.filter((g) => g.category === selectedCategory.value)
 })
 
-const handleProfileUpdated = (updated: UserProfile) => {
+const handleProfileUpdated = (updated: CuratorProfile) => {
   localProfile.value = updated
   emit('profileUpdated', updated)
 }
@@ -124,7 +125,7 @@ const craftPrinciples = [
 ]
 
 onMounted(() => {
-  window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent<UserProfile>) => {
+  window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent<CuratorProfile>) => {
     if (e.detail) localProfile.value = e.detail
   }) as EventListener)
 })
@@ -177,7 +178,7 @@ onMounted(() => {
       <div class="pt-4">
         <blockquote class="p-6 sm:p-8 rounded-xs bg-[var(--bg-subtle)]/50 border-l-3 border-[var(--accent-warm)] relative overflow-hidden">
           <div class="font-serif-editorial text-xl sm:text-2xl text-[var(--ink-primary)] italic leading-relaxed">
-            “{{ localProfile.philosophy || localProfile.motto || '生活大于项目，真实大于表演。' }}”
+            “{{ localProfile.motto || '生活大于项目，真实大于表演。' }}”
           </div>
           <div class="mt-3 font-mono-archive text-xs text-[var(--ink-muted)] uppercase tracking-wider flex items-center gap-2">
             <span>— 主理人生活信条</span>
@@ -202,8 +203,8 @@ onMounted(() => {
           <!-- 照片本体 -->
           <div class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] aspect-square border border-[var(--border-subtle)]/60">
             <img
-              v-if="localProfile.avatar"
-              :src="localProfile.avatar"
+              v-if="localProfile.avatar_url"
+              :src="localProfile.avatar_url"
               :alt="localProfile.name"
               class="w-full h-full object-cover group-hover:scale-[1.025] transition-transform duration-700 ease-out"
             />
@@ -378,7 +379,7 @@ onMounted(() => {
         </div>
 
         <div class="font-mono-archive text-xs text-[var(--ink-muted)]">
-          已编目收录 <strong class="text-[var(--ink-primary)]">{{ localProfile.gearList.length }}</strong> 件器物
+          已编目收录 <strong class="text-[var(--ink-primary)]">{{ (localProfile.edc_gear || []).length }}</strong> 件器物
         </div>
       </div>
 
@@ -396,7 +397,7 @@ onMounted(() => {
               : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'
           "
         >
-          全部器物 ({{ localProfile.gearList.length }})
+          全部器物 ({{ (localProfile.edc_gear || []).length }})
         </button>
 
         <button
@@ -410,7 +411,7 @@ onMounted(() => {
               : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'
           "
         >
-          {{ cat }} ({{ localProfile.gearList.filter(g => g.category === cat).length }})
+          {{ cat }} ({{ (localProfile.edc_gear || []).filter(g => g.category === cat).length }})
         </button>
       </div>
 
@@ -524,7 +525,7 @@ onMounted(() => {
     <!-- 暗房肖像大图灯箱 -->
     <EditorialLightbox
       :isOpen="isLightboxOpen"
-      :imageUrl="localProfile.avatar"
+      :imageUrl="localProfile.avatar_url || ''"
       :title="`${localProfile.name} · 主理人肖像`"
       :meta="'35mm PORTRAIT ARCHIVE'"
       :location="localProfile.location"

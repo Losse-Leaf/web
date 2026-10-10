@@ -208,25 +208,18 @@ export interface CuratorProfile {
   location: string
   current_city?: string
   avatar_url?: string
-  avatar?: string
   avatar_key?: string
   motto?: string
-  philosophy?: string
   manifesto?: string
   social_links?: Record<string, string>
   email?: string
   github?: string
   edc_gear?: GearItem[]
-  gearList?: GearItem[]
   updated_at?: string
 }
 
-// 统一主理人档案模型 (RC-29 ~ RC-32)
-export interface UserProfile extends CuratorProfile {
-  avatar: string
-  philosophy: string
-  gearList: GearItem[]
-}
+// 统一主理人档案模型契约，清除 UserProfile / philosophy / gearList 冗余 (RC-29, RC-31, RC-32)
+export type UserProfile = CuratorProfile
 
 export interface TrustedDevice {
   id: number

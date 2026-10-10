@@ -1,4 +1,4 @@
-import type { LifeEntry, Transaction, Project, UserProfile } from '../types'
+import type { LifeEntry, Transaction, Project, CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
 
 export function useExport() {
@@ -19,7 +19,7 @@ export function useExport() {
     entries: LifeEntry[]
     transactions: Transaction[]
     projects: Project[]
-    profile?: UserProfile
+    profile?: CuratorProfile
   }) => {
     const backup = {
       version: '1.0.0',
