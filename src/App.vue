@@ -208,6 +208,14 @@ const handleProjectCreated = (newProj: Project) => {
   projects.value = [newProj, ...projects.value]
 }
 
+const handleProjectUpdated = (updated: Project) => {
+  projects.value = projects.value.map((p) => (p.id === updated.id ? updated : p))
+}
+
+const handleProjectDeleted = (id: number) => {
+  projects.value = projects.value.filter((p) => p.id !== id)
+}
+
 const refreshData = async () => {
   try {
     const [, statsData, statusData] = await Promise.allSettled([
@@ -409,6 +417,9 @@ watch(currentView, (newV) => {
       <ProjectsView
         v-else-if="currentView === 'projects'"
         :projects="projects"
+        @projectCreated="handleProjectCreated"
+        @projectUpdated="handleProjectUpdated"
+        @projectDeleted="handleProjectDeleted"
       />
 
       <!-- 6. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->

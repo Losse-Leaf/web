@@ -359,16 +359,49 @@ export async function fetchProjects(): Promise<Project[]> {
 }
 
 export async function createProject(data: {
-  name: string
+  title: string
+  subtitle?: string
   description?: string
-  content?: string
+  story?: string
   category?: string
+  tags?: string
   github_url?: string
+  status?: string
+  featured?: boolean
+  order?: number
 }): Promise<Project> {
   return request<Project>(`${API_BASE}/projects`, {
     method: 'POST',
     body: JSON.stringify(data),
   })
+}
+
+export async function updateProject(
+  id: number,
+  data: {
+    title?: string
+    subtitle?: string
+    description?: string
+    story?: string
+    category?: string
+    tags?: string
+    github_url?: string
+    status?: string
+    featured?: boolean
+    order?: number
+  }
+): Promise<Project> {
+  return request<Project>(`${API_BASE}/projects/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteProject(id: number): Promise<boolean> {
+  await request(`${API_BASE}/projects/${id}`, {
+    method: 'DELETE',
+  })
+  return true
 }
 
 // 5. Global Stats

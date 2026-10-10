@@ -7,10 +7,6 @@ import {
   Mail,
   Github,
   Maximize2,
-  Camera,
-  Compass,
-  Coffee,
-  Laptop,
   User,
 } from 'lucide-vue-next'
 import type { CuratorProfile } from '../types'
@@ -46,7 +42,7 @@ watch(
         avatar_url: newP.avatar_url || localProfile.value.avatar_url,
         avatar_key: newP.avatar_key || localProfile.value.avatar_key,
         motto: newP.motto || localProfile.value.motto,
-        email: newP.email || localProfile.value.email,
+        email: newP.email || newP.social_links?.email || localProfile.value.email,
         github: newP.github || newP.social_links?.github || localProfile.value.github,
         current_city: newP.current_city || localProfile.value.current_city,
         edc_gear: newP.edc_gear || localProfile.value.edc_gear,
@@ -78,51 +74,20 @@ const handleProfileUpdated = (updated: CuratorProfile) => {
 
 // GitHub 用户名提取
 const githubUsername = computed(() => {
-  const url = localProfile.value.github || ''
+  const url = localProfile.value.github || localProfile.value.social_links?.github || ''
   const match = url.match(/github\.com\/([^/]+)/)
-  return match ? match[1] : 'GitHub'
+  return match ? match[1] : ''
 })
 
-// 城市提取
+// 城市提取 (纯真实数据驱动，无假城市兜底 RC-52)
 const cityDisplay = computed(() => {
   return (
     localProfile.value.current_city ||
-    localProfile.value.location.split('·')[1]?.trim() ||
-    '杭州'
+    localProfile.value.location?.split('·')[1]?.trim() ||
+    localProfile.value.location ||
+    ''
   )
 })
-
-// 主理人核心信条与手艺四重奏
-const craftPrinciples = [
-  {
-    num: '01',
-    icon: Camera,
-    title: '真实大于表演',
-    en: 'Reality over Performance',
-    desc: '记录真切发生过的饭食、底片与疲惫，拒绝为面试官量身定制的无瑕履历。',
-  },
-  {
-    num: '02',
-    icon: Compass,
-    title: '时间是唯一刻度',
-    en: 'Time as the Sole Scale',
-    desc: '不以成就排资论辈，散页按日期落印，每一次微小的思索都拥有同等重量。',
-  },
-  {
-    num: '03',
-    icon: Coffee,
-    title: '器物与手艺的体温',
-    en: 'Warmth of Tangible Craft',
-    desc: '手摇磨豆机的阻尼、旁轴机械快门的脆响，具体物理世界给予人充沛的安宁。',
-  },
-  {
-    num: '04',
-    icon: Laptop,
-    title: '代码作为表达工具',
-    en: 'Code as Pure Medium',
-    desc: '雕琢高并发状态机，搭建本地优先的软件，技术回归服务于自由而具体的个体。',
-  },
-]
 
 onMounted(() => {
   window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent<CuratorProfile>) => {
@@ -145,8 +110,8 @@ onMounted(() => {
         </div>
         
         <div class="flex items-center gap-4">
-          <span>坐标：{{ cityDisplay }}</span>
-          <span>·</span>
+          <span v-if="cityDisplay">坐标：{{ cityDisplay }}</span>
+          <span v-if="cityDisplay">·</span>
           <button
             @click="isEditOpen = true"
             class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
@@ -228,7 +193,7 @@ onMounted(() => {
           <!-- 胶片装裱边框底款参数 -->
           <div class="pt-3 px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span class="tracking-widest">EXP. 01 · 35mm 肖像</span>
-            <span class="text-[var(--ink-secondary)]">{{ cityDisplay }} · 档案收录</span>
+            <span v-if="cityDisplay" class="text-[var(--ink-secondary)]">{{ cityDisplay }} · 档案收录</span>
           </div>
         </div>
 
@@ -238,24 +203,24 @@ onMounted(() => {
           <div class="border-b border-[var(--border-subtle)] pb-3">
             <span class="text-[10px] tracking-wider text-[var(--ink-muted)] block">身份档案编目</span>
             <div class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium pt-0.5">
-              {{ localProfile.name }}
+              {{ localProfile.name || '未命名主理人' }}
             </div>
           </div>
 
           <div class="space-y-2.5 text-[var(--ink-secondary)]">
-            <div class="flex items-center gap-2">
+            <div v-if="localProfile.location" class="flex items-center gap-2">
               <MapPin class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0" />
               <span>{{ localProfile.location }}</span>
             </div>
             
-            <div class="flex items-center gap-2">
+            <div v-if="localProfile.email" class="flex items-center gap-2">
               <Mail class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0" />
               <a :href="`mailto:${localProfile.email}`" class="hover-underline truncate" :title="localProfile.email">
                 {{ localProfile.email }}
               </a>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div v-if="localProfile.github" class="flex items-center gap-2">
               <Github class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0" />
               <a
                 :href="localProfile.github"
@@ -263,7 +228,7 @@ onMounted(() => {
                 rel="noopener noreferrer"
                 class="hover-underline inline-flex items-center gap-1 text-[var(--ink-primary)]"
               >
-                <span>GitHub @{{ githubUsername }}</span>
+                <span>GitHub<template v-if="githubUsername"> @{{ githubUsername }}</template></span>
                 <ArrowUpRight class="w-3 h-3" />
               </a>
             </div>
@@ -288,74 +253,14 @@ onMounted(() => {
             <h3 class="tracking-wider">主理人自白</h3>
           </div>
           
-          <p class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] leading-relaxed whitespace-pre-line">
+          <p v-if="localProfile.bio" class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] leading-relaxed whitespace-pre-line">
             {{ localProfile.bio }}
           </p>
-        </section>
-
-        <!-- 为什么做《散页》 -->
-        <section class="space-y-4 pt-6 border-t border-[var(--border-subtle)]">
-          <div class="flex items-center gap-2 font-mono-archive text-xs text-[var(--ink-muted)]">
-            <span class="text-[var(--accent-warm)] font-medium">02</span>
-            <h3 class="tracking-wider">创刊初衷</h3>
-          </div>
-
-          <div class="font-serif-editorial text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed space-y-3.5">
-            <p>
-              在当下的互联网上，很多人的个人主页变成了千篇一律的职业履历展厅：满屏的技能徽章、KPI 指标、格式化的项目卡片与给招聘者看的说辞。
-            </p>
-            <p>
-              但我渐渐发现，那些真正构成我生命质感的东西——读完一本书时的触动、和朋友在深夜连麦打游戏的畅快、秋天满觉陇落满青石板的金桂底片——在那些标准的简历模板里根本无处安放。
-            </p>
-            <p class="text-[var(--ink-primary)]">
-              所以我决定推翻传统模板，把这里做成一本<strong>散页生活档案</strong>。时间是这里唯一的刻度。无论是一张底片、一段随笔、一个亲手造的轮子，还是一包咖啡豆的萃取数据，它们都是我生命中真真切切发生过的印记。
-            </p>
-          </div>
-        </section>
-
-      </div>
-
-    </section>
-
-    <!-- 核心板块 2：主理人手艺与生活原则 (The Principles of Craft) -->
-    <section class="space-y-8 pt-8 border-t border-[var(--border-subtle)]">
-      
-      <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-        <div>
-          <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)]">
-            生活信条与创作原则
-          </span>
-          <h2 class="font-serif-editorial text-2xl sm:text-3xl font-normal text-[var(--ink-primary)] mt-1">
-            四重刻度：如何在这里度过每一天
-          </h2>
-        </div>
-        <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
-          生活与手艺的四重支柱
-        </span>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div
-          v-for="p in craftPrinciples"
-          :key="p.num"
-          class="p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 hover:border-[var(--border-divider)] transition-all space-y-2.5"
-        >
-          <div class="flex items-center justify-between text-xs font-mono-archive">
-            <div class="flex items-center gap-1.5 text-[var(--accent-warm)]">
-              <component :is="p.icon" class="w-3.5 h-3.5" />
-              <span class="font-medium">{{ p.num }}</span>
-            </div>
-            <span class="text-[10px] text-[var(--ink-muted)] uppercase tracking-wider">{{ p.en }}</span>
-          </div>
-
-          <h3 class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
-            {{ p.title }}
-          </h3>
-
-          <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
-            {{ p.desc }}
+          <p v-else class="font-serif-editorial text-base sm:text-lg text-[var(--ink-muted)] italic leading-relaxed">
+            主理人暂未填写个人自白，点击上方「编辑主理人档案与器物」可补充属于你的生活印记与思考。
           </p>
-        </div>
+        </section>
+
       </div>
 
     </section>
@@ -480,12 +385,13 @@ onMounted(() => {
             写一封信给主理人
           </h3>
           <p class="font-serif-editorial text-sm text-[var(--ink-secondary)] max-w-xl">
-            若你对手冲萃取、旁轴胶片冲洗、Go 架构或是某个具体的生活瞬间有所共鸣，随时欢迎来信交流。
+            若你对这里的某篇生活散页、某段旅途光影或某个瞬间有所共鸣，欢迎来信交流。
           </p>
         </div>
 
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 font-mono-archive text-xs shrink-0">
+        <div v-if="localProfile.email || localProfile.github" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 font-mono-archive text-xs shrink-0">
           <a
+            v-if="localProfile.email"
             :href="`mailto:${localProfile.email}`"
             class="px-5 py-2.5 rounded-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity text-center flex items-center justify-center gap-1.5"
           >
@@ -494,21 +400,25 @@ onMounted(() => {
           </a>
 
           <a
+            v-if="localProfile.github"
             :href="localProfile.github"
             target="_blank"
             rel="noopener noreferrer"
             class="px-4 py-2.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors text-center flex items-center justify-center gap-1.5"
           >
             <Github class="w-3.5 h-3.5" />
-            <span>GitHub @{{ githubUsername }}</span>
+            <span>GitHub<template v-if="githubUsername"> @{{ githubUsername }}</template></span>
             <ArrowUpRight class="w-3 h-3" />
           </a>
+        </div>
+        <div v-else class="text-xs font-mono-archive text-[var(--ink-muted)]">
+          主理人暂未公开联络方式，可点击上方「编辑主理人档案与器物」补充邮箱或社交主页
         </div>
       </div>
 
       <!-- 版权与馆藏签名底款 (Colophon) -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono-archive text-[var(--ink-muted)] pt-4">
-        <span>《散页》· 时光手账与生活档案 · 杭城西子湖畔</span>
+        <span>《散页》· 时光手账与生活档案<template v-if="localProfile.location"> · {{ localProfile.location }}</template></span>
         <span>出版底款 · 严谨编目 · 2024–{{ new Date().getFullYear() }}</span>
       </div>
 

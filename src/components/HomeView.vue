@@ -69,7 +69,7 @@ const currentCategoryInfo = computed(() => {
       return {
         label: '项目',
         title: '项目 · 生活时间流',
-        desc: '创造与探索：ArchCanvas、Go 底层工具、开源服务与个人创作',
+        desc: '创造与探索：造物项目、开源实践、工具设计与长线创作',
       }
     case 'collection':
       return {

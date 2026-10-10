@@ -161,9 +161,9 @@ const handleSubmit = async () => {
     if (selectedKind.value === 'project' && title.value.trim() && !projId) {
       try {
         const newProj = await createProject({
-          name: title.value.trim(),
+          title: title.value.trim(),
           description: content.value.trim().slice(0, 100),
-          content: content.value.trim(),
+          story: content.value.trim(),
         })
         projId = newProj.id
         emit('projectCreated', newProj)
