@@ -7,6 +7,10 @@ const props = defineProps<{
   entries: LifeEntry[]
 }>()
 
+const emit = defineEmits<{
+  (e: 'selectEntry', item: LifeEntry): void
+}>()
+
 const currentYearStr = new Date().getFullYear().toString()
 const selectedYear = ref(currentYearStr)
 
@@ -135,14 +139,25 @@ const formatMonthDay = (occurredAt?: string) => {
     <div class="font-mono-archive text-xs text-[var(--ink-muted)] pb-8 mb-12 border-b border-[var(--border-subtle)] flex flex-wrap items-center gap-y-1">
       <span>{{ selectedYear }}年 · </span>
       <span class="text-[var(--ink-secondary)] font-medium ml-1">共 {{ yearEntries.length }} 条生活记录</span>
-      <span class="mx-2">·</span>
-      <span v-for="(count, type) in yearStats" :key="type" class="mr-3">
-        {{ count }} 条{{ type }}
-      </span>
+      <template v-if="Object.keys(yearStats).length > 0">
+        <span class="mx-2">·</span>
+        <span v-for="(count, type) in yearStats" :key="type" class="mr-3">
+          {{ count }} 条{{ type }}
+        </span>
+      </template>
+    </div>
+
+    <!-- 空状态 (RG-12) -->
+    <div
+      v-if="monthGroups.size === 0"
+      class="py-20 text-center space-y-3 font-serif-editorial text-[var(--ink-muted)] border border-dashed border-[var(--border-subtle)] rounded-xs"
+    >
+      <p class="text-base text-[var(--ink-primary)]">该年份尚未收录任何生活散页</p>
+      <p class="text-xs font-mono-archive text-[var(--ink-secondary)]">点击右下角「+」或顶部「＋ 记录」写下此时此刻的印记</p>
     </div>
 
     <!-- 按月份沉浸式浏览时间线清单 -->
-    <div class="space-y-16">
+    <div v-else class="space-y-16">
       <section
         v-for="[month, items] in monthGroups"
         :key="month"
@@ -157,7 +172,8 @@ const formatMonthDay = (occurredAt?: string) => {
           <div
             v-for="item in items"
             :key="item.id"
-            class="py-4 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 group hover:bg-[var(--bg-subtle)]/40 px-2 rounded-sm transition-colors"
+            @click="emit('selectEntry', item)"
+            class="py-4 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 group hover:bg-[var(--bg-subtle)]/40 px-2 rounded-sm transition-colors cursor-pointer"
           >
             <div class="flex items-baseline gap-4">
               <span class="font-mono-archive text-xs text-[var(--ink-muted)] shrink-0 w-12">

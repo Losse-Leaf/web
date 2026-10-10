@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import { createLifeEntry, createTransaction, createProject } from '../utils/api'
 import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project } from '../types'
 
+export type EntryKind = 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction'
+
 const props = defineProps<{
   isOpen: boolean
   storageConfigured: boolean
   projects?: Project[]
+  initialKind?: EntryKind
 }>()
 
 const emit = defineEmits<{
@@ -19,12 +22,27 @@ const emit = defineEmits<{
   (e: 'projectCreated', proj: Project): void
 }>()
 
-type EntryKind = 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction'
-
 const step = ref<'select' | 'form'>('select')
 const selectedKind = ref<EntryKind>('life')
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
+
+watch(
+  [() => props.isOpen, () => props.initialKind],
+  ([open, initKind]) => {
+    if (open) {
+      if (initKind) {
+        selectedKind.value = initKind
+        step.value = 'form'
+      } else {
+        step.value = 'select'
+        selectedKind.value = 'life'
+      }
+      errorMsg.value = null
+    }
+  },
+  { immediate: true }
+)
 
 // 基础表单状态
 const title = ref('')
@@ -67,8 +85,13 @@ const selectKind = (k: EntryKind) => {
 }
 
 const resetForm = () => {
-  step.value = 'select'
-  selectedKind.value = 'life'
+  if (props.initialKind) {
+    selectedKind.value = props.initialKind
+    step.value = 'form'
+  } else {
+    step.value = 'select'
+    selectedKind.value = 'life'
+  }
   title.value = ''
   content.value = ''
   location.value = ''

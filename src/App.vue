@@ -90,6 +90,13 @@ const projects = ref<Project[]>([])
 // 模态框显隐控制
 const selectedEntry = ref<LifeEntry | null>(null)
 const isNewEntryOpen = ref(false)
+const newEntryInitialKind = ref<'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction' | undefined>(undefined)
+
+const openNewEntry = (kind?: 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction') => {
+  newEntryInitialKind.value = kind || (currentView.value === 'transactions' ? 'transaction' : undefined)
+  isNewEntryOpen.value = true
+}
+
 const isStorageOpen = ref(false)
 const isStatsOpen = ref(false)
 const isSearchOpen = ref(false)
@@ -372,7 +379,7 @@ watch(currentView, (newV) => {
       :profile="curatorProfile"
       @navigate="navigateTo"
       @changeCategory="handleCategoryChange"
-      @openAdd="isNewEntryOpen = true"
+      @openAdd="openNewEntry()"
       @openSearch="isSearchOpen = true"
       @openExport="isExportOpen = true"
       @openPairing="isPairingOpen = true"
@@ -396,22 +403,23 @@ watch(currentView, (newV) => {
         @changeCategory="handleCategoryChange"
         @selectEntry="openEntryDetail"
         @selectTag="handleSelectTag"
-        @openAdd="isNewEntryOpen = true"
+        @openAdd="openNewEntry()"
       />
 
-      <!-- 2. TRANSACTIONS 视图：独立记账模块 -->
+      <!-- 2. TRANSACTIONS 视图：独立记账模块 (RG-11) -->
       <TransactionsView
         v-else-if="currentView === 'transactions'"
         :transactions="transactionsList"
-        @openAdd="isNewEntryOpen = true"
+        @openAdd="openNewEntry('transaction')"
         @transactionDeleted="handleTxDeleted"
         @transactionUpdated="handleTxUpdated"
       />
 
-      <!-- 3. ARCHIVE 视图：按年/按月索引 -->
+      <!-- 3. ARCHIVE 视图：按年/按月索引 (RG-12) -->
       <ArchiveView
         v-else-if="currentView === 'archive'"
         :entries="entries"
+        @selectEntry="openEntryDetail"
       />
 
       <!-- 4. PROJECTS 视图：作为人生经历的一章 (造物 / Things I Made) -->
@@ -440,7 +448,7 @@ watch(currentView, (newV) => {
     />
 
     <!-- 全局快捷新增浮动操作按钮 (桌面端 + 移动端右下角) -->
-    <FloatingActionButton @click="isNewEntryOpen = true" />
+    <FloatingActionButton @click="openNewEntry()" />
 
     <!-- 1. 全局即时模糊搜索与标签检索弹窗 (Cmd+K) -->
     <SearchModal
@@ -462,12 +470,13 @@ watch(currentView, (newV) => {
       @close="isExportOpen = false"
     />
 
-    <!-- 3. 新增生活记录/记账 弹窗 -->
+    <!-- 3. 新增生活记录/记账 弹窗 (RG-11) -->
     <NewEntryModal
       v-if="isNewEntryOpen"
       :isOpen="isNewEntryOpen"
       :storageConfigured="storageConfigured"
       :projects="projects"
+      :initialKind="newEntryInitialKind"
       @close="isNewEntryOpen = false"
       @entryCreated="handleEntryCreated"
       @transactionCreated="handleTxCreated"

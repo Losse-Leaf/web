@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download } from 'lucide-vue-next'
+import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download, X } from 'lucide-vue-next'
 import { fetchTransactions, fetchTransactionSummary, deleteTransaction, updateTransaction } from '../utils/api'
 import type { Transaction, TransactionSummary } from '../types'
 import { useExport } from '../composables/useExport'
@@ -24,13 +24,18 @@ const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
 const selectedCategoryFilter = ref<string>('')
 
-// 编辑态
+// 编辑态 (RG-11)
 const editingTx = ref<Transaction | null>(null)
 const editTitle = ref('')
 const editAmount = ref('')
 const editCategory = ref('餐饮')
 const editType = ref<'expense' | 'income'>('expense')
 const editNote = ref('')
+const editPaymentMethod = ref('微信支付')
+const editOccurredAt = ref('')
+
+const categoriesList = ['餐饮', '交通', '购物', '娱乐', '学习', '住房', '医疗', '其他']
+const paymentMethodsList = ['微信支付', '支付宝', '银行卡', '现金', '其他']
 
 const year = computed(() => currentDate.value.getFullYear())
 const month = computed(() => currentDate.value.getMonth() + 1)
@@ -62,6 +67,14 @@ const loadData = async () => {
 watch([year, month], () => {
   loadData()
 })
+
+watch(
+  () => props.transactions,
+  () => {
+    loadData()
+  },
+  { deep: true }
+)
 
 onMounted(() => {
   loadData()
@@ -124,6 +137,8 @@ const startEdit = (tx: Transaction) => {
   editCategory.value = tx.category
   editType.value = tx.type
   editNote.value = tx.note || ''
+  editPaymentMethod.value = tx.payment_method || '微信支付'
+  editOccurredAt.value = tx.occurred_at ? tx.occurred_at.slice(0, 16) : ''
 }
 
 const saveEdit = async () => {
@@ -137,6 +152,8 @@ const saveEdit = async () => {
     type: editType.value,
     category: editCategory.value,
     note: editNote.value.trim(),
+    payment_method: editPaymentMethod.value.trim() || undefined,
+    occurred_at: editOccurredAt.value || undefined,
   })
 
   const idx = transactionsList.value.findIndex((t) => t.id === updated.id)
@@ -421,33 +438,129 @@ const spectrumItems = computed(() => {
       </section>
     </div>
 
-    <!-- 内联编辑模态 -->
+    <!-- 内联编辑模态 (RG-11) -->
     <div
       v-if="editingTx"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
       @click.self="editingTx = null"
     >
-      <div class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] p-6 rounded-xs w-full max-w-md space-y-4">
-        <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
-          修改账目
-        </h3>
-        <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)] mb-1">事项名称</label>
-            <input v-model="editTitle" type="text" class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent" />
+      <div class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] p-6 rounded-xs w-full max-w-md space-y-4 max-h-[90dvh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
+          <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
+            修改账目
+          </h3>
+          <button @click="editingTx = null" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="space-y-4 text-xs font-mono-archive">
+          <!-- 收支类型切换 -->
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              @click="editType = 'expense'"
+              class="flex-1 py-1.5 rounded-xs border text-center transition-all cursor-pointer"
+              :class="editType === 'expense'
+                ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)] text-white font-medium shadow-xs'
+                : 'border-[var(--border-subtle)] text-[var(--ink-muted)] hover:border-[var(--border-divider)]'"
+            >
+              支出
+            </button>
+            <button
+              type="button"
+              @click="editType = 'income'"
+              class="flex-1 py-1.5 rounded-xs border text-center transition-all cursor-pointer"
+              :class="editType === 'income'
+                ? 'border-emerald-700 bg-emerald-700 text-white font-medium shadow-xs'
+                : 'border-[var(--border-subtle)] text-[var(--ink-muted)] hover:border-[var(--border-divider)]'"
+            >
+              收入
+            </button>
           </div>
-          <div>
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)] mb-1">金额 (¥)</label>
-            <input v-model="editAmount" type="number" step="0.01" class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent" />
+
+          <!-- 金额与事项名称 -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[var(--ink-muted)] mb-1">金额 (¥) *</label>
+              <input
+                v-model="editAmount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
+              />
+            </div>
+            <div>
+              <label class="block text-[var(--ink-muted)] mb-1">事项名称 *</label>
+              <input
+                v-model="editTitle"
+                type="text"
+                placeholder="例如: 柴米油盐"
+                class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
+              />
+            </div>
           </div>
+
+          <!-- 分类胶囊选择 -->
           <div>
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)] mb-1">备注</label>
-            <input v-model="editNote" type="text" class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent" />
+            <label class="block text-[var(--ink-muted)] mb-1.5">分类</label>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="cat in categoriesList"
+                :key="cat"
+                type="button"
+                @click="editCategory = cat"
+                class="px-2.5 py-1 rounded-xs border text-[11px] transition-all cursor-pointer"
+                :class="editCategory === cat
+                  ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-xs'
+                  : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)]'"
+              >
+                {{ cat }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 支付方式与发生时间 -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[var(--ink-muted)] mb-1">支付方式</label>
+              <select
+                v-model="editPaymentMethod"
+                class="w-full px-2.5 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
+              >
+                <option v-for="pm in paymentMethodsList" :key="pm" :value="pm">{{ pm }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[var(--ink-muted)] mb-1">记录时间</label>
+              <input
+                v-model="editOccurredAt"
+                type="datetime-local"
+                class="w-full px-2 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
+              />
+            </div>
+          </div>
+
+          <!-- 备注 -->
+          <div>
+            <label class="block text-[var(--ink-muted)] mb-1">备注说明</label>
+            <input
+              v-model="editNote"
+              type="text"
+              placeholder="选填备注..."
+              class="w-full px-3 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
+            />
           </div>
         </div>
+
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border-subtle)]">
-          <button @click="editingTx = null" class="px-3 py-1.5 text-xs font-mono-archive text-[var(--ink-muted)] cursor-pointer">取消</button>
-          <button @click="saveEdit" class="px-4 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-white rounded-xs cursor-pointer">保存</button>
+          <button @click="editingTx = null" class="px-3 py-1.5 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+            取消
+          </button>
+          <button @click="saveEdit" class="px-4 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90">
+            保存修改
+          </button>
         </div>
       </div>
     </div>
