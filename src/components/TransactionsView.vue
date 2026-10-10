@@ -2,12 +2,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download, X } from 'lucide-vue-next'
 import { fetchTransactions, fetchTransactionSummary, deleteTransaction, updateTransaction } from '../utils/api'
-import type { Transaction, TransactionSummary } from '../types'
+import type { Transaction, TransactionSummary, CuratorProfile } from '../types'
 import { useExport } from '../composables/useExport'
 import { formatMoney } from '../utils/format'
+import { loadCuratorProfile } from '../utils/profile'
 
 const props = defineProps<{
   transactions?: Transaction[]
+  profile?: CuratorProfile | null
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +38,35 @@ const editOccurredAt = ref('')
 
 const categoriesList = ['餐饮', '交通', '购物', '娱乐', '学习', '住房', '医疗', '其他']
 const paymentMethodsList = ['微信支付', '支付宝', '银行卡', '现金', '其他']
+
+// 资产与信贷管理大盘 (RC-53)
+const totalFixedAssets = computed(() => {
+  const profile = props.profile || loadCuratorProfile()
+  const gears = profile.edc_gear || []
+  return gears
+    .filter((g) => g.status !== '已出二手')
+    .reduce((sum, g) => sum + (g.price_cents || 0), 0)
+})
+
+const activeGearCount = computed(() => {
+  const profile = props.profile || loadCuratorProfile()
+  const gears = profile.edc_gear || []
+  return gears.filter((g) => g.status !== '已出二手').length
+})
+
+const getDaysUntilDay = (targetDay: number) => {
+  const now = new Date()
+  const currentDay = now.getDate()
+  if (currentDay <= targetDay) {
+    return targetDay - currentDay
+  }
+  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, targetDay)
+  const diffMs = nextMonthDate.getTime() - now.getTime()
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+}
+
+const huabeiCountdown = computed(() => getDaysUntilDay(10))
+const baitiaoCountdown = computed(() => getDaysUntilDay(20))
 
 const year = computed(() => currentDate.value.getFullYear())
 const month = computed(() => currentDate.value.getMonth() + 1)
@@ -274,6 +305,30 @@ const spectrumItems = computed(() => {
         </p>
       </div>
     </header>
+
+    <!-- 个人净资产与资产大盘指示纸签 (RC-53) -->
+    <div class="mb-10 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono-archive text-xs">
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div>
+          <span class="text-[var(--ink-muted)] block text-[11px]">固定资产沉淀 (随身硬件与桌面)</span>
+          <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
+            ¥{{ formatMoney(totalFixedAssets) }}
+          </span>
+          <span class="text-[10px] text-[var(--ink-muted)] ml-1">({{ activeGearCount }} 件在用)</span>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 text-[11px]">
+        <div class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs">
+          <span class="text-[var(--ink-muted)]">花呗还款日</span>
+          <span class="text-[var(--ink-primary)] font-semibold">{{ huabeiCountdown === 0 ? '今日到期' : `${huabeiCountdown} 天后 (10日)` }}</span>
+        </div>
+        <div class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs">
+          <span class="text-[var(--ink-muted)]">白条还款日</span>
+          <span class="text-[var(--ink-primary)] font-semibold">{{ baitiaoCountdown === 0 ? '今日到期' : `${baitiaoCountdown} 天后 (20日)` }}</span>
+        </div>
+      </div>
+    </div>
 
     <!-- 月度核心收支概览 (Editorial 优雅排版，非粗笨 SaaS 卡片) -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 pb-12 mb-14 border-b border-[var(--border-subtle)] font-serif-editorial">

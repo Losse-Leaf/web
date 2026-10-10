@@ -2,9 +2,10 @@
 import { ref, computed, watch } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
-import { createLifeEntry, createTransaction, createProject } from '../utils/api'
+import { createLifeEntry, createTransaction, createProject, updateCuratorProfile } from '../utils/api'
+import { loadCuratorProfile, saveCuratorProfile } from '../utils/profile'
 import { audio } from '../utils/audio'
-import type { LifeEntry, Transaction, Project } from '../types'
+import type { LifeEntry, Transaction, Project, GearItem } from '../types'
 
 export type EntryKind = 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction'
 
@@ -59,6 +60,8 @@ const txType = ref<'expense' | 'income'>('expense')
 const txCategory = ref<string>('餐饮')
 const txPaymentMethod = ref<string>('微信支付')
 const txNote = ref<string>('')
+const syncToGear = ref(false)
+const gearCategory = ref('影像与暗房')
 
 const txCategories = ['餐饮', '交通', '购物', '娱乐', '学习', '住房', '医疗', '其他']
 const paymentMethods = ['微信支付', '支付宝', '银行卡', '现金', '其他']
@@ -104,6 +107,8 @@ const resetForm = () => {
   txCategory.value = '餐饮'
   txPaymentMethod.value = '微信支付'
   txNote.value = ''
+  syncToGear.value = false
+  gearCategory.value = '影像与暗房'
   errorMsg.value = null
   isSubmitting.value = false
 }
@@ -156,6 +161,29 @@ const handleSubmit = async () => {
         payment_method: txPaymentMethod.value,
         occurred_at: occurredAt.value,
       })
+
+      // 路径 B：记账大件同步收录至随身设备库 (RC-53)
+      if (txType.value === 'expense' && syncToGear.value && title.value.trim()) {
+        try {
+          const profile = loadCuratorProfile()
+          const newGear: GearItem = {
+            id: `gear-${Date.now()}`,
+            name: title.value.trim(),
+            category: gearCategory.value,
+            spec: txNote.value.trim() || undefined,
+            status: '日常自用',
+            note: `记账同步收录，购于 ${occurredAt.value.slice(0, 10)}`,
+            price_cents: amountInCents,
+            purchase_date: occurredAt.value.slice(0, 10),
+          }
+          const updatedGear = [newGear, ...(profile.edc_gear || [])]
+          saveCuratorProfile({ ...profile, edc_gear: updatedGear })
+          updateCuratorProfile({ edc_gear: updatedGear }).catch(() => {})
+        } catch (err) {
+          console.warn('同步收录设备库失败:', err)
+        }
+      }
+
       emit('transactionCreated', createdTx)
       handleClose()
     } catch (err: any) {
@@ -379,6 +407,42 @@ const handleSubmit = async () => {
               placeholder="添加细节或心情批注……"
               class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
             />
+          </div>
+
+          <!-- 同步收录至随身设备库 (RC-53) -->
+          <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2">
+            <div class="flex items-center gap-2">
+              <input
+                id="syncToGearCheckbox"
+                v-model="syncToGear"
+                type="checkbox"
+                class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
+              />
+              <label for="syncToGearCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none">
+                同步收录至随身与桌面设备库 (固定资产沉淀)
+              </label>
+            </div>
+
+            <div v-if="syncToGear" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-mono-archive">
+              <div>
+                <label class="block text-[var(--ink-muted)] mb-1">设备类别</label>
+                <select
+                  v-model="gearCategory"
+                  class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none font-mono-archive"
+                >
+                  <option value="影像与暗房">影像与暗房</option>
+                  <option value="工作台与算力">工作台与算力</option>
+                  <option value="手冲咖啡工坊">手冲咖啡工坊</option>
+                  <option value="夜骑巡航">夜骑巡航</option>
+                  <option value="纸笔与日常">纸笔与日常</option>
+                </select>
+              </div>
+              <div class="flex items-end">
+                <span class="text-[11px] text-[var(--ink-muted)] pb-1.5">
+                  将以「日常自用」状态收录，原值 ¥{{ txAmount || '0.00' }}
+                </span>
+              </div>
+            </div>
           </div>
         </template>
 

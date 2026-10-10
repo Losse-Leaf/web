@@ -182,6 +182,10 @@ export interface GearItem {
   status?: string
   note?: string
   link?: string
+  price_cents?: number
+  purchase_date?: string
+  sold_price?: number
+  sold_date?: string
 }
 
 export interface UnifiedUploadResult {

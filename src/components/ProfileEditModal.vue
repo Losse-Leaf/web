@@ -3,7 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2, User } from 'lucide-vue-next'
 import type { CuratorProfile, GearItem } from '../types'
 import { DEFAULT_PROFILE, saveCuratorProfile } from '../utils/profile'
-import { uploadUnifiedFile, updateCuratorProfile } from '../utils/api'
+import { uploadUnifiedFile, updateCuratorProfile, createTransaction } from '../utils/api'
 
 const props = defineProps<{
   isOpen: boolean
@@ -40,6 +40,9 @@ const newGearName = ref('')
 const newGearSpec = ref('')
 const newGearStatus = ref('日常自用')
 const newGearNote = ref('')
+const newGearPrice = ref('')
+const newGearPurchaseDate = ref(new Date().toISOString().slice(0, 10))
+const syncBuyTransaction = ref(true)
 const showAddGear = ref(false)
 
 const categories = [
@@ -164,22 +167,81 @@ const handleResetDefault = () => {
   form.value = cloneProfile(DEFAULT_PROFILE)
 }
 
-const handleAddGear = () => {
+const handleAddGear = async () => {
   if (!newGearName.value.trim()) return
+  const priceFloat = parseFloat(newGearPrice.value)
+  const priceCents = !isNaN(priceFloat) && priceFloat > 0 ? Math.round(priceFloat * 100) : undefined
+
   const item: GearItem = {
     id: `gear-${Date.now()}`,
     category: newGearCategory.value,
     name: newGearName.value.trim(),
     spec: newGearSpec.value.trim(),
-    status: newGearStatus.value.trim(),
+    status: newGearStatus.value.trim() || '日常自用',
     note: newGearNote.value.trim(),
+    price_cents: priceCents,
+    purchase_date: newGearPurchaseDate.value || new Date().toISOString().slice(0, 10),
   }
   if (!form.value.edc_gear) form.value.edc_gear = []
   form.value.edc_gear.push(item)
+
+  // 路径 A：买入双向生成支出账单 (RC-53)
+  if (syncBuyTransaction.value && priceCents && priceCents > 0) {
+    try {
+      await createTransaction({
+        type: 'expense',
+        category: '购物',
+        amount: priceCents,
+        title: `购入设备: ${item.name}`,
+        note: item.spec || item.note,
+        payment_method: '微信支付',
+        occurred_at: newGearPurchaseDate.value ? `${newGearPurchaseDate.value}T12:00:00` : new Date().toISOString(),
+      })
+    } catch (err) {
+      console.warn('同步生成购买支出流水失败:', err)
+    }
+  }
+
   newGearName.value = ''
   newGearSpec.value = ''
   newGearNote.value = ''
+  newGearPrice.value = ''
+  newGearPurchaseDate.value = new Date().toISOString().slice(0, 10)
+  syncBuyTransaction.value = true
   showAddGear.value = false
+}
+
+const handleSellGear = async (idx: number) => {
+  const item = form.value.edc_gear?.[idx]
+  if (!item) return
+  const input = prompt(`请输入「${item.name}」转让/出二手回血金额 (¥):`, item.price_cents ? (item.price_cents / 100).toFixed(2) : '')
+  if (input === null) return
+  const soldFloat = parseFloat(input)
+  if (isNaN(soldFloat) || soldFloat < 0) {
+    alert('请输入有效金额')
+    return
+  }
+  const soldCents = Math.round(soldFloat * 100)
+  item.status = '已出二手'
+  item.sold_price = soldCents
+  item.sold_date = new Date().toISOString().slice(0, 10)
+
+  // 路径 B：闲置转售 · 卖出自动生成回血收入账单 (RC-53)
+  if (soldCents > 0) {
+    try {
+      await createTransaction({
+        type: 'income',
+        category: '二手回血',
+        amount: soldCents,
+        title: `设备转售回血: ${item.name}`,
+        note: `转让回收资金，设备原购置于 ${item.purchase_date || '此前'}`,
+        payment_method: '微信支付',
+        occurred_at: new Date().toISOString(),
+      })
+    } catch (err) {
+      console.warn('同步生成二手回血收入流水失败:', err)
+    }
+  }
 }
 
 const removeGear = (idx: number) => {
@@ -500,6 +562,40 @@ onMounted(() => {
             />
           </div>
 
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">购入金额 (¥，选填)</label>
+              <input
+                v-model="newGearPrice"
+                type="number"
+                step="0.01"
+                placeholder="例如: 3200.00"
+                class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
+              />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">购置日期</label>
+              <input
+                v-model="newGearPurchaseDate"
+                type="date"
+                class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <input
+              id="syncBuyTx"
+              v-model="syncBuyTransaction"
+              type="checkbox"
+              class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
+            />
+            <label for="syncBuyTx" class="text-xs font-mono-archive text-[var(--ink-secondary)] cursor-pointer select-none">
+              同步在账本中生成一条支出账单（金额与购入日期对应）
+            </label>
+          </div>
+
           <div class="flex justify-end pt-2">
             <button
               @click="handleAddGear"
@@ -519,15 +615,21 @@ onMounted(() => {
             class="py-3 flex items-start justify-between gap-4 group"
           >
             <div class="space-y-1">
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <span class="text-[10px] font-mono-archive px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]">
                   {{ item.category }}
                 </span>
                 <span class="font-serif-editorial text-base text-[var(--ink-primary)] font-medium">
                   {{ item.name }}
                 </span>
-                <span v-if="item.status" class="text-[11px] font-mono-archive text-[var(--accent-warm)]">
+                <span v-if="item.status" class="text-[11px] font-mono-archive" :class="item.status === '已出二手' ? 'text-amber-600' : 'text-[var(--accent-warm)]'">
                   · {{ item.status }}
+                </span>
+                <span v-if="item.price_cents" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                  (购入 ¥{{ (item.price_cents / 100).toFixed(2) }})
+                </span>
+                <span v-if="item.sold_price" class="text-[10px] font-mono-archive text-emerald-700">
+                  (回血 ¥{{ (item.sold_price / 100).toFixed(2) }})
                 </span>
               </div>
               <p v-if="item.spec" class="text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -538,13 +640,25 @@ onMounted(() => {
               </p>
             </div>
 
-            <button
-              @click="removeGear(idx)"
-              class="text-[var(--ink-muted)] hover:text-red-700 p-1 cursor-pointer opacity-70 group-hover:opacity-100 transition-opacity"
-              title="删除此项"
-            >
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                v-if="item.status !== '已出二手'"
+                @click="handleSellGear(idx)"
+                type="button"
+                class="text-[11px] font-mono-archive px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
+                title="标记为已出二手并自动生成回血账单"
+              >
+                出二手回血
+              </button>
+
+              <button
+                @click="removeGear(idx)"
+                class="text-[var(--ink-muted)] hover:text-red-700 p-1 cursor-pointer opacity-70 group-hover:opacity-100 transition-opacity"
+                title="删除此项"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

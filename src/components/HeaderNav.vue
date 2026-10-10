@@ -10,6 +10,7 @@ import {
   Sun,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
+import { getAdminToken } from '../utils/api'
 import type { ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 
 const props = defineProps<{
@@ -41,14 +42,23 @@ const displaySiteName = computed(() => {
   return props.config?.site_name?.split('·')?.[0]?.trim() || '散页'
 })
 
-// 核心导航栏目（单轨统一，消除双重导航冲突）
-const navItems = [
-  { key: 'home', label: '时间流' },
-  { key: 'transactions', label: '记账' },
-  { key: 'projects', label: '项目' },
-  { key: 'archive', label: '归档' },
-  { key: 'about', label: '主理人' },
-]
+const isAdmin = computed(() => Boolean(getAdminToken()))
+
+// 核心导航栏目（单轨统一；访客未登录时彻底不渲染私密记账/资产 RC-53）
+const navItems = computed(() => {
+  const items = [
+    { key: 'home', label: '时间流' },
+  ]
+  if (isAdmin.value) {
+    items.push({ key: 'transactions', label: '记账' })
+  }
+  items.push(
+    { key: 'projects', label: '项目' },
+    { key: 'archive', label: '归档' },
+    { key: 'about', label: '主理人' }
+  )
+  return items
+})
 
 // 辅助工具与设置（纯净无赘述）
 const toolOptions = computed(() => [

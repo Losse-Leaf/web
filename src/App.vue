@@ -137,13 +137,20 @@ const handleCategoryChange = (cat: ArchiveCategory) => {
 }
 
 const navigateTo = (view: string) => {
+  if (['transactions', 'assets'].includes(view) && !getAdminToken()) {
+    currentView.value = 'archive'
+    window.location.hash = 'archive'
+    return
+  }
   currentView.value = view
   window.location.hash = view
 }
 
 const openEntryDetail = (entry: LifeEntry) => {
   if (entry.is_transaction) {
-    navigateTo('transactions')
+    if (getAdminToken()) {
+      navigateTo('transactions')
+    }
     return
   }
   selectedEntry.value = entry
@@ -263,6 +270,12 @@ const handleHashChange = async () => {
     currentView.value = 'home'
     selectedEntry.value = null
   } else if (['transactions', 'archive', 'projects', 'about'].includes(hash)) {
+    if (['transactions', 'assets'].includes(hash) && !getAdminToken()) {
+      currentView.value = 'archive'
+      window.location.hash = 'archive'
+      selectedEntry.value = null
+      return
+    }
     currentView.value = hash
     selectedEntry.value = null
   }
@@ -406,10 +419,11 @@ watch(currentView, (newV) => {
         @openAdd="openNewEntry()"
       />
 
-      <!-- 2. TRANSACTIONS 视图：独立记账模块 (RG-11) -->
+      <!-- 2. TRANSACTIONS 视图：独立记账与资产管理模块 (RG-11, RC-53) -->
       <TransactionsView
         v-else-if="currentView === 'transactions'"
         :transactions="transactionsList"
+        :profile="curatorProfile"
         @openAdd="openNewEntry('transaction')"
         @transactionDeleted="handleTxDeleted"
         @transactionUpdated="handleTxUpdated"
