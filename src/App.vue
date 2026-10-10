@@ -5,6 +5,7 @@ import HomeView from './components/HomeView.vue'
 import ArchiveView from './components/ArchiveView.vue'
 import ProjectsView from './components/ProjectsView.vue'
 import WishlistView from './components/WishlistView.vue'
+import TravelAtlasView from './components/TravelAtlasView.vue'
 import AboutView from './components/AboutView.vue'
 import FooterArchive from './components/FooterArchive.vue'
 import TransactionsView from './components/TransactionsView.vue'
@@ -451,7 +452,12 @@ watch(currentView, (newV) => {
         v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
       />
 
-      <!-- 6. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
+      <!-- 6. ATLAS 视图：全国市级旅游足迹地图与城市回忆 (FE-12, FE-13) -->
+      <TravelAtlasView
+        v-else-if="currentView === 'atlas' || currentView === 'footprints'"
+      />
+
+      <!-- 7. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
       <AboutView
         v-else-if="currentView === 'about'"
         :profile="curatorProfile"

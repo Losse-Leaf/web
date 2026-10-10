@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeActivityMap from './LifeActivityMap.vue'
+import TravelAtlasView from './TravelAtlasView.vue'
 import LifeStream from './LifeStream.vue'
 import { ArrowRight } from 'lucide-vue-next'
 
@@ -85,7 +86,8 @@ const currentCategoryInfo = computed(() => {
       }
   }
 })
-const showHeatmap = ref(false)
+const showGraph = ref(false)
+const graphTab = ref<'time' | 'space'>('time')
 </script>
 
 <template>
@@ -113,26 +115,52 @@ const showHeatmap = ref(false)
       </div>
     </section>
 
-    <!-- 可选折叠的生活刻度热力图 -->
+    <!-- 生活图谱：时间热力 ⟷ 空间足迹 双 Tab 切换 (FE-12) -->
     <section class="py-4 border-b border-[var(--border-subtle)]">
       <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-        <div class="flex items-center gap-2">
-          <span class="text-[var(--ink-secondary)] font-medium">生活刻度 · 最近一年</span>
-          <span>在册 {{ heatmapEntries.length }} 条印记</span>
+        <div class="flex items-center gap-3">
+          <button
+            @click="graphTab = 'time'; showGraph = true"
+            class="transition-colors cursor-pointer"
+            :class="graphTab === 'time' && showGraph ? 'text-[var(--ink-primary)] font-bold border-b border-[var(--ink-primary)]' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+          >
+            时间热力 (在册 {{ heatmapEntries.length }} 条)
+          </button>
+          <span>·</span>
+          <button
+            @click="graphTab = 'space'; showGraph = true"
+            class="transition-colors cursor-pointer"
+            :class="graphTab === 'space' && showGraph ? 'text-[var(--ink-primary)] font-bold border-b border-[var(--ink-primary)]' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+          >
+            空间足迹
+          </button>
         </div>
-        <button
-          @click="showHeatmap = !showHeatmap"
-          class="hover:text-[var(--ink-primary)] cursor-pointer hover-underline text-xs"
-        >
-          {{ showHeatmap ? '收起刻度图 ▲' : '展开刻度图 ▼' }}
-        </button>
+        <div class="flex items-center gap-3">
+          <button
+            v-if="graphTab === 'space' && showGraph"
+            @click="emit('navigate', 'atlas')"
+            class="hover:text-[var(--ink-primary)] cursor-pointer text-xs"
+          >
+            进入全图 ↗
+          </button>
+          <button
+            @click="showGraph = !showGraph"
+            class="hover:text-[var(--ink-primary)] cursor-pointer hover-underline text-xs"
+          >
+            {{ showGraph ? '收起图谱 ▲' : '展开图谱 ▼' }}
+          </button>
+        </div>
       </div>
 
-      <div v-if="showHeatmap" class="pt-4 animate-in fade-in duration-200">
+      <div v-if="showGraph" class="pt-4 animate-in fade-in duration-200">
         <LifeActivityMap
+          v-if="graphTab === 'time'"
           :entries="heatmapEntries"
           :selectedDate="selectedDate"
           @selectDate="handleDateSelect"
+        />
+        <TravelAtlasView
+          v-else
         />
       </div>
     </section>

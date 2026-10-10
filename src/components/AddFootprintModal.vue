@@ -1,0 +1,154 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { X, MapPin, Compass, Check } from 'lucide-vue-next'
+import { createFootprint } from '../utils/api'
+import { audio } from '../utils/audio'
+import CityPicker from './CityPicker.vue'
+import type { Footprint } from '../types'
+
+const props = defineProps<{
+  isOpen: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'saved', footprint: Footprint): void
+}>()
+
+const selectedCityCode = ref('')
+const selectedCityName = ref('')
+const todayStr = new Date().toISOString().slice(0, 10)
+const visitedAt = ref(todayStr)
+const note = ref('')
+const isSubmitting = ref(false)
+const errorMsg = ref('')
+
+const handleCitySelect = (city: { code: string; name: string }) => {
+  selectedCityCode.value = city.code
+  selectedCityName.value = city.name
+}
+
+const handleSubmit = async () => {
+  if (!selectedCityCode.value || !selectedCityName.value) {
+    errorMsg.value = '请检索并选择到访城市'
+    return
+  }
+  if (!visitedAt.value) {
+    errorMsg.value = '请选择到访日期'
+    return
+  }
+
+  try {
+    isSubmitting.value = true
+    errorMsg.value = ''
+    const fp = await createFootprint({
+      city_code: selectedCityCode.value,
+      city_name: selectedCityName.value,
+      visited_at: new Date(visitedAt.value).toISOString(),
+      note: note.value.trim() || undefined,
+    })
+    audio.playShutter()
+    emit('saved', fp)
+    emit('close')
+  } catch (err: any) {
+    errorMsg.value = err.message || '录入足迹失败'
+  } finally {
+    isSubmitting.value = false
+  }
+}
+</script>
+
+<template>
+  <div
+    v-if="isOpen"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--ink-primary)]/40 backdrop-blur-xs animate-in fade-in duration-200"
+    @click.self="emit('close')"
+  >
+    <div
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-lg rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto text-left"
+    >
+      <!-- 弹窗标头 -->
+      <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)]">
+        <div>
+          <div class="flex items-center gap-2">
+            <Compass class="w-5 h-5 text-[var(--accent-warm)]" />
+            <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
+              补录城市足迹
+            </h2>
+          </div>
+          <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
+            点亮山川图谱。支持补录过去到访过的历史城市与行旅随笔。
+          </p>
+        </div>
+        <button
+          @click="emit('close')"
+          class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 cursor-pointer transition-colors"
+        >
+          <X class="w-4 h-4" />
+        </button>
+      </div>
+
+      <!-- 错误提示 -->
+      <div v-if="errorMsg" class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+        {{ errorMsg }}
+      </div>
+
+      <form @submit.prevent="handleSubmit" class="space-y-5 font-mono-archive text-xs">
+        <!-- 城市选择 -->
+        <div>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">到访城市 *</label>
+          <CityPicker
+            v-model="selectedCityCode"
+            placeholder="搜索城市 (如: 杭州 / 景德镇 / 大理)..."
+            @select="handleCitySelect"
+          />
+          <div v-if="selectedCityName" class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--accent-moss)]">
+            <MapPin class="w-3.5 h-3.5" />
+            <span>已选定城市：{{ selectedCityName }} ({{ selectedCityCode }})</span>
+          </div>
+        </div>
+
+        <!-- 到访日期 -->
+        <div>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">到访日期 (支持补录历史日期) *</label>
+          <input
+            v-model="visitedAt"
+            type="date"
+            required
+            class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive"
+          />
+        </div>
+
+        <!-- 足迹简注 / 随笔 -->
+        <div>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">足迹简注 / 行旅随笔 (选填)</label>
+          <textarea
+            v-model="note"
+            rows="3"
+            placeholder="记下一缕风、一碗热汤或一处驻足..."
+            class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- 底部提交操作 -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">
+          <button
+            @click="emit('close')"
+            type="button"
+            class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            :disabled="isSubmitting"
+            class="px-5 py-1.5 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer font-serif-editorial inline-flex items-center gap-1.5"
+          >
+            <Check class="w-3.5 h-3.5" />
+            <span>{{ isSubmitting ? '正在点亮...' : '点亮城市足迹' }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
