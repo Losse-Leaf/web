@@ -211,24 +211,49 @@ const handleAddGear = async () => {
   showAddGear.value = false
 }
 
-const handleSellGear = async (idx: number) => {
+// 出二手回血内联结算抽屉 (RC-54)
+const sellingGearIndex = ref<number | null>(null)
+const sellingPriceInput = ref('')
+const sellingDateInput = ref('')
+const sellingErrorMsg = ref('')
+const isSellingSubmitting = ref(false)
+
+const openSellDrawer = (idx: number) => {
   const item = form.value.edc_gear?.[idx]
   if (!item) return
-  const input = prompt(`请输入「${item.name}」转让/出二手回血金额 (¥):`, item.price_cents ? (item.price_cents / 100).toFixed(2) : '')
-  if (input === null) return
-  const soldFloat = parseFloat(input)
+  sellingGearIndex.value = idx
+  sellingPriceInput.value = item.price_cents ? (item.price_cents / 100).toFixed(2) : ''
+  sellingDateInput.value = new Date().toISOString().slice(0, 10)
+  sellingErrorMsg.value = ''
+}
+
+const cancelSellDrawer = () => {
+  sellingGearIndex.value = null
+  sellingPriceInput.value = ''
+  sellingDateInput.value = ''
+  sellingErrorMsg.value = ''
+}
+
+const confirmSellGear = async () => {
+  if (sellingGearIndex.value === null) return
+  const item = form.value.edc_gear?.[sellingGearIndex.value]
+  if (!item) return
+
+  const soldFloat = parseFloat(sellingPriceInput.value)
   if (isNaN(soldFloat) || soldFloat < 0) {
-    alert('请输入有效金额')
+    sellingErrorMsg.value = '请输入有效的转让回血金额'
     return
   }
+
   const soldCents = Math.round(soldFloat * 100)
   item.status = '已出二手'
   item.sold_price = soldCents
-  item.sold_date = new Date().toISOString().slice(0, 10)
+  item.sold_date = sellingDateInput.value || new Date().toISOString().slice(0, 10)
 
   // 路径 B：闲置转售 · 卖出自动生成回血收入账单 (RC-53)
   if (soldCents > 0) {
     try {
+      isSellingSubmitting.value = true
       await createTransaction({
         type: 'income',
         category: '二手回血',
@@ -236,12 +261,16 @@ const handleSellGear = async (idx: number) => {
         title: `设备转售回血: ${item.name}`,
         note: `转让回收资金，设备原购置于 ${item.purchase_date || '此前'}`,
         payment_method: '微信支付',
-        occurred_at: new Date().toISOString(),
+        occurred_at: item.sold_date,
       })
     } catch (err) {
       console.warn('同步生成二手回血收入流水失败:', err)
+    } finally {
+      isSellingSubmitting.value = false
     }
   }
+
+  cancelSellDrawer()
 }
 
 const removeGear = (idx: number) => {
@@ -612,52 +641,109 @@ onMounted(() => {
           <div
             v-for="(item, idx) in (form.edc_gear || [])"
             :key="item.id || idx"
-            class="py-3 flex items-start justify-between gap-4 group"
+            class="py-3 space-y-2 group"
           >
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="text-[10px] font-mono-archive px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]">
-                  {{ item.category }}
-                </span>
-                <span class="font-serif-editorial text-base text-[var(--ink-primary)] font-medium">
-                  {{ item.name }}
-                </span>
-                <span v-if="item.status" class="text-[11px] font-mono-archive" :class="item.status === '已出二手' ? 'text-amber-600' : 'text-[var(--accent-warm)]'">
-                  · {{ item.status }}
-                </span>
-                <span v-if="item.price_cents" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
-                  (购入 ¥{{ (item.price_cents / 100).toFixed(2) }})
-                </span>
-                <span v-if="item.sold_price" class="text-[10px] font-mono-archive text-emerald-700">
-                  (回血 ¥{{ (item.sold_price / 100).toFixed(2) }})
-                </span>
+            <div class="flex items-start justify-between gap-4">
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-[10px] font-mono-archive px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]">
+                    {{ item.category }}
+                  </span>
+                  <span class="font-serif-editorial text-base text-[var(--ink-primary)] font-medium">
+                    {{ item.name }}
+                  </span>
+                  <span v-if="item.status" class="text-[11px] font-mono-archive" :class="item.status === '已出二手' ? 'text-amber-600' : 'text-[var(--accent-warm)]'">
+                    · {{ item.status }}
+                  </span>
+                  <span v-if="item.price_cents" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                    (购入 ¥{{ (item.price_cents / 100).toFixed(2) }})
+                  </span>
+                  <span v-if="item.sold_price" class="text-[10px] font-mono-archive text-emerald-700">
+                    (回血 ¥{{ (item.sold_price / 100).toFixed(2) }})
+                  </span>
+                </div>
+                <p v-if="item.spec" class="text-xs font-mono-archive text-[var(--ink-muted)]">
+                  {{ item.spec }}
+                </p>
+                <p v-if="item.note" class="text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
+                  “{{ item.note }}”
+                </p>
               </div>
-              <p v-if="item.spec" class="text-xs font-mono-archive text-[var(--ink-muted)]">
-                {{ item.spec }}
-              </p>
-              <p v-if="item.note" class="text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
-                “{{ item.note }}”
-              </p>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <button
+                  v-if="item.status !== '已出二手'"
+                  @click="openSellDrawer(idx)"
+                  type="button"
+                  class="text-[11px] font-mono-archive px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"
+                  :class="sellingGearIndex === idx ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
+                  title="标记为已出二手并自动生成回血账单"
+                >
+                  出二手回血
+                </button>
+
+                <button
+                  @click="removeGear(idx)"
+                  class="text-[var(--ink-muted)] hover:text-red-700 p-1 cursor-pointer opacity-70 group-hover:opacity-100 transition-opacity"
+                  title="删除此项"
+                >
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
-            <div class="flex items-center gap-2 shrink-0">
-              <button
-                v-if="item.status !== '已出二手'"
-                @click="handleSellGear(idx)"
-                type="button"
-                class="text-[11px] font-mono-archive px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
-                title="标记为已出二手并自动生成回血账单"
-              >
-                出二手回血
-              </button>
+            <!-- 内联出二手回血纸卡确认面板 (RC-54，彻底替代原生 prompt/alert) -->
+            <div
+              v-if="sellingGearIndex === idx"
+              class="p-3 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs space-y-2.5 font-mono-archive text-xs animate-in fade-in duration-150"
+            >
+              <div class="flex items-center justify-between pb-1 border-b border-[var(--border-subtle)]/60">
+                <span class="font-medium text-[var(--ink-primary)]">设备转让与出二手回血结算</span>
+                <span class="text-[11px] text-[var(--ink-muted)]">《{{ item.name }}》</span>
+              </div>
 
-              <button
-                @click="removeGear(idx)"
-                class="text-[var(--ink-muted)] hover:text-red-700 p-1 cursor-pointer opacity-70 group-hover:opacity-100 transition-opacity"
-                title="删除此项"
-              >
-                <Trash2 class="w-3.5 h-3.5" />
-              </button>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] text-[var(--ink-muted)] mb-1">回血金额 (¥) *</label>
+                  <input
+                    v-model="sellingPriceInput"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] text-[var(--ink-muted)] mb-1">转让日期</label>
+                  <input
+                    v-model="sellingDateInput"
+                    type="date"
+                    class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
+                  />
+                </div>
+              </div>
+
+              <div v-if="sellingErrorMsg" class="text-[11px] text-red-600">
+                {{ sellingErrorMsg }}
+              </div>
+
+              <div class="flex items-center justify-end gap-2 pt-1">
+                <button
+                  @click="cancelSellDrawer"
+                  type="button"
+                  class="px-2.5 py-1 text-xs border border-[var(--border-subtle)] rounded-xs hover:border-[var(--ink-primary)] cursor-pointer text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  @click="confirmSellGear"
+                  type="button"
+                  :disabled="isSellingSubmitting"
+                  class="px-3 py-1 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90 transition-opacity"
+                >
+                  {{ isSellingSubmitting ? '正在结算...' : '确认回血并生成收入账单' }}
+                </button>
+              </div>
             </div>
           </div>
         </div>

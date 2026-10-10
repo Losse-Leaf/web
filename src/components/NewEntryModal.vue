@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
-import { createLifeEntry, createTransaction, createProject, updateCuratorProfile, fetchWishes } from '../utils/api'
+import { createLifeEntry, createTransaction, createProject, updateCuratorProfile, fetchWishes, updateWish } from '../utils/api'
 import { loadCuratorProfile, saveCuratorProfile } from '../utils/profile'
 import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project, GearItem, Wish } from '../types'
@@ -54,6 +54,16 @@ const tags = ref('')
 const occurredAt = ref(getTodayDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const attachmentIds = ref<number[]>([])
+
+// 造物项目专有状态 (RC-55 统一录入模型)
+const projTitle = ref('')
+const projSubtitle = ref('')
+const projCategory = ref('开源项目')
+const projStatus = ref('Active')
+const projDescription = ref('')
+const projStory = ref('')
+const projTags = ref('')
+const projGithubUrl = ref('')
 
 // 记账专用状态
 const txAmount = ref<string>('')
@@ -160,6 +170,14 @@ const resetForm = () => {
   installmentChannel.value = 'huabei'
   installmentMonths.value = 12
   customRepaymentDay.value = 15
+  projTitle.value = ''
+  projSubtitle.value = ''
+  projCategory.value = '开源项目'
+  projStatus.value = 'Active'
+  projDescription.value = ''
+  projStory.value = ''
+  projTags.value = ''
+  projGithubUrl.value = ''
   errorMsg.value = null
   isSubmitting.value = false
 }
@@ -180,8 +198,6 @@ const contentPlaceholder = computed(() => {
       return '写下此刻脑海里的念头、感触或片段……'
     case 'photo':
       return '为这些照片写几句注脚或拍摄时的心境……'
-    case 'project':
-      return '记录这个项目的进展、思考、踩坑或新的突破……'
     case 'collection':
       return '记录这张唱片、这本书、这款游戏或这件好物吸引你的地方……'
     default:
@@ -266,10 +282,64 @@ const handleSubmit = async () => {
         }
       }
 
+      // 路径 C：关联心愿单时同步调用归册接口闭环 (RG-14)
+      if (selectedWishId.value) {
+        try {
+          await updateWish(selectedWishId.value, {
+            status: 'fulfilled',
+            actual_cost: amountInCents,
+          })
+        } catch (err) {
+          console.warn('同步更新心愿归册状态失败:', err)
+        }
+      }
+
       emit('transactionCreated', createdTx)
       handleClose()
     } catch (err: any) {
       errorMsg.value = err.message || '记账失败'
+    } finally {
+      isSubmitting.value = false
+    }
+    return
+  }
+
+  // 提交造物项目 (RC-55 统一造物录入表单)
+  if (selectedKind.value === 'project') {
+    if (!projTitle.value.trim()) {
+      errorMsg.value = '造物项目名称不能为空'
+      return
+    }
+
+    try {
+      isSubmitting.value = true
+      const createdProj = await createProject({
+        title: projTitle.value.trim(),
+        subtitle: projSubtitle.value.trim(),
+        category: projCategory.value.trim() || '开源项目',
+        status: projStatus.value || 'Active',
+        description: projDescription.value.trim(),
+        story: projStory.value.trim(),
+        tags: projTags.value.trim(),
+        github_url: projGithubUrl.value.trim(),
+      })
+
+      // 同时在时间流生成关联项目散页
+      const createdEntry = await createLifeEntry({
+        type: 'project',
+        title: projTitle.value.trim(),
+        content: projDescription.value.trim() || projStory.value.trim() || '亲手创造的作品。',
+        occurred_at: occurredAt.value,
+        tags: projTags.value.trim(),
+        project_id: createdProj.id,
+      })
+
+      audio.playShutter()
+      emit('projectCreated', createdProj)
+      emit('entryCreated', createdEntry)
+      handleClose()
+    } catch (err: any) {
+      errorMsg.value = err.message || '创建造物项目失败'
     } finally {
       isSubmitting.value = false
     }
@@ -288,22 +358,7 @@ const handleSubmit = async () => {
 
   try {
     isSubmitting.value = true
-
-    // 如果是新建项目类型，同时允许创建基础 Project
     let projId = selectedProjectId.value
-    if (selectedKind.value === 'project' && title.value.trim() && !projId) {
-      try {
-        const newProj = await createProject({
-          title: title.value.trim(),
-          description: content.value.trim().slice(0, 100),
-          story: content.value.trim(),
-        })
-        projId = newProj.id
-        emit('projectCreated', newProj)
-      } catch {
-        // ignore
-      }
-    }
 
     const created = await createLifeEntry({
       type: selectedKind.value,
@@ -605,7 +660,103 @@ const handleSubmit = async () => {
           </div>
         </template>
 
-        <!-- 普通 Life Entry 表单分支 (生活 / 想法 / 照片 / 项目 / 收藏) -->
+        <!-- 造物专有表单分支 (RC-55 统一录入模型) -->
+        <template v-else-if="selectedKind === 'project'">
+          <div class="space-y-4">
+            <!-- 项目标题与副标题 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物名称 *</label>
+                <input
+                  v-model="projTitle"
+                  type="text"
+                  placeholder="项目名称 (例如: 散页)"
+                  class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题 (简明定位)</label>
+                <input
+                  v-model="projSubtitle"
+                  type="text"
+                  placeholder="例如: 个人生活档案馆与数据中枢"
+                  class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
+              </div>
+            </div>
+
+            <!-- 分类与状态 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物分类</label>
+                <input
+                  v-model="projCategory"
+                  type="text"
+                  placeholder="例如: 开源项目 / 效率工具 / 生活手艺"
+                  class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">运行状态</label>
+                <select
+                  v-model="projStatus"
+                  class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                >
+                  <option value="Active">活跃 (Active)</option>
+                  <option value="Maintained">维护 (Maintained)</option>
+                  <option value="WIP">构思试验 (WIP)</option>
+                  <option value="Archived">归档 (Archived)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 项目简介 -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">项目简介 (一两句话) *</label>
+              <textarea
+                v-model="projDescription"
+                rows="2"
+                placeholder="简明阐述该造物的核心价值与用途……"
+                class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
+              ></textarea>
+            </div>
+
+            <!-- 背后的故事 -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">背后的故事 / 实践历程 (可选)</label>
+              <textarea
+                v-model="projStory"
+                rows="4"
+                placeholder="记录为何萌生创造它的念头、遇到的挑战或有趣的手艺经历……"
+                class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+              ></textarea>
+            </div>
+
+            <!-- 标签与代码仓链接 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标签 (逗号分隔)</label>
+                <input
+                  v-model="projTags"
+                  type="text"
+                  placeholder="例如: Vue, Go, SQLite"
+                  class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">代码仓 / 访问外链 (可选)</label>
+                <input
+                  v-model="projGithubUrl"
+                  type="url"
+                  placeholder="https://github.com/..."
+                  class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 普通 Life Entry 表单分支 (生活 / 想法 / 照片 / 收藏) -->
         <template v-else>
           <!-- 标题 (可选) -->
           <div class="space-y-1.5">
@@ -615,7 +766,7 @@ const handleSubmit = async () => {
             <input
               v-model="title"
               type="text"
-              :placeholder="selectedKind === 'project' ? '项目名称 (例如: 个人主页与生活档案)' : '给这条记录一个简短标题……'"
+              placeholder="给这条记录一个简短标题……"
               class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -675,7 +826,7 @@ const handleSubmit = async () => {
           </div>
 
           <!-- 项目关联 (可选) -->
-          <div v-if="projects && projects.length > 0 && selectedKind !== 'project'" class="space-y-1.5">
+          <div v-if="projects && projects.length > 0" class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联造物项目 (可选)</label>
             <select
               v-model="selectedProjectId"

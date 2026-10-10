@@ -358,6 +358,30 @@ export async function fetchWishes(params?: { kind?: string; status?: string }): 
   }
 }
 
+export async function updateWish(id: number, data: Partial<Wish>): Promise<Wish> {
+  return request<Wish>(`${API_BASE}/wishes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function resolveWish(
+  id: number,
+  data: {
+    resolution_type?: 'exact' | 'altered' | 'relinquished'
+    actual_cost?: number
+    actual_title?: string
+    fulfilled_at?: string
+    create_transaction?: boolean
+    transaction_id?: number
+  }
+): Promise<Wish> {
+  return request<Wish>(`${API_BASE}/wishes/${id}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 export async function updateTransaction(
   id: number,
   data: Partial<Transaction>
