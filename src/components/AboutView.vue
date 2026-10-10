@@ -346,9 +346,14 @@ onMounted(() => {
 
             <span
               v-if="gear.status"
-              class="border border-[var(--accent-warm)]/30 bg-[var(--accent-warm)]/5 px-2 py-0.5 rounded-xs text-[10px] text-[var(--accent-warm)] font-medium"
+              class="px-2 py-0.5 rounded-xs text-[10px] font-medium border"
+              :class="
+                gear.status === 'sold' || gear.status === '已出二手'
+                  ? 'border-amber-600/30 bg-amber-600/5 text-amber-600'
+                  : 'border-[var(--accent-warm)]/30 bg-[var(--accent-warm)]/5 text-[var(--accent-warm)]'
+              "
             >
-              {{ gear.status }}
+              {{ gear.status === 'active' ? '日常自用' : gear.status === 'sold' ? '已出二手' : gear.status }}
             </span>
           </div>
 

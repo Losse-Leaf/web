@@ -211,7 +211,16 @@ const handleAddGear = async () => {
   showAddGear.value = false
 }
 
-// 出二手回血内联结算抽屉 (RC-54)
+// 设备状态兼容判断与中文映射 (RG-19)
+const isGearSold = (status?: string) => status === 'sold' || status === '已出二手'
+
+const formatGearStatus = (status?: string) => {
+  if (!status || status === 'active') return '日常自用'
+  if (status === 'sold' || status === '已出二手') return '已出二手'
+  return status
+}
+
+// 出二手回血内联结算抽屉 (RC-54, RG-19)
 const sellingGearIndex = ref<number | null>(null)
 const sellingPriceInput = ref('')
 const sellingDateInput = ref('')
@@ -246,14 +255,29 @@ const confirmSellGear = async () => {
   }
 
   const soldCents = Math.round(soldFloat * 100)
-  item.status = '已出二手'
+  item.status = 'sold'
   item.sold_price = soldCents
+  item.sold_price_cents = soldCents
   item.sold_date = sellingDateInput.value || new Date().toISOString().slice(0, 10)
 
-  // 路径 B：闲置转售 · 卖出自动生成回血收入账单 (RC-53)
-  if (soldCents > 0) {
+  try {
+    isSellingSubmitting.value = true
+    // 1. 立即同步持久化设备状态至本地与后端，无需二次点击底部保存 (RG-19)
+    saveCuratorProfile(form.value)
     try {
-      isSellingSubmitting.value = true
+      const updated = await updateCuratorProfile({
+        ...form.value,
+        edc_gear: form.value.edc_gear,
+      })
+      saveCuratorProfile(updated)
+      emit('updated', updated)
+    } catch (syncErr) {
+      console.warn('同步设备出二手状态至后端失败:', syncErr)
+      emit('updated', { ...form.value })
+    }
+
+    // 2. 路径 B：闲置转售 · 卖出自动生成回血收入账单 (RC-53)
+    if (soldCents > 0) {
       await createTransaction({
         type: 'income',
         category: '二手回血',
@@ -263,11 +287,11 @@ const confirmSellGear = async () => {
         payment_method: '微信支付',
         occurred_at: item.sold_date,
       })
-    } catch (err) {
-      console.warn('同步生成二手回血收入流水失败:', err)
-    } finally {
-      isSellingSubmitting.value = false
     }
+  } catch (err) {
+    console.warn('同步生成二手回血收入流水失败:', err)
+  } finally {
+    isSellingSubmitting.value = false
   }
 
   cancelSellDrawer()
@@ -652,14 +676,14 @@ onMounted(() => {
                   <span class="font-serif-editorial text-base text-[var(--ink-primary)] font-medium">
                     {{ item.name }}
                   </span>
-                  <span v-if="item.status" class="text-[11px] font-mono-archive" :class="item.status === '已出二手' ? 'text-amber-600' : 'text-[var(--accent-warm)]'">
-                    · {{ item.status }}
+                  <span v-if="item.status" class="text-[11px] font-mono-archive" :class="isGearSold(item.status) ? 'text-amber-600' : 'text-[var(--accent-warm)]'">
+                    · {{ formatGearStatus(item.status) }}
                   </span>
                   <span v-if="item.price_cents" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
                     (购入 ¥{{ (item.price_cents / 100).toFixed(2) }})
                   </span>
-                  <span v-if="item.sold_price" class="text-[10px] font-mono-archive text-emerald-700">
-                    (回血 ¥{{ (item.sold_price / 100).toFixed(2) }})
+                  <span v-if="item.sold_price_cents || item.sold_price" class="text-[10px] font-mono-archive text-emerald-700">
+                    (回血 ¥{{ (((item.sold_price_cents ?? item.sold_price) || 0) / 100).toFixed(2) }})
                   </span>
                 </div>
                 <p v-if="item.spec" class="text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -672,7 +696,7 @@ onMounted(() => {
 
               <div class="flex items-center gap-2 shrink-0">
                 <button
-                  v-if="item.status !== '已出二手'"
+                  v-if="!isGearSold(item.status)"
                   @click="openSellDrawer(idx)"
                   type="button"
                   class="text-[11px] font-mono-archive px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"

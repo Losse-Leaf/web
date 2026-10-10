@@ -8,6 +8,7 @@ import {
   updateTransaction,
   fetchAssetsOverview,
   fetchCreditChannels,
+  updateInitialLiquidBalance,
 } from '../utils/api'
 import type { Transaction, TransactionSummary, CuratorProfile, AssetsOverview, CreditChannel } from '../types'
 import { useExport } from '../composables/useExport'
@@ -34,10 +35,37 @@ const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
 const selectedCategoryFilter = ref<string>('')
 
-// 信贷渠道与资产大盘 (RC-53, FE-15)
+// 信贷渠道与资产大盘 (RC-53, FE-15, RG-20)
 const isCreditModalOpen = ref(false)
 const assetsOverview = ref<AssetsOverview | null>(null)
 const creditChannels = ref<CreditChannel[]>([])
+
+// 初始流动资金底数校准状态 (RG-20)
+const isEditingLiquidBalance = ref(false)
+const liquidBalanceInput = ref('')
+const isSavingLiquidBalance = ref(false)
+
+const openEditLiquidBalance = () => {
+  const currentInitial = assetsOverview.value?.initial_liquid_balance ?? 0
+  liquidBalanceInput.value = (currentInitial / 100).toFixed(2)
+  isEditingLiquidBalance.value = true
+}
+
+const saveInitialLiquidBalance = async () => {
+  const valFloat = parseFloat(liquidBalanceInput.value || '0')
+  if (isNaN(valFloat)) return
+  try {
+    isSavingLiquidBalance.value = true
+    const cents = Math.round(valFloat * 100)
+    await updateInitialLiquidBalance(cents)
+    isEditingLiquidBalance.value = false
+    await loadAssetsOverview()
+  } catch (err) {
+    console.error('Failed to update initial liquid balance:', err)
+  } finally {
+    isSavingLiquidBalance.value = false
+  }
+}
 
 // 编辑态 (RG-11)
 const editingTx = ref<Transaction | null>(null)
@@ -52,19 +80,19 @@ const editOccurredAt = ref('')
 const categoriesList = ['餐饮', '交通', '购物', '娱乐', '学习', '住房', '医疗', '其他']
 const paymentMethodsList = ['微信支付', '支付宝', '银行卡', '现金', '其他']
 
-// 资产与信贷管理大盘 (RC-53)
+// 资产与信贷管理大盘 (RC-53, RG-19)
 const totalFixedAssets = computed(() => {
   const profile = props.profile || loadCuratorProfile()
   const gears = profile.edc_gear || []
   return gears
-    .filter((g) => g.status !== '已出二手')
+    .filter((g) => g.status !== 'sold' && g.status !== '已出二手')
     .reduce((sum, g) => sum + (g.price_cents || 0), 0)
 })
 
 const activeGearCount = computed(() => {
   const profile = props.profile || loadCuratorProfile()
   const gears = profile.edc_gear || []
-  return gears.filter((g) => g.status !== '已出二手').length
+  return gears.filter((g) => g.status !== 'sold' && g.status !== '已出二手').length
 })
 
 const totalInstallmentLiabilities = computed(() => {
@@ -344,15 +372,58 @@ const spectrumItems = computed(() => {
       </div>
     </header>
 
-    <!-- 个人净资产与资产大盘指示纸签 (RC-53, FE-15) -->
+    <!-- 个人净资产与资产大盘指示纸签 (RC-53, FE-15, RG-20) -->
     <div class="mb-10 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col md:flex-row md:items-center justify-between gap-5 font-mono-archive text-xs">
       <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
-        <!-- 流动可用资金池 (储蓄与余额) -->
+        <!-- 流动可用资金池 (储蓄与余额 + 初始底数校准 RG-20) -->
         <div>
-          <span class="text-[var(--ink-muted)] block text-[11px]">流动资金池 (储蓄与结余)</span>
-          <span class="font-serif-editorial text-lg font-medium" :class="(assetsOverview?.liquid_balance ?? 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
-            {{ (assetsOverview?.liquid_balance ?? 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.liquid_balance ?? (summary?.balance || 0))) }}
-          </span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[var(--ink-muted)] text-[11px]">流动资金池 (储蓄与结余)</span>
+            <button
+              v-if="!isEditingLiquidBalance"
+              @click="openEditLiquidBalance"
+              type="button"
+              class="text-[10px] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] underline underline-offset-2 cursor-pointer"
+              title="校准初始流动存款底数"
+            >
+              校准底数
+            </button>
+          </div>
+
+          <div v-if="!isEditingLiquidBalance" class="flex items-baseline gap-1.5">
+            <span class="font-serif-editorial text-lg font-medium" :class="(assetsOverview?.liquid_balance ?? 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
+              {{ (assetsOverview?.liquid_balance ?? 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.liquid_balance ?? (summary?.balance || 0))) }}
+            </span>
+            <span v-if="assetsOverview?.initial_liquid_balance" class="text-[10px] text-[var(--ink-muted)]">
+              (初始底数 ¥{{ formatMoney(assetsOverview.initial_liquid_balance) }})
+            </span>
+          </div>
+
+          <div v-else class="flex items-center gap-1.5 pt-1">
+            <span class="text-[11px] text-[var(--ink-muted)]">底数 ¥</span>
+            <input
+              v-model="liquidBalanceInput"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              class="w-24 px-2 py-0.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+            />
+            <button
+              @click="saveInitialLiquidBalance"
+              type="button"
+              :disabled="isSavingLiquidBalance"
+              class="px-2 py-0.5 text-[11px] bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90"
+            >
+              保存
+            </button>
+            <button
+              @click="isEditingLiquidBalance = false"
+              type="button"
+              class="px-1.5 py-0.5 text-[11px] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+            >
+              取消
+            </button>
+          </div>
         </div>
 
         <!-- 固定资产沉淀 -->

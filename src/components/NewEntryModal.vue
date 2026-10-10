@@ -2,10 +2,19 @@
 import { ref, computed, watch } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
-import { createLifeEntry, createTransaction, createProject, updateCuratorProfile, fetchWishes, updateWish } from '../utils/api'
+import {
+  createLifeEntry,
+  createTransaction,
+  createProject,
+  updateCuratorProfile,
+  fetchWishes,
+  updateWish,
+  fetchCreditChannels,
+  getAdminToken,
+} from '../utils/api'
 import { loadCuratorProfile, saveCuratorProfile } from '../utils/profile'
 import { audio } from '../utils/audio'
-import type { LifeEntry, Transaction, Project, GearItem, Wish } from '../types'
+import type { LifeEntry, Transaction, Project, GearItem, Wish, CreditChannel } from '../types'
 
 export type EntryKind = 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction'
 
@@ -27,24 +36,6 @@ const step = ref<'select' | 'form'>('select')
 const selectedKind = ref<EntryKind>('life')
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
-
-watch(
-  [() => props.isOpen, () => props.initialKind],
-  ([open, initKind]) => {
-    if (open) {
-      loadAvailableWishes()
-      if (initKind) {
-        selectedKind.value = initKind
-        step.value = 'form'
-      } else {
-        step.value = 'select'
-        selectedKind.value = 'life'
-      }
-      errorMsg.value = null
-    }
-  },
-  { immediate: true }
-)
 
 // 基础表单状态
 const title = ref('')
@@ -74,13 +65,23 @@ const txNote = ref<string>('')
 const syncToGear = ref(false)
 const gearCategory = ref('影像与暗房')
 
-// 心愿单与分期付款支持 (RG-11, RC-53)
+// 心愿单与分期付款支持 (RG-11, RC-53, RG-21)
 const availableWishes = ref<Wish[]>([])
+const creditChannels = ref<CreditChannel[]>([])
 const selectedWishId = ref<number | null>(null)
 const isInstallment = ref(false)
 const installmentChannel = ref('huabei')
 const installmentMonths = ref(12)
 const customRepaymentDay = ref(15)
+
+const defaultCreditChannels: CreditChannel[] = [
+  { code: 'huabei', name: '花呗', repayment_day: 10 },
+  { code: 'baitiao', name: '京东白条', repayment_day: 20 },
+]
+
+const displayCreditChannels = computed<CreditChannel[]>(() => {
+  return creditChannels.value.length > 0 ? creditChannels.value : defaultCreditChannels
+})
 
 const loadAvailableWishes = async () => {
   try {
@@ -90,6 +91,43 @@ const loadAvailableWishes = async () => {
     availableWishes.value = []
   }
 }
+
+const loadCreditChannelsList = async () => {
+  if (!getAdminToken()) return
+  try {
+    const list = await fetchCreditChannels()
+    if (Array.isArray(list) && list.length > 0) {
+      creditChannels.value = list
+      if (
+        installmentChannel.value !== 'custom' &&
+        !list.some((c) => c.code === installmentChannel.value)
+      ) {
+        installmentChannel.value = list[0].code
+      }
+    }
+  } catch {
+    // 保持默认兜底渠道
+  }
+}
+
+watch(
+  [() => props.isOpen, () => props.initialKind],
+  ([open, initKind]) => {
+    if (open) {
+      loadAvailableWishes()
+      loadCreditChannelsList()
+      if (initKind) {
+        selectedKind.value = initKind
+        step.value = 'form'
+      } else {
+        step.value = 'select'
+        selectedKind.value = 'life'
+      }
+      errorMsg.value = null
+    }
+  },
+  { immediate: true }
+)
 
 const onWishSelected = () => {
   if (!selectedWishId.value) return
@@ -114,6 +152,13 @@ const calculatedMonthlyPay = computed(() => {
 })
 
 const effectiveRepaymentDay = computed(() => {
+  if (installmentChannel.value === 'custom') {
+    return customRepaymentDay.value || 15
+  }
+  const matched = displayCreditChannels.value.find((c) => c.code === installmentChannel.value)
+  if (matched) {
+    return matched.repayment_day
+  }
   if (installmentChannel.value === 'huabei') return 10
   if (installmentChannel.value === 'baitiao') return 20
   return customRepaymentDay.value || 15
@@ -167,7 +212,7 @@ const resetForm = () => {
   gearCategory.value = '影像与暗房'
   selectedWishId.value = null
   isInstallment.value = false
-  installmentChannel.value = 'huabei'
+  installmentChannel.value = displayCreditChannels.value[0]?.code || 'huabei'
   installmentMonths.value = 12
   customRepaymentDay.value = 15
   projTitle.value = ''
@@ -222,13 +267,19 @@ const handleSubmit = async () => {
       ? Math.round(amountInCents / (installmentMonths.value || 1))
       : undefined
 
-    let noteText = txNote.value.trim()
-    if (isInstallment.value && !noteText.includes('期')) {
-      const channelLabel = installmentChannel.value === 'huabei'
+    const matchedChannel = displayCreditChannels.value.find(
+      (c) => c.code === installmentChannel.value
+    )
+    const channelLabel = matchedChannel
+      ? matchedChannel.name
+      : installmentChannel.value === 'huabei'
         ? '花呗'
         : installmentChannel.value === 'baitiao'
           ? '京东白条'
           : '信贷分期'
+
+    let noteText = txNote.value.trim()
+    if (isInstallment.value && !noteText.includes('期')) {
       const monthlyYuan = ((installmentPay || 0) / 100).toFixed(2)
       const installmentTag = `[${channelLabel} ${installmentMonths.value}期 · 每月${repaymentDay}日还款 · 每期¥${monthlyYuan}]`
       noteText = noteText ? `${noteText} ${installmentTag}` : installmentTag
@@ -247,7 +298,9 @@ const handleSubmit = async () => {
               ? '支付宝 (花呗分期)'
               : installmentChannel.value === 'baitiao'
                 ? '京东支付 (白条分期)'
-                : txPaymentMethod.value)
+                : matchedChannel
+                  ? `${matchedChannel.name} (分期)`
+                  : txPaymentMethod.value)
           : txPaymentMethod.value,
         occurred_at: occurredAt.value,
         wish_id: selectedWishId.value || undefined,
@@ -583,8 +636,13 @@ const handleSubmit = async () => {
                     v-model="installmentChannel"
                     class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none font-mono-archive"
                   >
-                    <option value="huabei">花呗 (每月 10 日还款)</option>
-                    <option value="baitiao">京东白条 (每月 20 日还款)</option>
+                    <option
+                      v-for="ch in displayCreditChannels"
+                      :key="ch.code"
+                      :value="ch.code"
+                    >
+                      {{ ch.name }} (每月 {{ ch.repayment_day }} 日还款)
+                    </option>
                     <option value="custom">信用卡 / 自定义分期</option>
                   </select>
                 </div>
