@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { Plus, X, RotateCcw, AlertCircle } from 'lucide-vue-next'
-import { presignUpload, uploadDirectToR2, completeUpload, cleanupUploads } from '../utils/api'
+import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { audio } from '../utils/audio'
 import type { Attachment } from '../types'
 
@@ -86,32 +86,15 @@ const startUpload = async (item: UploadItem) => {
 
   try {
     item.status = 'uploading'
-    item.progress = 5
+    item.progress = 10
     item.errorMsg = undefined
 
-    // 1. 请求预签名 PUT URL
-    const presign = await presignUpload(item.file.name, item.file.type || 'image/jpeg', item.file.size)
-    item.objectKey = presign.object_key
-    item.progress = 20
-
-    // 2. 直传 R2
-    await uploadDirectToR2(presign.upload_url, item.file, (pct) => {
-      // 映射进度 20% -> 90%
-      item.progress = Math.min(90, Math.max(20, Math.round(20 + pct * 0.7)))
+    const res = await uploadUnifiedFile(item.file, 'entry', (pct) => {
+      item.progress = Math.max(10, pct)
     })
 
-    item.progress = 95
-
-    // 3. 确认上传完成，落库 Attachment
-    const att = await completeUpload({
-      upload_id: presign.upload_id,
-      object_key: presign.object_key,
-      original_filename: item.file.name,
-      mime_type: item.file.type || 'image/jpeg',
-      size: item.file.size,
-    })
-
-    item.attachmentId = att.id
+    item.attachmentId = res.attachment_id
+    item.objectKey = res.object_key
     item.status = 'completed'
     item.progress = 100
     audio.playShutter()
