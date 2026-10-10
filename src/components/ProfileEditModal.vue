@@ -15,7 +15,12 @@ const emit = defineEmits<{
   (e: 'updated', profile: UserProfile): void
 }>()
 
-const form = ref<UserProfile>({ ...props.profile })
+const cloneProfile = (p: UserProfile): UserProfile => ({
+  ...p,
+  gearList: p.gearList ? p.gearList.map((item) => ({ ...item })) : [],
+})
+
+const form = ref<UserProfile>(cloneProfile(props.profile))
 const activeTab = ref<'base' | 'gear'>('base')
 
 // 头像上传与相对路径状态
@@ -45,13 +50,18 @@ const categories = [
   '纸笔与日常',
 ]
 
+// 仅在弹窗打开时同步并克隆表单状态，移除全局深监听与 JSON 频繁序列化开销 (FE-07)
 watch(
-  () => props.profile,
-  (newP) => {
-    form.value = JSON.parse(JSON.stringify(newP))
-    avatarKey.value = newP.avatar_key || ''
+  () => props.isOpen,
+  (open) => {
+    if (open) {
+      form.value = cloneProfile(props.profile)
+      avatarKey.value = props.profile.avatar_key || ''
+      avatarUploadError.value = ''
+      saveError.value = ''
+    }
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 )
 
 const triggerSelectAvatar = () => {
@@ -146,7 +156,7 @@ const handleSave = async () => {
 
 const handleResetDefault = () => {
   if (!confirm('确定恢复为默认主理人资料与预置设备清单？')) return
-  form.value = JSON.parse(JSON.stringify(DEFAULT_PROFILE))
+  form.value = cloneProfile(DEFAULT_PROFILE)
 }
 
 const handleAddGear = () => {

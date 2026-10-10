@@ -82,13 +82,24 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // 1. Life Entries
+let entriesAbortController: AbortController | null = null
+
 export async function fetchEntries(params?: {
   page?: number
   page_size?: number
   type?: string
   category?: string
   year?: string
+  signal?: AbortSignal
 }): Promise<LifeEntry[]> {
+  // 竞态保护：未指定外部 signal 时自动终止上一次未完成的请求 (FE-08)
+  if (!params?.signal) {
+    if (entriesAbortController) {
+      entriesAbortController.abort()
+    }
+    entriesAbortController = new AbortController()
+  }
+
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
   if (params?.page_size) query.set('page_size', String(params.page_size))
@@ -97,8 +108,16 @@ export async function fetchEntries(params?: {
   if (params?.year && params.year !== 'all') query.set('year', params.year)
 
   const url = `${API_BASE}/entries?${query.toString()}`
-  const data = await request<{ entries: LifeEntry[]; total: number }>(url)
-  return data.entries || []
+  const signal = params?.signal || entriesAbortController?.signal
+  try {
+    const data = await request<{ entries: LifeEntry[]; total: number }>(url, { signal })
+    return data.entries || []
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return []
+    }
+    throw err
+  }
 }
 
 export async function fetchEntryById(id: number): Promise<LifeEntry> {
