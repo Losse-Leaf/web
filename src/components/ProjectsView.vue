@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import type { Project } from '../types'
 import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle } from 'lucide-vue-next'
 import { createProject, updateProject, deleteProject } from '../utils/api'
+import PaperSelect from './PaperSelect.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -359,14 +360,15 @@ const isGitHubUrl = (url?: string) => {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-[var(--ink-secondary)] mb-1">状态</label>
-              <select
+              <PaperSelect
                 v-model="formStatus"
-                class="w-full px-3 py-1.5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)]"
-              >
-                <option value="Active">Active (进行中)</option>
-                <option value="Maintained">Maintained (长期维护)</option>
-                <option value="Archived">Archived (已封存)</option>
-              </select>
+                size="sm"
+                :options="[
+                  { value: 'Active', label: 'Active (进行中)' },
+                  { value: 'Maintained', label: 'Maintained (长期维护)' },
+                  { value: 'Archived', label: 'Archived (已封存)' },
+                ]"
+              />
             </div>
             <div>
               <label class="block text-[var(--ink-secondary)] mb-1">GitHub / 主页链接</label>

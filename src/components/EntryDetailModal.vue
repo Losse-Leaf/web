@@ -2,6 +2,8 @@
 import { ref, computed } from 'vue'
 import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
+import PaperSelect from './PaperSelect.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 import { updateLifeEntry, deleteLifeEntry } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
 import { parseOccurredDate } from '../utils/format'
@@ -244,10 +246,10 @@ const getKindLabel = (type: string) => {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
-            <input
+            <PaperDatePicker
               v-model="editOccurredAt"
-              type="datetime-local"
-              class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              enableTime
+              placeholder="选择发生时间..."
             />
           </div>
 
@@ -264,13 +266,13 @@ const getKindLabel = (type: string) => {
         <!-- 项目关联 -->
         <div v-if="projects && projects.length > 0" class="space-y-1.5">
           <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联造物项目</label>
-          <select
+          <PaperSelect
             v-model="editProjectId"
-            class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-          >
-            <option :value="null">不关联项目</option>
-            <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.title }}</option>
-          </select>
+            :options="[
+              { value: null, label: '不关联项目' },
+              ...projects.map((p) => ({ value: p.id, label: p.title })),
+            ]"
+          />
         </div>
 
         <!-- 标签分类 -->

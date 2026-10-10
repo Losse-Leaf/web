@@ -4,6 +4,7 @@ import { X, Sparkles } from 'lucide-vue-next'
 import { createWish, updateWish } from '../utils/api'
 import type { Wish } from '../types'
 import CityPicker from './CityPicker.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -251,10 +252,10 @@ const handleSubmit = async () => {
 
           <div>
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">愿景目标期 (锚点无逾期惩罚)</label>
-            <input
+            <PaperDatePicker
               v-model="targetDate"
-              type="date"
-              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
+              clearable
+              placeholder="选择目标日期 (选填)..."
             />
           </div>
         </div>

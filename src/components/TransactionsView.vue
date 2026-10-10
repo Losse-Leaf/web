@@ -15,6 +15,8 @@ import { useExport } from '../composables/useExport'
 import { formatMoney } from '../utils/format'
 import { loadCuratorProfile } from '../utils/profile'
 import CreditChannelsModal from './CreditChannelsModal.vue'
+import PaperSelect from './PaperSelect.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 
 const props = defineProps<{
   transactions?: Transaction[]
@@ -749,19 +751,18 @@ const spectrumItems = computed(() => {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-[var(--ink-muted)] mb-1">支付方式</label>
-              <select
+              <PaperSelect
                 v-model="editPaymentMethod"
-                class="w-full px-2.5 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
-              >
-                <option v-for="pm in paymentMethodsList" :key="pm" :value="pm">{{ pm }}</option>
-              </select>
+                size="sm"
+                :options="paymentMethodsList.map((pm) => ({ value: pm, label: pm }))"
+              />
             </div>
             <div>
               <label class="block text-[var(--ink-muted)] mb-1">记录时间</label>
-              <input
+              <PaperDatePicker
                 v-model="editOccurredAt"
-                type="datetime-local"
-                class="w-full px-2 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
+                enableTime
+                size="sm"
               />
             </div>
           </div>

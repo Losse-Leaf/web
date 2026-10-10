@@ -4,6 +4,8 @@ import { X, Sparkles, Check, ShieldCheck } from 'lucide-vue-next'
 import { resolveWish, fetchCreditChannels } from '../utils/api'
 import { audio } from '../utils/audio'
 import type { Wish, CreditChannel } from '../types'
+import PaperSelect from './PaperSelect.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -319,12 +321,9 @@ const handleSubmit = async () => {
         <!-- 3. 达成归册日期 (支持自选历史时间，严格 <= now) -->
         <div>
           <label class="block text-[11px] text-[var(--ink-muted)] mb-1">达成归册日期 (默认今天，可补录历史) *</label>
-          <input
+          <PaperDatePicker
             v-model="fulfilledDate"
-            type="date"
-            :max="todayStr"
-            required
-            class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive"
+            placeholder="选择达成日期..."
           />
         </div>
 
@@ -342,26 +341,29 @@ const handleSubmit = async () => {
           <div v-if="isInstallment" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-subtle)]">
             <div>
               <label class="block text-[10px] text-[var(--ink-muted)] mb-1">分期渠道</label>
-              <select
+              <PaperSelect
                 v-model="selectedChannelCode"
-                class="w-full px-2 py-1 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
-              >
-                <option v-for="ch in creditChannels" :key="ch.code" :value="ch.code">
-                  {{ ch.name }} (每月{{ ch.repayment_day }}日还款)
-                </option>
-              </select>
+                size="sm"
+                :options="
+                  creditChannels.map((ch) => ({
+                    value: ch.code,
+                    label: `${ch.name} (每月${ch.repayment_day}日还款)`,
+                  }))
+                "
+              />
             </div>
             <div>
               <label class="block text-[10px] text-[var(--ink-muted)] mb-1">分期期数</label>
-              <select
-                v-model.number="installmentMonths"
-                class="w-full px-2 py-1 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
-              >
-                <option :value="3">3 期 (约 ¥{{ monthlyPayEstimate }}/月)</option>
-                <option :value="6">6 期 (约 ¥{{ monthlyPayEstimate }}/月)</option>
-                <option :value="12">12 期 (约 ¥{{ monthlyPayEstimate }}/月)</option>
-                <option :value="24">24 期 (约 ¥{{ monthlyPayEstimate }}/月)</option>
-              </select>
+              <PaperSelect
+                v-model="installmentMonths"
+                size="sm"
+                :options="[
+                  { value: 3, label: `3 期 (约 ¥${monthlyPayEstimate}/月)` },
+                  { value: 6, label: `6 期 (约 ¥${monthlyPayEstimate}/月)` },
+                  { value: 12, label: `12 期 (约 ¥${monthlyPayEstimate}/月)` },
+                  { value: 24, label: `24 期 (约 ¥${monthlyPayEstimate}/月)` },
+                ]"
+              />
             </div>
           </div>
         </div>

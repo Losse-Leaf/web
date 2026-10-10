@@ -2,6 +2,8 @@
 import { ref, computed, watch } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
+import PaperSelect from './PaperSelect.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 import {
   createLifeEntry,
   createTransaction,
@@ -579,12 +581,10 @@ const handleSubmit = async () => {
 
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">支付渠道</label>
-              <select
+              <PaperSelect
                 v-model="txPaymentMethod"
-                class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
-              >
-                <option v-for="m in paymentMethods" :key="m" :value="m">{{ m }}</option>
-              </select>
+                :options="paymentMethods.map((m) => ({ value: m, label: m }))"
+              />
             </div>
           </div>
 
@@ -602,16 +602,17 @@ const handleSubmit = async () => {
           <!-- 联动心愿单 (RG-11, RC-53) -->
           <div v-if="txType === 'expense' && availableWishes.length > 0" class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联心愿清单 (可选)</label>
-            <select
+            <PaperSelect
               v-model="selectedWishId"
               @change="onWishSelected"
-              class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
-            >
-              <option :value="null">-- 不关联心愿 --</option>
-              <option v-for="w in availableWishes" :key="w.id" :value="w.id">
-                {{ w.title }} (预算: ¥{{ (w.budget / 100).toFixed(2) }})
-              </option>
-            </select>
+              :options="[
+                { value: null, label: '-- 不关联心愿 --' },
+                ...availableWishes.map((w) => ({
+                  value: w.id,
+                  label: `${w.title} (预算: ¥${(w.budget / 100).toFixed(2)})`,
+                })),
+              ]"
+            />
           </div>
 
           <!-- 分期付款支持 (RG-11, RC-53) -->
@@ -632,19 +633,17 @@ const handleSubmit = async () => {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
-                  <select
+                  <PaperSelect
                     v-model="installmentChannel"
-                    class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none font-mono-archive"
-                  >
-                    <option
-                      v-for="ch in displayCreditChannels"
-                      :key="ch.code"
-                      :value="ch.code"
-                    >
-                      {{ ch.name }} (每月 {{ ch.repayment_day }} 日还款)
-                    </option>
-                    <option value="custom">信用卡 / 自定义分期</option>
-                  </select>
+                    size="sm"
+                    :options="[
+                      ...displayCreditChannels.map((ch) => ({
+                        value: ch.code,
+                        label: `${ch.name} (每月 ${ch.repayment_day} 日还款)`,
+                      })),
+                      { value: 'custom', label: '信用卡 / 自定义分期' },
+                    ]"
+                  />
                 </div>
                 <div>
                   <label class="block text-[var(--ink-muted)] mb-1">分期期数</label>
@@ -698,16 +697,17 @@ const handleSubmit = async () => {
             <div v-if="syncToGear" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-mono-archive">
               <div>
                 <label class="block text-[var(--ink-muted)] mb-1">设备类别</label>
-                <select
+                <PaperSelect
                   v-model="gearCategory"
-                  class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none font-mono-archive"
-                >
-                  <option value="影像与暗房">影像与暗房</option>
-                  <option value="工作台与算力">工作台与算力</option>
-                  <option value="手冲咖啡工坊">手冲咖啡工坊</option>
-                  <option value="夜骑巡航">夜骑巡航</option>
-                  <option value="纸笔与日常">纸笔与日常</option>
-                </select>
+                  size="sm"
+                  :options="[
+                    { value: '影像与暗房', label: '影像与暗房' },
+                    { value: '工作台与算力', label: '工作台与算力' },
+                    { value: '手冲咖啡工坊', label: '手冲咖啡工坊' },
+                    { value: '夜骑巡航', label: '夜骑巡航' },
+                    { value: '纸笔与日常', label: '纸笔与日常' },
+                  ]"
+                />
               </div>
               <div class="flex items-end">
                 <span class="text-[11px] text-[var(--ink-muted)] pb-1.5">
@@ -756,15 +756,15 @@ const handleSubmit = async () => {
               </div>
               <div class="space-y-1.5">
                 <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">运行状态</label>
-                <select
+                <PaperSelect
                   v-model="projStatus"
-                  class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                >
-                  <option value="Active">活跃 (Active)</option>
-                  <option value="Maintained">维护 (Maintained)</option>
-                  <option value="WIP">构思试验 (WIP)</option>
-                  <option value="Archived">归档 (Archived)</option>
-                </select>
+                  :options="[
+                    { value: 'Active', label: '活跃 (Active)' },
+                    { value: 'Maintained', label: '维护 (Maintained)' },
+                    { value: 'WIP', label: '构思试验 (WIP)' },
+                    { value: 'Archived', label: '归档 (Archived)' },
+                  ]"
+                />
               </div>
             </div>
 
@@ -852,10 +852,10 @@ const handleSubmit = async () => {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
-              <input
+              <PaperDatePicker
                 v-model="occurredAt"
-                type="datetime-local"
-                class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                enableTime
+                placeholder="选择发生时间..."
               />
             </div>
 
@@ -886,23 +886,23 @@ const handleSubmit = async () => {
           <!-- 项目关联 (可选) -->
           <div v-if="projects && projects.length > 0" class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联造物项目 (可选)</label>
-            <select
+            <PaperSelect
               v-model="selectedProjectId"
-              class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-            >
-              <option :value="null">不关联项目</option>
-              <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.title }}</option>
-            </select>
+              :options="[
+                { value: null, label: '不关联项目' },
+                ...projects.map((p) => ({ value: p.id, label: p.title })),
+              ]"
+            />
           </div>
         </template>
 
         <!-- 发生时间 (记账时置底) -->
         <div v-if="selectedKind === 'transaction'" class="space-y-1.5">
           <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">记录时间</label>
-          <input
+          <PaperDatePicker
             v-model="occurredAt"
-            type="datetime-local"
-            class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+            enableTime
+            placeholder="选择记录时间..."
           />
         </div>
 

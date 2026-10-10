@@ -8,6 +8,7 @@ import {
   deleteCreditChannel,
 } from '../utils/api'
 import type { CreditChannel } from '../types'
+import PaperSelect from './PaperSelect.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -31,7 +32,10 @@ const isCreating = ref(false)
 // 编辑中状态 map: channelId -> { name, repayment_day, isSaving }
 const editingMap = ref<Record<number, { repayment_day: number; name: string; isSaving?: boolean }>>({})
 
-const daysOptions = Array.from({ length: 31 }, (_, i) => i + 1)
+const daySelectOptions = Array.from({ length: 31 }, (_, i) => ({
+  value: i + 1,
+  label: `每月 ${i + 1} 号`,
+}))
 
 const loadChannels = async () => {
   try {
@@ -218,16 +222,15 @@ onMounted(() => {
             <!-- 还款日配置与保存 -->
             <div class="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-[var(--border-subtle)]/50 text-[11px]">
               <div class="flex items-center gap-2" v-if="ch.id && editingMap[ch.id]">
-                <Calendar class="w-3.5 h-3.5 text-[var(--ink-muted)]" />
-                <span class="text-[var(--ink-muted)]">每月独立还款日:</span>
-                <select
-                  v-model.number="editingMap[ch.id].repayment_day"
-                  class="px-2 py-1 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none text-[var(--ink-primary)] font-mono-archive cursor-pointer"
-                >
-                  <option v-for="d in daysOptions" :key="d" :value="d">
-                    每月 {{ d }} 号
-                  </option>
-                </select>
+                <Calendar class="w-3.5 h-3.5 text-[var(--ink-muted)] shrink-0" />
+                <span class="text-[var(--ink-muted)] shrink-0">每月独立还款日:</span>
+                <div class="w-32">
+                  <PaperSelect
+                    v-model="editingMap[ch.id].repayment_day"
+                    size="xs"
+                    :options="daySelectOptions"
+                  />
+                </div>
               </div>
 
               <button
@@ -265,14 +268,11 @@ onMounted(() => {
 
           <div>
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">每月还款日 *</label>
-            <select
-              v-model.number="newRepaymentDay"
-              class="w-full px-2.5 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none text-xs text-[var(--ink-primary)] cursor-pointer"
-            >
-              <option v-for="d in daysOptions" :key="d" :value="d">
-                每月 {{ d }} 号
-              </option>
-            </select>
+            <PaperSelect
+              v-model="newRepaymentDay"
+              size="sm"
+              :options="daySelectOptions"
+            />
           </div>
         </div>
 

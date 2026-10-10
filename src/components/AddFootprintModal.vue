@@ -4,6 +4,7 @@ import { X, MapPin, Compass, Check } from 'lucide-vue-next'
 import { createFootprint } from '../utils/api'
 import { audio } from '../utils/audio'
 import CityPicker from './CityPicker.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 import type { Footprint } from '../types'
 
 const props = defineProps<{
@@ -111,11 +112,9 @@ const handleSubmit = async () => {
         <!-- 到访日期 -->
         <div>
           <label class="block text-[11px] text-[var(--ink-muted)] mb-1">到访日期 (支持补录历史日期) *</label>
-          <input
+          <PaperDatePicker
             v-model="visitedAt"
-            type="date"
-            required
-            class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive"
+            placeholder="选择到访日期..."
           />
         </div>
 

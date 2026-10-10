@@ -4,6 +4,8 @@ import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2, User } from 'lucide
 import type { CuratorProfile, GearItem } from '../types'
 import { DEFAULT_PROFILE, saveCuratorProfile } from '../utils/profile'
 import { uploadUnifiedFile, updateCuratorProfile, createTransaction } from '../utils/api'
+import PaperSelect from './PaperSelect.vue'
+import PaperDatePicker from './PaperDatePicker.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -566,12 +568,11 @@ onMounted(() => {
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">类目</label>
-              <select
+              <PaperSelect
                 v-model="newGearCategory"
-                class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
-              >
-                <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
-              </select>
+                size="sm"
+                :options="categories.map((cat) => ({ value: cat, label: cat }))"
+              />
             </div>
 
             <div>
@@ -629,10 +630,10 @@ onMounted(() => {
 
             <div>
               <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">购置日期</label>
-              <input
+              <PaperDatePicker
                 v-model="newGearPurchaseDate"
-                type="date"
-                class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
+                size="sm"
+                placeholder="选择购置日期..."
               />
             </div>
           </div>
@@ -739,10 +740,10 @@ onMounted(() => {
                 </div>
                 <div>
                   <label class="block text-[11px] text-[var(--ink-muted)] mb-1">转让日期</label>
-                  <input
+                  <PaperDatePicker
                     v-model="sellingDateInput"
-                    type="date"
-                    class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
+                    size="sm"
+                    placeholder="选择转让日期..."
                   />
                 </div>
               </div>
