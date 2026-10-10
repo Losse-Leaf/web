@@ -268,6 +268,17 @@ onUnmounted(() => {
             </span>
           </div>
 
+          <!-- 视觉二维码 (若后端原生引擎下发 qr_code_data_url, RG-02) -->
+          <div v-if="currentTicket?.qr_code_data_url" class="flex justify-center py-1">
+            <div class="p-3 bg-white rounded-xs border border-[var(--border-subtle)] shadow-xs">
+              <img
+                :src="currentTicket.qr_code_data_url"
+                alt="配对二维码"
+                class="w-40 h-40 object-contain"
+              />
+            </div>
+          </div>
+
           <!-- 6 位高辨识度 PIN 码 -->
           <div class="text-center py-3 space-y-2">
             <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-widest">

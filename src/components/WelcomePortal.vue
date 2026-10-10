@@ -17,6 +17,7 @@ import {
   Camera,
   Compass,
   Layers,
+  Smartphone,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
 import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
@@ -225,54 +226,6 @@ const handleLogout = () => {
   isCurator.value = false
   currentMode.value = 'landing'
 }
-
-// 纯前端内联二维码矩阵生成算法
-const qrMatrix = computed(() => {
-  const text = qrSession.value?.qr_payload || 'looseleaf://login'
-  const size = 25
-  const grid: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false))
-
-  const drawCorner = (startR: number, startC: number) => {
-    for (let r = 0; r < 7; r++) {
-      for (let c = 0; c < 7; c++) {
-        if (
-          r === 0 ||
-          r === 6 ||
-          c === 0 ||
-          c === 6 ||
-          (r >= 2 && r <= 4 && c >= 2 && c <= 4)
-        ) {
-          grid[startR + r][startC + c] = true
-        }
-      }
-    }
-  }
-  drawCorner(0, 0)
-  drawCorner(0, size - 7)
-  drawCorner(size - 7, 0)
-
-  let hash = 0
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash << 5) - hash + text.charCodeAt(i)
-    hash |= 0
-  }
-
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      if (
-        (r < 8 && c < 8) ||
-        (r < 8 && c >= size - 8) ||
-        (r >= size - 8 && c < 8)
-      ) {
-        continue
-      }
-      const val = Math.sin(r * 13 + c * 17 + hash) * 10000
-      grid[r][c] = (Math.floor(val) & 1) === 1
-    }
-  }
-
-  return grid
-})
 
 const todayDisplay = computed(() => {
   const now = new Date()
@@ -604,17 +557,16 @@ onUnmounted(() => {
               </div>
 
               <div class="flex flex-col items-center justify-center py-2 space-y-4">
-                <div class="p-4 bg-white rounded-xs border border-[var(--border-subtle)] shadow-sm relative group">
-                  <svg viewBox="0 0 25 25" class="w-48 h-48 sm:w-56 sm:h-56" shape-rendering="crispEdges">
-                    <rect width="25" height="25" fill="#ffffff" />
-                    <g fill="#181716">
-                      <template v-for="(row, r) in qrMatrix" :key="r">
-                        <template v-for="(cell, c) in row" :key="c">
-                          <rect v-if="cell" :x="c" :y="r" width="1" height="1" />
-                        </template>
-                      </template>
-                    </g>
-                  </svg>
+                <!-- 真实二维码图像呈现 (RG-02)：后端原生返回 qr_code_data_url 时渲染真图 -->
+                <div
+                  v-if="qrSession?.qr_code_data_url"
+                  class="p-4 bg-white rounded-xs border border-[var(--border-subtle)] shadow-sm relative group"
+                >
+                  <img
+                    :src="qrSession.qr_code_data_url"
+                    alt="扫码登录二维码"
+                    class="w-48 h-48 sm:w-56 sm:h-56 object-contain"
+                  />
 
                   <div
                     v-if="qrTimeRemaining <= 0"
@@ -631,13 +583,40 @@ onUnmounted(() => {
                   </div>
                 </div>
 
+                <!-- 未返回视觉二维码时，真实展示免密握手深链并提供便捷复制 (RG-02, RG-04) -->
+                <div
+                  v-else
+                  class="p-6 bg-[var(--bg-subtle)]/70 rounded-xs border border-[var(--border-subtle)] space-y-3 text-center max-w-sm"
+                >
+                  <div class="flex items-center justify-center gap-2 text-xs font-mono-archive text-[var(--ink-primary)]">
+                    <Smartphone class="w-4 h-4 text-[var(--accent-warm)]" />
+                    <span>免密登录深链已就绪</span>
+                  </div>
+                  <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
+                    在已配对的设备中打开下方深链，或待后端原生引擎生成视觉二维码后扫码。
+                  </p>
+                  <div
+                    v-if="qrTimeRemaining <= 0"
+                    class="pt-2 text-center space-y-2"
+                  >
+                    <span class="text-xs font-mono-archive text-[var(--ink-secondary)]">凭据已过期</span>
+                    <button
+                      @click="refreshQRSession"
+                      class="px-3 py-1 bg-[var(--ink-primary)] text-white text-xs font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1 mx-auto"
+                    >
+                      <RotateCw class="w-3 h-3" />
+                      <span>重新生成</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div class="text-center space-y-1 font-mono-archive text-xs text-[var(--ink-muted)]">
                   <div class="flex items-center justify-center gap-2">
                     <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>等待手机扫码确认... (剩余 {{ qrTimeRemaining }}s)</span>
+                    <span>等待移动端授信确认... (剩余 {{ qrTimeRemaining }}s)</span>
                   </div>
                   <p class="font-serif-editorial text-xs text-[var(--ink-secondary)]">
-                    打开已完成配对的移动端，轻扫上方二维码即可瞬间授信进入。
+                    已配对的移动端在收到授信请求后将自动完成鉴权握手。
                   </p>
                 </div>
 

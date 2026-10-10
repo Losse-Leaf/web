@@ -34,9 +34,16 @@ const lightboxPayload = ref({
   date: '',
 })
 
+const getEntryFirstImage = (entry: LifeEntry): string => {
+  if (entry.attachments && entry.attachments.length > 0 && entry.attachments[0].url) {
+    return entry.attachments[0].url
+  }
+  return entry.images || ''
+}
+
 const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   lightboxPayload.value = {
-    imageUrl: customUrl || entry.images || '',
+    imageUrl: customUrl || getEntryFirstImage(entry),
     title: entry.title || '',
     meta: entry.meta || '',
     location: entry.location || '',
@@ -344,14 +351,14 @@ const getGapDays = (index: number): number => {
             </h3>
             <!-- 胶片装裱底片框 (Passe-partout) -->
             <div
-              v-if="entry.images"
+              v-if="getEntryFirstImage(entry)"
               class="film-frame bg-[var(--bg-subtle)]/80 p-2 sm:p-3 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] transition-all max-w-3xl group/photo cursor-zoom-in"
               @click.stop="openLightbox(entry)"
               title="点击在暗房灯箱中查看底片"
             >
               <div class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)]">
                 <img
-                  :src="entry.images"
+                  :src="getEntryFirstImage(entry)"
                   :alt="entry.title"
                   class="w-full max-h-[580px] object-cover editorial-image group-hover/photo:scale-[1.01] transition-transform duration-500"
                   loading="lazy"
@@ -431,14 +438,14 @@ const getGapDays = (index: number): number => {
 
             <!-- 胶片装裱暗房底片框 (支持 R2 附件与历史底片) -->
             <div
-              v-if="entry.images || (entry.attachments && entry.attachments.length > 0)"
+              v-if="getEntryFirstImage(entry)"
               class="film-frame bg-[var(--bg-subtle)]/80 p-2.5 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl cursor-zoom-in group/img space-y-2"
               @click.stop="openLightbox(entry)"
               title="点击在暗房灯箱中放大"
             >
               <div class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)]">
                 <img
-                  :src="entry.images || entry.attachments?.[0]?.url"
+                  :src="getEntryFirstImage(entry)"
                   :alt="entry.title"
                   class="w-full max-h-[500px] object-cover editorial-image group-hover/img:scale-[1.01] transition-transform duration-500"
                   loading="lazy"
@@ -460,7 +467,7 @@ const getGapDays = (index: number): number => {
             </p>
 
             <div
-              v-if="entry.meta && !entry.images"
+              v-if="entry.meta && !getEntryFirstImage(entry)"
               class="text-xs font-mono-archive text-[var(--ink-muted)]"
             >
               — {{ entry.meta }}

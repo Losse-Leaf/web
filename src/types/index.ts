@@ -238,6 +238,7 @@ export interface PairingTicketResult {
   expires_at: string
   expires_in_seconds: number
   qr_payload: string
+  qr_code_data_url?: string
 }
 
 export interface SystemStatus {
@@ -264,6 +265,7 @@ export interface QRLoginSession {
   session_id: string
   qr_payload: string
   expires_in_seconds: number
+  qr_code_data_url?: string
 }
 
 export interface QRLoginPollResult {

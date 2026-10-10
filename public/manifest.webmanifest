@@ -1,7 +1,7 @@
 {
-  "name": "散页 · Loose Leaf",
+  "name": "散页",
   "short_name": "散页",
-  "description": "生活自留地 · 真正记录生活的数字档案馆",
+  "description": "个人生活手账与时光档案",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f9f8f5",
