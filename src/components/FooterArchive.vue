@@ -19,7 +19,7 @@ const emit = defineEmits<{
   >
     <div class="max-w-5xl mx-auto px-4 sm:px-8 space-y-8 font-mono-archive text-xs text-[var(--ink-muted)]">
       
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 border-b border-[var(--border-subtle)]">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-[var(--border-subtle)]">
         <div>
           <span class="text-[var(--ink-primary)] font-semibold tracking-wider font-serif-editorial text-sm">
             《散页》
@@ -29,37 +29,9 @@ const emit = defineEmits<{
           </p>
         </div>
 
-        <!-- 规范工信部备案号 (严格合规) -->
-        <div class="flex items-center gap-3">
-          <a
-            :href="config?.icp_link || 'https://beian.miit.gov.cn'"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="hover:text-[var(--ink-primary)] hover-underline transition-colors py-1 inline-flex items-center gap-1 text-[var(--ink-secondary)]"
-          >
-            <span>{{ config?.icp_number || '浙ICP备2026081664号' }}</span>
-            <ArrowUpRight class="w-3 h-3 opacity-60" />
-          </a>
-        </div>
-      </div>
-
-      <!-- 版权与定位 -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-[11px]">
-        <div>
-          © 2024–{{ new Date().getFullYear() }} 《散页》 · {{ profile?.motto || '真实生活大于一切。' }}
-        </div>
-        <div class="flex items-center gap-4">
-          <a
-            :href="profile?.social_links?.github || profile?.github || 'https://github.com/YN1753'"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="hover:text-[var(--ink-primary)]"
-          >
-            <span>{{ (profile?.social_links?.github || profile?.github || 'https://github.com/YN1753').replace('https://', '') }}</span>
-          </a>
-          <span>·</span>
-          <span>{{ profile?.location || config?.default_location || '中国 · 杭州' }}</span>
-          <span>·</span>
+        <div class="flex items-center gap-4 text-[11px]">
+          <span v-if="profile?.location">{{ profile.location }}</span>
+          <span v-if="profile?.location">·</span>
           <button
             @click="emit('openWelcome')"
             class="hover:text-[var(--ink-primary)] hover-underline cursor-pointer transition-colors opacity-70 hover:opacity-100"
@@ -67,6 +39,24 @@ const emit = defineEmits<{
           >
             扉页
           </button>
+        </div>
+      </div>
+
+      <!-- 版权与开源署名解耦 (RC-52) -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-[11px]">
+        <div>
+          © 2024–{{ new Date().getFullYear() }} 《散页》<span v-if="profile?.name"> · {{ profile.name }}</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <a
+            href="https://github.com/YN1753/Loose-Leaf"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:text-[var(--ink-primary)] inline-flex items-center gap-1 transition-colors"
+          >
+            <span>开源项目 Loose Leaf · Crafted by @YN1753</span>
+            <ArrowUpRight class="w-3 h-3 opacity-60" />
+          </a>
         </div>
       </div>
 

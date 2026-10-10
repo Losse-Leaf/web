@@ -793,8 +793,6 @@ onUnmounted(() => {
       </div>
 
       <div class="flex items-center gap-4">
-        <span>浙ICP备2026081664号</span>
-        <span>·</span>
         <span>© 2024–{{ new Date().getFullYear() }} 《散页》</span>
       </div>
     </footer>

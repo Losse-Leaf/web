@@ -2,10 +2,7 @@ const SOUND_PREF_KEY = 'looseleaf_sound_enabled'
 
 class AudioEngine {
   private ctx: AudioContext | null = null
-  private rainNode: AudioNode | null = null
-  private rainGain: GainNode | null = null
   public soundEnabled: boolean = true
-  public ambientRainEnabled: boolean = false
 
   constructor() {
     try {
@@ -130,69 +127,6 @@ class AudioEngine {
       osc.stop(now + 0.04)
     } catch {
       // 忽略
-    }
-  }
-
-  // 切换秋夜细雨自然白噪音 (Ambient Rain Synthesizer)
-  public toggleRain(): boolean {
-    try {
-      this.initContext()
-      if (!this.ctx) return false
-
-      if (this.ambientRainEnabled) {
-        if (this.rainGain && this.ctx) {
-          const now = this.ctx.currentTime
-          this.rainGain.gain.linearRampToValueAtTime(0.0001, now + 0.5)
-          setTimeout(() => {
-            if (this.rainNode) {
-              this.rainNode.disconnect()
-              this.rainNode = null
-            }
-          }, 600)
-        }
-        this.ambientRainEnabled = false
-        return false
-      } else {
-        // 生成 3 秒粉红噪声缓冲用于平滑循环
-        const bufferSize = this.ctx.sampleRate * 3
-        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate)
-        const output = noiseBuffer.getChannelData(0)
-        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0
-        for (let i = 0; i < bufferSize; i++) {
-          const white = Math.random() * 2 - 1
-          b0 = 0.99886 * b0 + white * 0.0555179
-          b1 = 0.99332 * b1 + white * 0.0750759
-          b2 = 0.96900 * b2 + white * 0.1538520
-          b3 = 0.86650 * b3 + white * 0.3104856
-          b4 = 0.55000 * b4 + white * 0.5329522
-          b5 = -0.7616 * b5 - white * 0.0168980
-          output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.035
-          b6 = white * 0.115926
-        }
-
-        const whiteNoise = this.ctx.createBufferSource()
-        whiteNoise.buffer = noiseBuffer
-        whiteNoise.loop = true
-
-        const filter = this.ctx.createBiquadFilter()
-        filter.type = 'lowpass'
-        filter.frequency.setValueAtTime(850, this.ctx.currentTime)
-
-        this.rainGain = this.ctx.createGain()
-        this.rainGain.gain.setValueAtTime(0.001, this.ctx.currentTime)
-        this.rainGain.gain.linearRampToValueAtTime(0.05, this.ctx.currentTime + 1.2)
-
-        whiteNoise.connect(filter)
-        filter.connect(this.rainGain)
-        this.rainGain.connect(this.ctx.destination)
-
-        whiteNoise.start()
-        this.rainNode = whiteNoise
-        this.ambientRainEnabled = true
-        return true
-      }
-    } catch {
-      return false
     }
   }
 

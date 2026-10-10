@@ -4,8 +4,7 @@
 >
 > 组织主页: [https://github.com/Losse-Leaf](https://github.com/Losse-Leaf)  
 > 线上画廊: [https://codeactivityhub.top](https://codeactivityhub.top)  
-> 后端核心: [https://github.com/Losse-Leaf/backend](https://github.com/Losse-Leaf/backend)  
-> 备案号: [浙ICP备2026081664号](https://beian.miit.gov.cn/)
+> 后端核心: [https://github.com/Losse-Leaf/backend](https://github.com/Losse-Leaf/backend)
 
 ---
 

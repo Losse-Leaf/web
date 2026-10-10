@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
-  ArrowUpRight,
   ChevronDown,
-  CloudRain,
   Menu,
   X,
   Plus,
@@ -35,7 +33,6 @@ const emit = defineEmits<{
 }>()
 
 const mobileMenuOpen = ref(false)
-const isRainPlaying = ref(false)
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
@@ -97,10 +94,6 @@ const handleOpenAdd = () => {
   mobileMenuOpen.value = false
 }
 
-const toggleRain = () => {
-  const active = audio.toggleRain()
-  isRainPlaying.value = active
-}
 
 // 点击外部自动关闭下拉浮层
 const handleDocumentClick = (e: MouseEvent) => {
@@ -230,32 +223,6 @@ onUnmounted(() => {
           <Moon v-if="theme === 'paper'" class="w-3.5 h-3.5" />
           <Sun v-else class="w-3.5 h-3.5 text-amber-500" />
         </button>
-
-        <span class="text-[var(--border-divider)]">/</span>
-
-        <!-- 自然白噪音 -->
-        <button
-          @click="toggleRain"
-          class="flex items-center gap-1.5 transition-colors cursor-pointer hover:text-[var(--ink-primary)]"
-          :class="{ 'text-[var(--accent-moss)]': isRainPlaying }"
-          title="自然雨声白噪音"
-        >
-          <CloudRain class="w-3.5 h-3.5" :class="{ 'animate-pulse': isRainPlaying }" />
-          <span class="text-xs">{{ isRainPlaying ? '雨声' : '雨声' }}</span>
-        </button>
-
-        <span class="text-[var(--border-divider)]">/</span>
-
-        <!-- 外部代码仓 -->
-        <a
-          :href="profile?.social_links?.github || profile?.github || 'https://github.com/YN1753'"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center gap-1 hover:text-[var(--ink-primary)] transition-colors"
-        >
-          <span>GitHub</span>
-          <ArrowUpRight class="w-3 h-3" />
-        </a>
       </div>
 
       <!-- 移动端右上角：搜索 + 暗房 + ＋ 与 菜单按钮 -->
@@ -344,17 +311,6 @@ onUnmounted(() => {
             {{ opt.label }}
           </button>
         </div>
-      </div>
-
-      <div class="pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-        <button @click="toggleRain" class="flex items-center gap-1.5 cursor-pointer">
-          <CloudRain class="w-3.5 h-3.5" />
-          <span>{{ isRainPlaying ? '雨声：开' : '雨声：关' }}</span>
-        </button>
-        <a :href="profile?.social_links?.github || profile?.github || 'https://github.com/YN1753'" target="_blank" class="flex items-center gap-1">
-          <span>GitHub</span>
-          <ArrowUpRight class="w-3 h-3" />
-        </a>
       </div>
     </div>
   </header>
