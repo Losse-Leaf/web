@@ -3,10 +3,12 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Search, X, Calendar, Tag, ArrowRight } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { audio } from '../utils/audio'
+import { extractAllTags } from '../composables/useArchive'
 
 const props = defineProps<{
   isOpen: boolean
   entries: LifeEntry[]
+  tags?: { name: string; count: number }[]
 }>()
 
 const emit = defineEmits<{
@@ -15,29 +17,33 @@ const emit = defineEmits<{
 }>()
 
 const query = ref('')
+const debouncedQuery = ref('')
 const selectedTag = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
+let debounceTimer: number | null = null
 
-// 提取所有标签与计数
-const popularTags = computed(() => {
-  const map = new Map<string, number>()
-  props.entries.forEach((e) => {
-    if (!e.tags) return
-    e.tags.split(/[,，\s]+/).forEach((t) => {
-      const clean = t.trim()
-      if (clean) {
-        map.set(clean, (map.get(clean) || 0) + 1)
-      }
-    })
-  })
-  return Array.from(map.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
+watch(query, (newQ) => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = window.setTimeout(() => {
+    debouncedQuery.value = newQ
+  }, 180)
 })
 
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+})
+
+// 提取前 10 个高频标签 (优先复用父级传参或 useArchive.ts 中的单一实现，消除 RC-22 重复逻辑)
+const popularTags = computed(() => {
+  if (props.tags && props.tags.length > 0) {
+    return props.tags.slice(0, 10)
+  }
+  return extractAllTags(props.entries).slice(0, 10)
+})
+
+// 带防抖的检索结果 (FE-05)
 const results = computed(() => {
-  const q = query.value.trim().toLowerCase()
+  const q = debouncedQuery.value.trim().toLowerCase()
   const tag = selectedTag.value.trim().toLowerCase()
 
   if (!q && !tag) {
@@ -81,7 +87,9 @@ const toggleTag = (tagName: string) => {
 }
 
 const clearSearch = () => {
+  if (debounceTimer) clearTimeout(debounceTimer)
   query.value = ''
+  debouncedQuery.value = ''
   selectedTag.value = ''
 }
 
@@ -106,6 +114,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  if (props.isOpen) {
+    nextTick(() => {
+      inputRef.value?.focus()
+    })
+  }
 })
 
 onUnmounted(() => {

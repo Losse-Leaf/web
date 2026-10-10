@@ -42,6 +42,27 @@ import {
   fetchSystemStatus,
 } from './utils/api'
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
+import { markEnteredArchive, clearEnteredArchive, hasEnteredArchiveSession } from './utils/auth'
+
+// 统一主理人档案与本地缓存同步 (RC-24)
+const syncProfileCache = (profile: CuratorProfile) => {
+  curatorProfile.value = profile
+  saveCuratorProfile({
+    ...DEFAULT_PROFILE,
+    name: profile.name || DEFAULT_PROFILE.name,
+    title: profile.title || DEFAULT_PROFILE.title,
+    avatar: profile.avatar || profile.avatar_url || DEFAULT_PROFILE.avatar,
+    avatar_key: profile.avatar_key || '',
+    location: profile.location || DEFAULT_PROFILE.location,
+    current_city: profile.current_city || DEFAULT_PROFILE.current_city,
+    bio: profile.bio || DEFAULT_PROFILE.bio,
+    philosophy: profile.philosophy || profile.motto || DEFAULT_PROFILE.philosophy,
+    motto: profile.philosophy || profile.motto || DEFAULT_PROFILE.motto,
+    email: profile.email || DEFAULT_PROFILE.email,
+    github: profile.github || profile.social_links?.github || DEFAULT_PROFILE.github,
+    gearList: profile.gearList || profile.edc_gear || DEFAULT_PROFILE.gearList,
+  })
+}
 
 // 1. 基础视图与主题模式
 const currentView = ref<string>('home')
@@ -53,6 +74,7 @@ const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile() as unknow
 const {
   entries,
   currentCategory,
+  allTags,
   loadRemoteEntries,
   addEntry,
   updateEntry,
@@ -281,7 +303,7 @@ const openStorageModal = async () => {
 
 const handleEntryCreated = (newEntry: LifeEntry) => {
   addEntry(newEntry)
-  refreshData()
+  loadRemoteEntries()
   if (currentView.value !== 'home' && currentView.value !== 'life') {
     navigateTo('home')
   }
@@ -290,7 +312,7 @@ const handleEntryCreated = (newEntry: LifeEntry) => {
 const handleEntryUpdated = (updated: LifeEntry) => {
   updateEntry(updated)
   selectedEntry.value = updated
-  refreshData()
+  loadRemoteEntries()
 }
 
 const handleEntryDeleted = (id: number) => {
@@ -301,27 +323,26 @@ const handleEntryDeleted = (id: number) => {
   if (window.location.hash.startsWith('#entry/')) {
     window.location.hash = currentView.value
   }
-  refreshData()
+  loadRemoteEntries()
 }
 
 const handleTxCreated = (tx: Transaction) => {
   addTransaction(tx)
-  refreshData()
+  loadRemoteTransactions()
 }
 
 const handleTxUpdated = (tx: Transaction) => {
   updateTransactionItem(tx)
-  refreshData()
+  loadRemoteTransactions()
 }
 
 const handleTxDeleted = (id: number) => {
   removeTransaction(id)
-  refreshData()
+  loadRemoteTransactions()
 }
 
 const handleProjectCreated = (newProj: Project) => {
   projects.value = [newProj, ...projects.value]
-  refreshData()
 }
 
 const refreshData = async () => {
@@ -390,30 +411,14 @@ onMounted(async () => {
       document.title = '散页 · 生活档案与时光手账'
     }
     if (profRes.status === 'fulfilled' && profRes.value) {
-      curatorProfile.value = profRes.value
-      // 持久化到本地 localStorage 缓存，节省资源，离线/二次打开直接秒开
-      saveCuratorProfile({
-        ...DEFAULT_PROFILE,
-        name: profRes.value.name || DEFAULT_PROFILE.name,
-        title: profRes.value.title || DEFAULT_PROFILE.title,
-        avatar: profRes.value.avatar || profRes.value.avatar_url || DEFAULT_PROFILE.avatar,
-        avatar_key: profRes.value.avatar_key || '',
-        location: profRes.value.location || DEFAULT_PROFILE.location,
-        current_city: profRes.value.current_city || DEFAULT_PROFILE.current_city,
-        bio: profRes.value.bio || DEFAULT_PROFILE.bio,
-        philosophy: profRes.value.philosophy || profRes.value.motto || DEFAULT_PROFILE.philosophy,
-        motto: profRes.value.philosophy || profRes.value.motto || DEFAULT_PROFILE.motto,
-        email: profRes.value.email || DEFAULT_PROFILE.email,
-        github: profRes.value.github || profRes.value.social_links?.github || DEFAULT_PROFILE.github,
-        gearList: profRes.value.gearList || profRes.value.edc_gear || DEFAULT_PROFILE.gearList,
-      })
+      syncProfileCache(profRes.value)
     }
     if (sysRes.status === 'fulfilled' && sysRes.value) {
       systemStatus.value = sysRes.value
       // 若系统尚未初始化，必须停留在欢迎扉页装帧向导
       if (!sysRes.value.initialized) {
         hasEnteredArchive.value = false
-      } else if (Boolean(getAdminToken()) || localStorage.getItem('looseleaf_entered') === 'true') {
+      } else if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
         hasEnteredArchive.value = true
       }
     }
@@ -426,33 +431,22 @@ onMounted(async () => {
   }) as EventListener)
 })
 
-// 顶级大屏页面与真正网站的流转状态
-// 规则：
-// 1. 若主理人已登记/登录 (getAdminToken())，直接进入内容，无需再见扉页；
-// 2. 若访客曾经进入过档案馆 (localStorage 记录已阅)，直接进入内容；
-// 3. 只有全新访客或系统尚未初始化时，才在首屏展现欢迎扉页。
+// 顶级大屏页面与真正网站的流转状态 (RC-25)
 const checkHasEntered = (): boolean => {
-  try {
-    if (Boolean(getAdminToken())) return true
-    if (localStorage.getItem('looseleaf_entered') === 'true') return true
-    if (sessionStorage.getItem('looseleaf_entered') === 'true') return true
-  } catch {}
-  return false
+  return Boolean(getAdminToken()) || hasEnteredArchiveSession()
 }
 
 const hasEnteredArchive = ref<boolean>(checkHasEntered())
 
 const handleEnterArchive = () => {
   hasEnteredArchive.value = true
-  try {
-    sessionStorage.setItem('looseleaf_entered', 'true')
-    localStorage.setItem('looseleaf_entered', 'true')
-  } catch {}
+  markEnteredArchive()
   refreshData()
 }
 
 const handleReturnToWelcome = () => {
   hasEnteredArchive.value = false
+  clearEnteredArchive()
 }
 
 const handleBootstrapped = async () => {
@@ -463,31 +457,11 @@ const handleBootstrapped = async () => {
       fetchSystemStatus(),
     ])
     if (cfg.status === 'fulfilled' && cfg.value) siteConfig.value = cfg.value
-    if (prof.status === 'fulfilled' && prof.value) {
-      curatorProfile.value = prof.value
-      saveCuratorProfile({
-        ...DEFAULT_PROFILE,
-        name: prof.value.name || DEFAULT_PROFILE.name,
-        title: prof.value.title || DEFAULT_PROFILE.title,
-        avatar: prof.value.avatar || prof.value.avatar_url || DEFAULT_PROFILE.avatar,
-        avatar_key: prof.value.avatar_key || '',
-        location: prof.value.location || DEFAULT_PROFILE.location,
-        current_city: prof.value.current_city || DEFAULT_PROFILE.current_city,
-        bio: prof.value.bio || DEFAULT_PROFILE.bio,
-        philosophy: prof.value.philosophy || prof.value.motto || DEFAULT_PROFILE.philosophy,
-        motto: prof.value.philosophy || prof.value.motto || DEFAULT_PROFILE.motto,
-        email: prof.value.email || DEFAULT_PROFILE.email,
-        github: prof.value.github || prof.value.social_links?.github || DEFAULT_PROFILE.github,
-        gearList: prof.value.gearList || prof.value.edc_gear || DEFAULT_PROFILE.gearList,
-      })
-    }
+    if (prof.status === 'fulfilled' && prof.value) syncProfileCache(prof.value)
     if (sys.status === 'fulfilled' && sys.value) systemStatus.value = sys.value
   } catch {}
   hasEnteredArchive.value = true
-  try {
-    sessionStorage.setItem('looseleaf_entered', 'true')
-    localStorage.setItem('looseleaf_entered', 'true')
-  } catch {}
+  markEnteredArchive()
   refreshData()
 }
 
@@ -595,6 +569,7 @@ watch(currentView, (newV) => {
 
     <!-- 1. 全局即时模糊搜索与标签检索弹窗 (Cmd+K) -->
     <SearchModal
+      v-if="isSearchOpen"
       :isOpen="isSearchOpen"
       :entries="entries"
       @close="isSearchOpen = false"
@@ -603,6 +578,7 @@ watch(currentView, (newV) => {
 
     <!-- 2. 数据主权全量备份与导出中心 (JSON / MD / CSV) -->
     <ExportModal
+      v-if="isExportOpen"
       :isOpen="isExportOpen"
       :entries="entries"
       :transactions="transactionsList"
@@ -612,6 +588,7 @@ watch(currentView, (newV) => {
 
     <!-- 3. 新增生活记录/记账 弹窗 -->
     <NewEntryModal
+      v-if="isNewEntryOpen"
       :isOpen="isNewEntryOpen"
       :storageConfigured="storageConfigured"
       :projects="projects"
@@ -623,6 +600,7 @@ watch(currentView, (newV) => {
 
     <!-- 4. 生活记录详情 / 编辑 / 删除 弹窗 -->
     <EntryDetailModal
+      v-if="Boolean(selectedEntry)"
       :entry="selectedEntry"
       :storageConfigured="storageConfigured"
       :projects="projects"
@@ -633,6 +611,7 @@ watch(currentView, (newV) => {
 
     <!-- 5. 对象存储状态 弹窗 -->
     <StorageModal
+      v-if="isStorageOpen"
       :isOpen="isStorageOpen"
       :status="storageStatus"
       @close="isStorageOpen = false"
@@ -640,6 +619,7 @@ watch(currentView, (newV) => {
 
     <!-- 6. 统计指标 弹窗 -->
     <StatsModal
+      v-if="isStatsOpen"
       :isOpen="isStatsOpen"
       :stats="globalStats"
       @close="isStatsOpen = false"
@@ -647,6 +627,7 @@ watch(currentView, (newV) => {
 
     <!-- 7. 设备免密配对与受信任设备管理 弹窗 -->
     <DevicePairingModal
+      v-if="isPairingOpen"
       :isOpen="isPairingOpen"
       @close="isPairingOpen = false"
     />

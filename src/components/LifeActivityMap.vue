@@ -63,6 +63,7 @@ export interface DayCell {
   entries: LifeEntry[]
   count: number
   level: number
+  baseClass: string
 }
 
 // 今天日期基准
@@ -115,6 +116,26 @@ const calendarWeeks = computed(() => {
     else if (count === 3) level = 3
     else if (count >= 4) level = 4
 
+    let baseClass = ''
+    if (isFuture) {
+      baseClass = 'opacity-0 pointer-events-none'
+    } else {
+      if (level === 0) {
+        baseClass = 'bg-[var(--activity-empty)] hover:bg-[var(--border-divider)] cursor-default'
+      } else if (level === 1) {
+        baseClass = 'bg-[var(--activity-l1)] hover:opacity-85 cursor-pointer shadow-xs'
+      } else if (level === 2) {
+        baseClass = 'bg-[var(--activity-l2)] hover:opacity-85 cursor-pointer shadow-xs'
+      } else if (level === 3) {
+        baseClass = 'bg-[var(--activity-l3)] hover:opacity-85 cursor-pointer shadow-xs'
+      } else if (level >= 4) {
+        baseClass = 'bg-[var(--activity-l4)] hover:opacity-85 cursor-pointer shadow-xs'
+      }
+      if (isToday) {
+        baseClass += ' ring-1.5 ring-[var(--ink-primary)] ring-offset-1 z-10'
+      }
+    }
+
     currentWeek.push({
       date: dateStr,
       displayDate: `${m}月${d}日`,
@@ -127,6 +148,7 @@ const calendarWeeks = computed(() => {
       entries: matchedEntries,
       count,
       level,
+      baseClass,
     })
 
     if (currentWeek.length === 7) {
@@ -138,6 +160,17 @@ const calendarWeeks = computed(() => {
   }
 
   return weeks
+})
+
+// 按日期索引单元格（供事件委托极速定位）
+const cellByDateMap = computed(() => {
+  const map = new Map<string, DayCell>()
+  for (const week of calendarWeeks.value) {
+    for (const cell of week) {
+      map.set(cell.date, cell)
+    }
+  }
+  return map
 })
 
 // 月份横向标签（GitHub 风格：按周计算月份变化）
@@ -220,21 +253,23 @@ const streaks = computed(() => {
   }
 })
 
-const onCellClick = (cell: DayCell) => {
-  if (cell.isFuture || cell.count === 0) return
-  if (props.selectedDate === cell.date) {
-    emit('selectDate', '')
-  } else {
-    emit('selectDate', cell.date)
-  }
-}
-
-const onCellHover = (cell: DayCell, event: MouseEvent) => {
-  if (cell.isFuture) {
+// 事件委托：容器级鼠标悬浮
+const onGridMouseOver = (event: MouseEvent) => {
+  const target = (event.target as HTMLElement).closest<HTMLElement>('button[data-date]')
+  if (!target) {
     hoveredDay.value = null
     return
   }
-  const target = event.currentTarget as HTMLElement
+  const date = target.dataset.date
+  if (!date) {
+    hoveredDay.value = null
+    return
+  }
+  const cell = cellByDateMap.value.get(date)
+  if (!cell || cell.isFuture) {
+    hoveredDay.value = null
+    return
+  }
   const rect = target.getBoundingClientRect()
   hoveredDay.value = {
     date: cell.date,
@@ -246,31 +281,24 @@ const onCellHover = (cell: DayCell, event: MouseEvent) => {
   }
 }
 
-const onCellLeave = () => {
+// 事件委托：移出容器清理悬浮信息
+const onGridMouseLeave = () => {
   hoveredDay.value = null
 }
 
-const getCellClass = (day: DayCell) => {
-  if (day.isFuture) return 'opacity-0 pointer-events-none'
-  const classes: string[] = []
-  if (day.level === 0) {
-    classes.push('bg-[var(--activity-empty)] hover:bg-[var(--border-divider)] cursor-default')
-  } else if (day.level === 1) {
-    classes.push('bg-[var(--activity-l1)] hover:opacity-85 cursor-pointer shadow-xs')
-  } else if (day.level === 2) {
-    classes.push('bg-[var(--activity-l2)] hover:opacity-85 cursor-pointer shadow-xs')
-  } else if (day.level === 3) {
-    classes.push('bg-[var(--activity-l3)] hover:opacity-85 cursor-pointer shadow-xs')
-  } else if (day.level >= 4) {
-    classes.push('bg-[var(--activity-l4)] hover:opacity-85 cursor-pointer shadow-xs')
+// 事件委托：容器级点击筛选
+const onGridClick = (event: MouseEvent) => {
+  const target = (event.target as HTMLElement).closest<HTMLElement>('button[data-date]')
+  if (!target) return
+  const date = target.dataset.date
+  if (!date) return
+  const cell = cellByDateMap.value.get(date)
+  if (!cell || cell.isFuture || cell.count === 0) return
+  if (props.selectedDate === cell.date) {
+    emit('selectDate', '')
+  } else {
+    emit('selectDate', cell.date)
   }
-  if (day.isToday) {
-    classes.push('ring-1.5 ring-[var(--ink-primary)] ring-offset-1 z-10')
-  }
-  if (props.selectedDate === day.date) {
-    classes.push('ring-2 ring-[var(--accent-warm)] ring-offset-1 scale-125 z-20')
-  }
-  return classes.join(' ')
 }
 
 onMounted(() => {
@@ -345,8 +373,13 @@ onMounted(() => {
             </span>
           </div>
 
-          <!-- 53 周方格矩阵 (每列 7 天：周日到周六) -->
-          <div class="flex gap-[3px]">
+          <!-- 53 周方格矩阵 (每列 7 天：周日到周六，容器级事件委托与预计算类名) -->
+          <div
+            class="flex gap-[3px]"
+            @mouseover="onGridMouseOver"
+            @mouseleave="onGridMouseLeave"
+            @click="onGridClick"
+          >
             <div
               v-for="(week, wIdx) in calendarWeeks"
               :key="wIdx"
@@ -355,12 +388,13 @@ onMounted(() => {
               <button
                 v-for="(day, dIdx) in week"
                 :key="dIdx"
-                @mouseenter="onCellHover(day, $event)"
-                @mouseleave="onCellLeave"
-                @click="onCellClick(day)"
+                :data-date="day.date"
                 :disabled="day.isFuture || day.count === 0"
                 class="w-[11px] h-[11px] rounded-[1.5px] transition-all duration-100 relative focus:outline-none"
-                :class="getCellClass(day)"
+                :class="[
+                  day.baseClass,
+                  selectedDate === day.date ? 'ring-2 ring-[var(--accent-warm)] ring-offset-1 scale-125 z-20' : ''
+                ]"
                 :aria-label="!day.isFuture ? `${day.date} (${day.dayOfWeekStr}): ${day.count} 条记录` : ''"
               />
             </div>

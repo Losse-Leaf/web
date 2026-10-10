@@ -301,6 +301,24 @@ const searchQuery = ref<string>('')
 const activeTag = ref<string>('')
 const currentCategory = ref<ArchiveCategory>('all')
 
+// 提取全局所有独有标签与其频次 (复用单一实现，消除 RC-22 重复逻辑)
+export function extractAllTags(entriesList: LifeEntry[]): { name: string; count: number }[] {
+  const tagCountMap = new Map<string, number>()
+  entriesList.forEach((e) => {
+    if (!e.tags) return
+    const splits = e.tags.split(/[,，\s]+/).filter(Boolean)
+    splits.forEach((t) => {
+      const clean = t.trim()
+      if (clean) {
+        tagCountMap.set(clean, (tagCountMap.get(clean) || 0) + 1)
+      }
+    })
+  })
+  return Array.from(tagCountMap.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+}
+
 export function useArchive() {
   const saveToCache = (list: LifeEntry[]) => {
     try {
@@ -308,23 +326,7 @@ export function useArchive() {
     } catch {}
   }
 
-  // 提取全局所有独有标签与其频次
-  const allTags = computed(() => {
-    const tagCountMap = new Map<string, number>()
-    entries.value.forEach((e) => {
-      if (!e.tags) return
-      const splits = e.tags.split(/[,，\s]+/).filter(Boolean)
-      splits.forEach((t) => {
-        const clean = t.trim()
-        if (clean) {
-          tagCountMap.set(clean, (tagCountMap.get(clean) || 0) + 1)
-        }
-      })
-    })
-    return Array.from(tagCountMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-  })
+  const allTags = computed(() => extractAllTags(entries.value))
 
   // 纯前端秒级全文模糊检索
   const searchResults = computed(() => {

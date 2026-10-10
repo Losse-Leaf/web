@@ -19,6 +19,7 @@ import {
   Layers,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
+import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
 import {
   fetchSystemStatus,
   bootstrapSystem,
@@ -83,10 +84,7 @@ const checkCuratorAuth = () => {
 // 1. 静心翻阅 · 游客直接进入主网站
 const handleEnterAsGuest = () => {
   audio.playTink()
-  try {
-    sessionStorage.setItem('looseleaf_entered', 'true')
-    localStorage.setItem('looseleaf_entered', 'true')
-  } catch {}
+  markEnteredArchive()
   emit('enter')
 }
 
@@ -132,10 +130,7 @@ const startQRPolling = (sessionId: string) => {
         audio.playTink()
         stopQRPolling()
         isCurator.value = true
-        try {
-          sessionStorage.setItem('looseleaf_entered', 'true')
-          localStorage.setItem('looseleaf_entered', 'true')
-        } catch {}
+        markEnteredArchive()
         emit('enter')
       } else if (res.status === 'expired') {
         stopQRPolling()
@@ -180,10 +175,7 @@ const handlePasscodeLogin = async () => {
     await verifyMasterPasscode(passcode.value.trim())
     isCurator.value = true
     passcode.value = ''
-    try {
-      sessionStorage.setItem('looseleaf_entered', 'true')
-      localStorage.setItem('looseleaf_entered', 'true')
-    } catch {}
+    markEnteredArchive()
     emit('enter')
   } catch (err: any) {
     loginError.value = err?.message || '主理人口令不正确，请重新输入'
@@ -215,10 +207,7 @@ const handleBootstrapSubmit = async () => {
     })
     status.value.initialized = true
     isCurator.value = true
-    try {
-      sessionStorage.setItem('looseleaf_entered', 'true')
-      localStorage.setItem('looseleaf_entered', 'true')
-    } catch {}
+    markEnteredArchive()
     emit('bootstrapped')
     emit('enter')
   } catch (err: any) {
@@ -232,10 +221,7 @@ const handleBootstrapSubmit = async () => {
 const handleLogout = () => {
   audio.playTink()
   removeAdminToken()
-  try {
-    sessionStorage.removeItem('looseleaf_entered')
-    localStorage.removeItem('looseleaf_entered')
-  } catch {}
+  clearEnteredArchive()
   isCurator.value = false
   currentMode.value = 'landing'
 }
