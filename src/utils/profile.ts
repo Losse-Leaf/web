@@ -1,6 +1,6 @@
 import type { UserProfile } from '../types'
 
-const PROFILE_STORAGE_KEY = 'chimu_curator_profile'
+const PROFILE_STORAGE_KEY = 'looseleaf_curator_profile'
 
 export const DEFAULT_PROFILE: UserProfile = {
   name: '迟暮',
@@ -157,7 +157,7 @@ export const DEFAULT_PROFILE: UserProfile = {
 
 export function loadCuratorProfile(): UserProfile {
   try {
-    const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY) || localStorage.getItem('chimu_curator_profile')
     if (raw) {
       const parsed = JSON.parse(raw)
       return {
@@ -175,7 +175,8 @@ export function loadCuratorProfile(): UserProfile {
 export function saveCuratorProfile(profile: UserProfile): void {
   try {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile))
-    window.dispatchEvent(new CustomEvent('chimu-profile-updated', { detail: profile }))
+    localStorage.removeItem('chimu_curator_profile')
+    window.dispatchEvent(new CustomEvent('looseleaf-profile-updated', { detail: profile }))
   } catch (err) {
     console.error('Failed to save curator profile to localStorage:', err)
   }

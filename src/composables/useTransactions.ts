@@ -1,8 +1,8 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import type { Transaction, LifeEntry } from '../types'
 import { fetchTransactions } from '../utils/api'
 
-const TX_CACHE_KEY = 'chimu_cached_transactions'
+const TX_CACHE_KEY = 'looseleaf_cached_transactions'
 
 export const DEFAULT_TRANSACTIONS: Transaction[] = [
   {
@@ -49,7 +49,7 @@ export const DEFAULT_TRANSACTIONS: Transaction[] = [
 
 function getInitialTransactions(): Transaction[] {
   try {
-    const cached = localStorage.getItem(TX_CACHE_KEY)
+    const cached = localStorage.getItem(TX_CACHE_KEY) || localStorage.getItem('chimu_cached_transactions')
     if (cached) {
       const parsed = JSON.parse(cached)
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -108,10 +108,6 @@ export function useTransactions() {
     }
   }
 
-  const transactionEntries = computed(() => {
-    return transactions.value.map(txToEntry)
-  })
-
   const addTransaction = (tx: Transaction) => {
     transactions.value = [tx, ...transactions.value.filter((t) => t.id !== tx.id)]
     saveToCache(transactions.value)
@@ -132,7 +128,6 @@ export function useTransactions() {
 
   return {
     transactions,
-    transactionEntries,
     loadRemoteTransactions,
     addTransaction,
     updateTransactionItem,

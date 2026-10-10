@@ -123,7 +123,7 @@ const craftPrinciples = [
 ]
 
 onMounted(() => {
-  window.addEventListener('chimu-profile-updated', ((e: CustomEvent<UserProfile>) => {
+  window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent<UserProfile>) => {
     if (e.detail) localProfile.value = e.detail
   }) as EventListener)
 })

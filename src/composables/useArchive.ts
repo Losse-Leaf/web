@@ -3,7 +3,7 @@ import type { LifeEntry, ArchiveCategory } from '../types'
 import { entryMatchesCategory } from '../types'
 import { fetchEntries } from '../utils/api'
 
-const ENTRIES_CACHE_KEY = 'chimu_cached_entries'
+const ENTRIES_CACHE_KEY = 'looseleaf_cached_entries'
 
 // 真实生活档案数据 (含默认离线备用数据)
 export const DEFAULT_ENTRIES: LifeEntry[] = [
@@ -285,7 +285,7 @@ export const DEFAULT_ENTRIES: LifeEntry[] = [
 
 function getInitialEntries(): LifeEntry[] {
   try {
-    const cached = localStorage.getItem(ENTRIES_CACHE_KEY)
+    const cached = localStorage.getItem(ENTRIES_CACHE_KEY) || localStorage.getItem('chimu_cached_entries')
     if (cached) {
       const parsed = JSON.parse(cached)
       if (Array.isArray(parsed) && parsed.length > 0) {

@@ -3,7 +3,7 @@ import { audio } from '../utils/audio'
 
 export type ArchiveTheme = 'paper' | 'darkroom'
 
-const THEME_STORAGE_KEY = 'chimu_theme_mode'
+const THEME_STORAGE_KEY = 'looseleaf_theme_mode'
 
 const currentTheme = ref<ArchiveTheme>('paper')
 
@@ -32,7 +32,7 @@ export function useTheme() {
 
   const initTheme = () => {
     try {
-      const saved = localStorage.getItem(THEME_STORAGE_KEY) as ArchiveTheme | null
+      const saved = (localStorage.getItem(THEME_STORAGE_KEY) || localStorage.getItem('chimu_theme_mode')) as ArchiveTheme | null
       if (saved === 'darkroom' || saved === 'paper') {
         applyTheme(saved)
         return

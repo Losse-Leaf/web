@@ -1,4 +1,4 @@
-const SOUND_PREF_KEY = 'chimu_sound_enabled'
+const SOUND_PREF_KEY = 'looseleaf_sound_enabled'
 
 class AudioEngine {
   private ctx: AudioContext | null = null
@@ -9,7 +9,7 @@ class AudioEngine {
 
   constructor() {
     try {
-      const saved = localStorage.getItem(SOUND_PREF_KEY)
+      const saved = localStorage.getItem(SOUND_PREF_KEY) || localStorage.getItem('chimu_sound_enabled')
       if (saved !== null) {
         this.soundEnabled = saved === 'true'
       }

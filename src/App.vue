@@ -419,7 +419,7 @@ onMounted(async () => {
     }
   } catch {}
 
-  window.addEventListener('chimu-profile-updated', ((e: CustomEvent) => {
+  window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent) => {
     if (e.detail) {
       curatorProfile.value = { ...curatorProfile.value, ...e.detail }
     }
