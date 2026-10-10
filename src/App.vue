@@ -313,8 +313,9 @@ onMounted(async () => {
     }
     if (sysRes.status === 'fulfilled' && sysRes.value) {
       systemStatus.value = sysRes.value
-      // 若系统尚未初始化，必须停留在欢迎扉页装帧向导
-      if (!sysRes.value.initialized) {
+      // 若系统尚未初始化且本地无管理员 Token，必须停留在欢迎扉页首次装帧向导 (RC-59)
+      if (!sysRes.value.initialized && !getAdminToken()) {
+        clearEnteredArchive()
         hasEnteredArchive.value = false
       } else if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
         hasEnteredArchive.value = true
@@ -329,7 +330,7 @@ onMounted(async () => {
   }) as EventListener)
 })
 
-// 顶级大屏页面与真正网站的流转状态 (RC-25)
+// 顶级大屏页面与真正网站的流转状态 (RC-25, RC-59)
 const checkHasEntered = (): boolean => {
   return Boolean(getAdminToken()) || hasEnteredArchiveSession()
 }
@@ -337,6 +338,9 @@ const checkHasEntered = (): boolean => {
 const hasEnteredArchive = ref<boolean>(checkHasEntered())
 
 const handleEnterArchive = () => {
+  if (systemStatus.value && !systemStatus.value.initialized && !getAdminToken()) {
+    return
+  }
   hasEnteredArchive.value = true
   markEnteredArchive()
   refreshData()
@@ -348,6 +352,11 @@ const handleReturnToWelcome = () => {
 }
 
 const handleBootstrapped = async () => {
+  if (systemStatus.value) {
+    systemStatus.value = { ...systemStatus.value, initialized: true }
+  } else {
+    systemStatus.value = { initialized: true, site_name: '散页' }
+  }
   try {
     const [cfg, prof, sys] = await Promise.allSettled([
       fetchSiteConfig(),
@@ -356,7 +365,9 @@ const handleBootstrapped = async () => {
     ])
     if (cfg.status === 'fulfilled' && cfg.value) siteConfig.value = cfg.value
     if (prof.status === 'fulfilled' && prof.value) syncProfileCache(prof.value)
-    if (sys.status === 'fulfilled' && sys.value) systemStatus.value = sys.value
+    if (sys.status === 'fulfilled' && sys.value) {
+      systemStatus.value = { ...sys.value, initialized: true }
+    }
   } catch {}
   hasEnteredArchive.value = true
   markEnteredArchive()

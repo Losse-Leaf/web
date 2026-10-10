@@ -12,8 +12,10 @@ import type {
   SystemStatus,
   BootstrapPayload,
   BootstrapResult,
-  QRLoginSession,
-  QRLoginPollResult,
+  PairConfirmPayload,
+  PairConfirmResult,
+  PairStatusResult,
+  VerifyPasscodeResult,
   UnifiedUploadResult,
   Wish,
   AssetsOverview,
@@ -53,6 +55,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const authHeaders: Record<string, string> = {}
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`
+    authHeaders['X-Device-Token'] = token
   }
 
   const res = await fetch(url, {
@@ -495,10 +498,38 @@ export async function fetchGlobalStats(): Promise<GlobalStats> {
 }
 
 // 6. Device Pairing & Trusted Devices (设备免密配对与管理)
-export async function initPairingTicket(): Promise<PairingTicketResult> {
+export async function initPairingTicket(params?: {
+  hub_url?: string
+  device_hint?: string
+}): Promise<PairingTicketResult> {
   return request<PairingTicketResult>(`${API_BASE}/auth/pair/init`, {
     method: 'POST',
+    body: JSON.stringify({
+      hub_url: params?.hub_url || (typeof window !== 'undefined' ? window.location.origin : ''),
+      device_hint: params?.device_hint,
+    }),
   })
+}
+
+export async function confirmPairingTicket(data: PairConfirmPayload): Promise<PairConfirmResult> {
+  const res = await request<PairConfirmResult>(`${API_BASE}/auth/pair/confirm`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  if (res.device_token) {
+    setAdminToken(res.device_token)
+  }
+  return res
+}
+
+export async function pollPairingTicketStatus(ticket: string): Promise<PairStatusResult> {
+  const res = await request<PairStatusResult>(
+    `${API_BASE}/auth/pair/status?ticket=${encodeURIComponent(ticket)}`
+  )
+  if (res.web_token) {
+    setAdminToken(res.web_token)
+  }
+  return res
 }
 
 export async function fetchTrustedDevices(): Promise<TrustedDevice[]> {
@@ -537,15 +568,19 @@ export async function updateCuratorProfile(data: Partial<CuratorProfile>): Promi
   })
 }
 
-// 10. 系统生命周期与冷启动装帧 (System Lifecycle & Bootstrap)
+// 10. 系统生命周期与冷启动两步装帧 (System Lifecycle & Two-Step Bootstrap RC-59)
 export async function fetchSystemStatus(): Promise<SystemStatus> {
   return request<SystemStatus>(`${API_BASE}/system/status`)
 }
 
 export async function bootstrapSystem(data: BootstrapPayload): Promise<BootstrapResult> {
+  const payload: BootstrapPayload = {
+    ...data,
+    hub_url: data.hub_url || (typeof window !== 'undefined' ? window.location.origin : ''),
+  }
   const result = await request<BootstrapResult>(`${API_BASE}/system/bootstrap`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   })
   if (result.token) {
     setAdminToken(result.token)
@@ -553,29 +588,36 @@ export async function bootstrapSystem(data: BootstrapPayload): Promise<Bootstrap
   return result
 }
 
-// 11. 网页反向扫码与口令快速登入 (Reverse QR Login & Passcode Verify)
-export async function createQRLoginSession(): Promise<QRLoginSession> {
-  return request<QRLoginSession>(`${API_BASE}/auth/qr/create`, {
-    method: 'POST',
-  })
+// 11. 浏览器设备名识别与扉页管理员密钥验证 (Admin Key Sign-In RC-60)
+export function detectBrowserDeviceName(): string {
+  if (typeof navigator === 'undefined') return 'Web Browser'
+  const ua = navigator.userAgent || ''
+  let browser = 'Browser'
+  if (ua.includes('Edg/')) browser = 'Edge'
+  else if (ua.includes('Chrome/') && !ua.includes('Edg/')) browser = 'Chrome'
+  else if (ua.includes('Firefox/')) browser = 'Firefox'
+  else if (ua.includes('Safari/') && !ua.includes('Chrome/')) browser = 'Safari'
+
+  let os = 'Web'
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) os = 'macOS'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Linux')) os = 'Linux'
+
+  return `${browser} · ${os}`
 }
 
-export async function pollQRLoginSession(sessionId: string): Promise<QRLoginPollResult> {
-  try {
-    const res = await request<QRLoginPollResult>(`${API_BASE}/auth/qr/poll/${sessionId}`)
-    if (res.status === 'authorized' && res.token) {
-      setAdminToken(res.token)
-    }
-    return res
-  } catch {
-    return { status: 'pending' }
-  }
-}
-
-export async function verifyMasterPasscode(passcode: string): Promise<{ token: string }> {
-  const res = await request<{ token: string }>(`${API_BASE}/auth/verify`, {
+export async function verifyMasterPasscode(
+  passcode: string,
+  deviceName?: string
+): Promise<VerifyPasscodeResult> {
+  const res = await request<VerifyPasscodeResult>(`${API_BASE}/auth/verify`, {
     method: 'POST',
-    body: JSON.stringify({ passcode }),
+    body: JSON.stringify({
+      passcode,
+      device_name: deviceName || detectBrowserDeviceName(),
+    }),
   })
   if (res.token) {
     setAdminToken(res.token)

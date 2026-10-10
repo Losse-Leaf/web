@@ -24,6 +24,22 @@ const handleSelect = (city: CityOption) => {
   emit('select', { code: city.code, name: city.name })
   isOpen.value = false
 }
+
+const handleInput = () => {
+  isOpen.value = true
+  const trimmed = keyword.value.trim()
+  const exact = filteredList.value.find(
+    (c) => c.name === trimmed || c.name.replace(/市$/, '') === trimmed.replace(/市$/, '')
+  )
+  emit('update:modelValue', exact ? exact.code : '')
+  emit('select', { code: exact ? exact.code : '', name: exact ? exact.name : trimmed })
+}
+
+const handleBlur = () => {
+  window.setTimeout(() => {
+    isOpen.value = false
+  }, 160)
+}
 </script>
 
 <template>
@@ -35,6 +51,8 @@ const handleSelect = (city: CityOption) => {
         type="text"
         :placeholder="placeholder || '输入城市名称或拼音进行检索...'"
         @focus="isOpen = true"
+        @input="handleInput"
+        @blur="handleBlur"
         class="w-full pl-8 pr-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive"
       />
     </div>
@@ -47,7 +65,7 @@ const handleSelect = (city: CityOption) => {
       <div
         v-for="city in filteredList"
         :key="city.code"
-        @click="handleSelect(city)"
+        @mousedown.prevent="handleSelect(city)"
         class="px-3 py-2 hover:bg-[var(--bg-subtle)] cursor-pointer flex items-center justify-between transition-colors"
       >
         <div class="flex items-center gap-2">

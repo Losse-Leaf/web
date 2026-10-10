@@ -241,6 +241,7 @@ export interface TrustedDevice {
 export interface PairingTicketResult {
   ticket: string
   pin_code: string
+  hub_url?: string
   expires_at: string
   expires_in_seconds: number
   qr_payload: string
@@ -249,34 +250,66 @@ export interface PairingTicketResult {
 
 export interface SystemStatus {
   initialized: boolean
+  has_passcode_set?: boolean
   site_name: string
   curator_name?: string
-  has_master_key_configured?: boolean
 }
 
 export interface BootstrapPayload {
   curator_name: string
   location?: string
   master_passcode: string
-  master_key?: string
+  confirm_passcode: string
+  hub_url?: string
 }
 
 export interface BootstrapResult {
-  token: string
   curator_name: string
   location: string
-}
-
-export interface QRLoginSession {
-  session_id: string
+  ticket: string
+  pin_code: string
+  hub_url?: string
   qr_payload: string
-  expires_in_seconds: number
   qr_code_data_url?: string
+  expires_at: string
+  expires_in_seconds: number
+  token?: string
 }
 
-export interface QRLoginPollResult {
-  status: 'pending' | 'authorized' | 'expired'
-  token?: string
+export interface PairConfirmPayload {
+  ticket?: string
+  pin_code?: string
+  device_name: string
+  platform: 'ios' | 'macos' | 'android' | 'web' | string
+  device_model?: string
+}
+
+export interface PairConfirmResult {
+  device_id: string
+  device_name: string
+  platform: string
+  paired_at: string
+  device_token: string
+  initialized?: boolean
+  hub_url?: string
+}
+
+export interface PairStatusResult {
+  status: 'pending' | 'paired' | 'expired'
+  initialized: boolean
+  device?: {
+    device_id: string
+    name: string
+    platform: string
+    paired_at: string
+  }
+  web_token?: string
+}
+
+export interface VerifyPasscodeResult {
+  token: string
+  device_id?: string
+  device_name?: string
 }
 
 export interface Wish {
