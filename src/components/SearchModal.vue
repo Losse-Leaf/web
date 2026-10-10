@@ -3,7 +3,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Search, X, Calendar, Tag, ArrowRight } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { audio } from '../utils/audio'
-import { extractAllTags } from '../composables/useArchive'
+import { extractAllTags, filterEntriesBySearch } from '../composables/useArchive'
 
 const props = defineProps<{
   isOpen: boolean
@@ -41,34 +41,9 @@ const popularTags = computed(() => {
   return extractAllTags(props.entries).slice(0, 10)
 })
 
-// 带防抖的检索结果 (FE-05)
+// 带防抖的检索结果 (复用单一检索实现 RC-23 / FE-05)
 const results = computed(() => {
-  const q = debouncedQuery.value.trim().toLowerCase()
-  const tag = selectedTag.value.trim().toLowerCase()
-
-  if (!q && !tag) {
-    return []
-  }
-
-  return props.entries.filter((e) => {
-    let matchQ = true
-    if (q) {
-      const title = (e.title || '').toLowerCase()
-      const content = (e.content || '').toLowerCase()
-      const location = (e.location || '').toLowerCase()
-      const meta = (e.meta || '').toLowerCase()
-      const tags = (e.tags || '').toLowerCase()
-      matchQ = title.includes(q) || content.includes(q) || location.includes(q) || meta.includes(q) || tags.includes(q)
-    }
-
-    let matchTag = true
-    if (tag) {
-      const tags = (e.tags || '').toLowerCase()
-      matchTag = tags.includes(tag)
-    }
-
-    return matchQ && matchTag
-  })
+  return filterEntriesBySearch(props.entries, debouncedQuery.value, selectedTag.value)
 })
 
 const handleSelect = (entry: LifeEntry) => {

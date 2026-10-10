@@ -83,8 +83,21 @@ const isCodeRepo = (proj: Project) => {
       </button>
     </div>
 
+    <!-- 空状态 (真实空态 RC-38) -->
+    <div
+      v-if="filteredProjects.length === 0"
+      class="py-24 text-center space-y-3 font-serif-editorial text-[var(--ink-muted)]"
+    >
+      <p class="text-xl text-[var(--ink-primary)]">
+        暂无造物记录
+      </p>
+      <p class="font-mono-archive text-xs tracking-wider">
+        生活是一场长线造物。点击右下角「+」开始记录你的第一个作品。
+      </p>
+    </div>
+
     <!-- 项目故事清单 (Editorial Stories, 非模板化 Card 墙) -->
-    <div class="divide-y divide-[var(--border-subtle)] space-y-16">
+    <div v-else class="divide-y divide-[var(--border-subtle)] space-y-16">
       
       <article
         v-for="(proj, idx) in filteredProjects"
@@ -127,8 +140,8 @@ const isCodeRepo = (proj: Project) => {
         <!-- 标签与外部链接 -->
         <div class="pt-2 flex flex-wrap items-center justify-between gap-4 text-xs font-mono-archive">
           <div class="flex flex-wrap gap-2 text-[var(--ink-muted)]">
-            <span v-for="tag in proj.tags.split(',')" :key="tag">
-              #{{ tag.trim() }}
+            <span v-for="tag in (proj.tags || '').split(',').map((t) => t.trim()).filter(Boolean)" :key="tag">
+              #{{ tag }}
             </span>
           </div>
 

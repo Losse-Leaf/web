@@ -503,6 +503,19 @@ const getGapDays = (index: number): number => {
       </template>
     </div>
 
+    <!-- 空状态提示 (RC-38) -->
+    <div
+      v-if="entries.length === 0"
+      class="py-24 text-center space-y-3 font-serif-editorial text-[var(--ink-muted)]"
+    >
+      <p class="text-xl text-[var(--ink-primary)]">
+        暂无生活印记收录
+      </p>
+      <p class="font-mono-archive text-xs tracking-wider">
+        每一刻具体的日常都值得定格。点击右下角「+」写下第一篇档案。
+      </p>
+    </div>
+
     <!-- 暗房底片灯箱 -->
     <EditorialLightbox
       :isOpen="isLightboxOpen"

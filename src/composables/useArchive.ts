@@ -5,301 +5,36 @@ import { fetchEntries } from '../utils/api'
 
 const ENTRIES_CACHE_KEY = 'looseleaf_cached_entries'
 
-// 真实生活档案数据 (含默认离线备用数据)
-export const DEFAULT_ENTRIES: LifeEntry[] = [
-  {
-    id: 1,
-    date: '2026.10.09',
-    year: '2026',
-    month: '10',
-    day: '09',
-    time: '00:30',
-    type: 'thought',
-    title: '做一个真正记录生活的网站',
-    content: '深夜突然想到：我不想再把自己的网络主页做成一份展示给招聘者或甲方的技术简历了。生活不只有编译、部署和代码架构。下班后迎面吹来的夜风、清晨手冲咖啡的香气、拍下的胶卷、听了整夜的唱片、和朋友玩过的游戏……这些所有具体琐碎的事物，才构成了我真实活着的样子。这里应当是一本安静的个人生活档案馆。',
-    meta: '深夜书房随笔',
-    tags: '想法,生活志,初心',
-    featured: true,
-  },
-  {
-    id: 2,
-    date: '2026.10.08',
-    year: '2026',
-    month: '10',
-    day: '08',
-    time: '21:40',
-    type: 'photo',
-    title: '满觉陇的桂花蒸与旁轴底片',
-    content: '假期最后几天去了一趟满觉陇。沿山的村落都在做糖桂花，青石板路上落了一层薄薄的金黄，空气甜得发稠。下午四点半的夕阳斜斜穿过樟树叶，光斑在青石砖上摇曳。带了老胶片机拍完了一卷 Kodak 400。阳光晒在皮肤上的温热感，大概就是秋天最好的注脚。',
-    images: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
-    location: '杭州 · 满觉陇',
-    meta: 'Contax T2 · 38mm f/2.8 · Kodak Portra 400',
-    tags: '摄影,胶片,满觉陇,秋天',
-    featured: true,
-  },
-  {
-    id: 3,
-    date: '2026.10.08',
-    year: '2026',
-    month: '10',
-    day: '08',
-    time: '15:20',
-    type: 'coffee',
-    title: '浅烘埃塞古吉：92°C 细水慢萃',
-    content: '磨了 15g 埃塞俄比亚古吉日晒花魁豆。磨齿带出的干香满是草莓和茉莉花气息。92°C 纯净水，三段式注水萃取。第一段闷蒸 35 秒看咖啡粉像面包一样膨胀，白桃与柑橘酸感明亮。每天看着水柱在滤杯里画同心圆，是让人最沉静的日常仪式。',
-    images: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1000&q=80',
-    location: '书房窗台前',
-    meta: '埃塞古吉花魁 · 15g粉 / 225g水 · 2分18秒',
-    tags: '咖啡,手冲,慢生活',
-    featured: false,
-  },
-  {
-    id: 4,
-    date: '2026.10.07',
-    year: '2026',
-    month: '10',
-    day: '07',
-    time: '23:15',
-    type: 'music',
-    title: '最近开始反复听坂本龙一的《async》',
-    content: '深夜关掉大灯，只留一盏暖黄的书桌灯。戴上耳机放《async》。空旷而平静的钢琴琴键、风吹过树梢的采样，整个城市好像都睡熟了。在这样的底噪里看几页书、记几笔日记，心底有一种极其踏实的宁静。',
-    images: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1000&q=80',
-    meta: 'Ryuichi Sakamoto - async (2017) · 推荐曲目：《andata》《solari》',
-    tags: '音乐,坂本龙一,深夜',
-    featured: true,
-  },
-  {
-    id: 5,
-    date: '2026.10.06',
-    year: '2026',
-    month: '10',
-    day: '06',
-    time: '22:30',
-    type: 'game',
-    title: '和朋友玩了一整晚游戏',
-    content: '假期倒数第二天，叫上几个好友连麦打了一整晚游戏。从《黑神话：悟空》讨论到 Steam 合作通关，中间点了一大桶冰镇可乐和炸鸡。好久没有这样毫无目的地和朋友大笑、打打闹闹到深夜了。生活需要这样的留白和放空。',
-    images: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
-    meta: 'Steam & PS5 连麦联机 · 快乐放空',
-    tags: '游戏,朋友,放空',
-    featured: false,
-  },
-  {
-    id: 6,
-    date: '2026.10.03',
-    year: '2026',
-    month: '10',
-    day: '03',
-    time: '20:10',
-    type: 'place',
-    title: '杨公堤夜骑：风从荷叶上吹过来的温度',
-    content: '傍晚换了身衣服去西湖夜骑。从曲院风荷出发，沿着杨公堤一路穿行到南山路。两侧高大的水杉在路灯下投下斑驳长影，秋夜的风穿过枯荷拂在脸上，带着微凉的水汽。把白天的信息和杂念全抛在脑后，出了一身薄汗，整个人仿佛被晚风洗涤过一遍。',
-    images: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&w=1200&q=80',
-    location: '杭州 · 西湖杨公堤',
-    meta: '公路车巡航 · 里程 21.4 km · 均速 22 km/h',
-    tags: '骑行,西湖,夜风,行迹',
-    featured: true,
-  },
-  {
-    id: 7,
-    date: '2026.09.30',
-    year: '2026',
-    month: '09',
-    day: '30',
-    time: '18:00',
-    type: 'project',
-    title: '校园开源协会业务后端 (SUSE-OAA-BACKEND)',
-    content: '为四川轻化工大学开源协会重构了核心业务架构。抽离鉴权拦截器与事务层，让新一届协会学弟学妹在举办活动和技术招新时能有一个稳定干净的后端服务。造轮子最开心的瞬间，莫过于亲手写的逻辑真正跑在校园生活里。',
-    images: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1000&q=80',
-    meta: 'Go / Gin / GORM / Campus OpenSource Backbone',
-    link: 'https://github.com/suse-edu-cn/SUSE-OAA-BACKEND',
-    tags: '造物,Go,校园开源',
-    featured: false,
-  },
-  {
-    id: 8,
-    date: '2026.09.24',
-    year: '2026',
-    month: '09',
-    day: '24',
-    time: '16:30',
-    type: 'book',
-    title: '重读《禅与摩托车维修艺术》：手艺与良质',
-    content: '坐在长椅上吹着风读波西格。书中写：‘佛陀或耶稣坐在排气管边，就跟坐在莲花座上一样正常。’ 当你带着真正的良质（Quality）去对待手头的事物——无论是调校一辆自行车、手冲一杯咖啡，还是雕琢一段逻辑——人与工具就合一了。少一点向外张望的功利，多一点对手艺与生活的敬畏。',
-    images: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1000&q=80',
-    meta: '罗伯特·M·波西格 著 · 哲学与手艺书摘',
-    tags: '阅读,书摘,良质,手艺',
-    featured: true,
-  },
-  {
-    id: 9,
-    date: '2026.09.15',
-    year: '2026',
-    month: '09',
-    day: '15',
-    time: '14:00',
-    type: 'purchase',
-    title: '陪伴三年的旧物：无刻机械键盘、钢笔与手账',
-    content: '擦拭这把用了三年的无刻机械键盘，键帽表面泛出了温润的光泽。旁边是一支百乐钢笔和一个牛皮纸手账。这些天天陪伴我的物件，沉默却忠诚。‘日用即道’，善待身边的每一件物，日子也会变得更踏实有温度。',
-    images: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=1000&q=80',
-    meta: 'Custom Mechanical Keyboard + Pilot 78G + Midori MD',
-    tags: '好物,文具,旧物,陪伴',
-    featured: false,
-  },
-  {
-    id: 10,
-    date: '2026.09.05',
-    year: '2026',
-    month: '09',
-    day: '05',
-    time: '21:00',
-    type: 'project',
-    title: 'ArchCanvas：AI 辅助 Go 架构设计画布',
-    content: '想让 AI 辅助开发不只停留在单文件的补全上，而是从全局需求语义直观生成整套可运行的 Go 架构拓扑。开始构建 ArchCanvas 的 AST 双向同步引擎。',
-    meta: 'TypeScript / Go AST / Architecture Canvas',
-    link: 'https://github.com/YN1753/ArchCanvas',
-    tags: '造物,AI架构,实验',
-    featured: false,
-  },
-  {
-    id: 11,
-    date: '2026.08.20',
-    year: '2026',
-    month: '08',
-    day: '20',
-    time: '19:30',
-    type: 'project',
-    title: 'GoLens：交互式状态机下的运行时透视镜',
-    content: '把 Go 复杂的 GMP 协程调度、三色标记 GC 写屏障做成交互式状态机动画。亲手敲完一套调度流转，才算真正摸到了并发系统的齿轮。',
-    meta: 'Go Internals Visualization / GMP / GC Barrier',
-    link: 'https://github.com/YN1753/GoLens',
-    tags: '造物,Go底层,状态机',
-    featured: false,
-  },
-  {
-    id: 12,
-    date: '2026.07.18',
-    year: '2026',
-    month: '07',
-    day: '18',
-    time: '05:15',
-    type: 'photo',
-    title: '东极岛的日出与第一缕海风',
-    content: '凌晨四点半爬起来走到东福山岛的最东端。海平线先是从深蓝泛出极淡的鹅黄，然后是一抹不可思议的粉紫。浪头撞在黑色的礁石上激起三米高的雪白浪花。坐在礁石上吹着咸湿的海风，天地浩大，人的那些微小烦恼瞬间显得微不足道。',
-    images: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
-    location: '舟山 · 东极岛东福山',
-    meta: 'Contax T2 · 38mm f/2.8 · Kodak Ektar 100',
-    tags: '摄影,旅行,海边,日出',
-    featured: true,
-  },
-  {
-    id: 13,
-    date: '2026.06.21',
-    year: '2026',
-    month: '06',
-    day: '21',
-    time: '19:45',
-    type: 'thought',
-    title: '夏至黄昏的暴雨与空街',
-    content: '夏至这天傍晚，暴雨毫无预兆地倾盆而下。站在便利店屋檐下等雨停，看着水流顺着沥青路面汇入下水道，空气里满是泥土被雨水浇透后的清新气味。城市突然按下了静音键。很享受这样被意外困住的片刻，不用赶路，只要看雨就好。',
-    meta: '雨天屋檐随记',
-    tags: '随笔,夏至,雨天',
-    featured: false,
-  },
-  {
-    id: 14,
-    date: '2026.05.02',
-    year: '2026',
-    month: '05',
-    day: '02',
-    time: '14:30',
-    type: 'place',
-    title: '莫干山竹林徒步：春末初夏的青翠',
-    content: '五一假期避开人群，钻进莫干山后山的野竹林里徒步了五公里。阳光从密密匝匝的竹叶缝隙里漏下来，脚下的泥土松软带着竹叶香。山涧溪水冰凉刺骨，捧起来洗了把脸，神清气爽。',
-    images: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80',
-    location: '浙江 · 湖州莫干山',
-    meta: '山野徒步 · 5.8 km 穿行',
-    tags: '徒步,山野,自然,行迹',
-    featured: false,
-  },
-  {
-    id: 15,
-    date: '2026.04.12',
-    year: '2026',
-    month: '04',
-    day: '12',
-    time: '16:00',
-    type: 'coffee',
-    title: '哥伦比亚双重厌氧瑰夏：水蜜桃与肉桂尾韵',
-    content: '收到了新到的哥伦比亚蕙兰双重厌氧瑰夏豆。研磨时的香气像刚切开的多汁水蜜桃。90°C 水温萃取，前段是明艳的水果红茶感，温度降到微温后，肉桂与红糖的尾韵浮现出来。好的豆子确实能让人在舌尖上旅行。',
-    images: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1000&q=80',
-    location: '书房',
-    meta: '哥伦比亚双重厌氧瑰夏 · V60滤杯',
-    tags: '咖啡,手冲,瑰夏',
-    featured: false,
-  },
-  {
-    id: 16,
-    date: '2026.03.20',
-    year: '2026',
-    month: '03',
-    day: '20',
-    time: '23:40',
-    type: 'music',
-    title: '深夜重听 Bill Evans《Sunday at the Village Vanguard》',
-    content: '春分这天夜里，重新翻出 Bill Evans 1961 年在先锋村的现场录音。背景里隐隐约约有酒杯轻碰的声音、低声的交谈，以及保罗·莫蒂安极其克制细腻的刷子鼓点。生活不需要时刻紧绷，爵士乐里那种即兴与松弛，是面对复杂世界的最好解药。',
-    images: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1000&q=80',
-    meta: 'Bill Evans Trio - Sunday at the Village Vanguard (1961)',
-    tags: '音乐,爵士乐,深夜,黑胶',
-    featured: false,
-  },
-  {
-    id: 17,
-    date: '2026.02.10',
-    year: '2026',
-    month: '02',
-    day: '10',
-    time: '01:20',
-    type: 'game',
-    title: '春节假期通关《星际拓荒 Outer Wilds》',
-    content: '在老家安静的深夜里打完了 Outer Wilds 的最后一幕。当所有乐器在宇宙尽头合奏起那首主题曲时，坐在屏幕前久久不能平静。它不仅是一款游戏，更是一首写给好奇心、科学探索与生命终极意义的伟大散文诗。',
-    images: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1000&q=80',
-    meta: 'Mobius Digital · 22分钟循环的终点',
-    tags: '游戏,OuterWilds,科幻,感动',
-    featured: false,
-  },
-  {
-    id: 18,
-    date: '2026.01.01',
-    year: '2026',
-    month: '01',
-    day: '01',
-    time: '10:00',
-    type: 'thought',
-    title: '给二零二六年的自己写一封信',
-    content: '新年第一天清晨，在手账本第一页写下：新的一年，不求做多宏大的事情，但求认认真真过好具体的一天天。多看几卷胶卷，多冲几杯好咖啡，多去山林和湖边吹风，少一些盲目的自我消耗。真实而安静地生活。',
-    meta: '新年手账寄语',
-    tags: '新年,随笔,初心,生活志',
-    featured: true,
-  },
-]
+// 生活档案数据统一管理 (真实空态，遵循单一事实来源 RC-38)
+export const DEFAULT_ENTRIES: LifeEntry[] = []
 
 function getInitialEntries(): LifeEntry[] {
   try {
-    const cached = localStorage.getItem(ENTRIES_CACHE_KEY) || localStorage.getItem('chimu_cached_entries')
-    if (cached) {
-      const parsed = JSON.parse(cached)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
+    const raw = localStorage.getItem(ENTRIES_CACHE_KEY) || localStorage.getItem('chimu_cached_entries')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const list = Array.isArray(parsed) ? parsed : parsed?.data
+      if (Array.isArray(list)) {
+        return list
       }
     }
   } catch {}
-  return [...DEFAULT_ENTRIES]
+  return []
 }
 
 const entries = ref<LifeEntry[]>(getInitialEntries())
-const searchQuery = ref<string>('')
-const activeTag = ref<string>('')
 const currentCategory = ref<ArchiveCategory>('all')
+
+// 节流写入本地存储并附带时间戳 (FE-06)
+let saveTimer: number | null = null
+function throttledSaveEntries(list: LifeEntry[]) {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(ENTRIES_CACHE_KEY, JSON.stringify({ cached_at: Date.now(), data: list }))
+    } catch {}
+  }, 400)
+}
 
 // 提取全局所有独有标签与其频次 (复用单一实现，消除 RC-22 重复逻辑)
 export function extractAllTags(entriesList: LifeEntry[]): { name: string; count: number }[] {
@@ -319,59 +54,58 @@ export function extractAllTags(entriesList: LifeEntry[]): { name: string; count:
     .sort((a, b) => b.count - a.count)
 }
 
-export function useArchive() {
-  const saveToCache = (list: LifeEntry[]) => {
-    try {
-      localStorage.setItem(ENTRIES_CACHE_KEY, JSON.stringify(list))
-    } catch {}
-  }
+// 纯前端全文搜索与标签过滤单一实现 (复用单一实现，消除 RC-23 重复逻辑)
+export function filterEntriesBySearch(entriesList: LifeEntry[], query: string, tag: string): LifeEntry[] {
+  const q = query.trim().toLowerCase()
+  const t = tag.trim().toLowerCase()
 
+  if (!q && !t) return []
+
+  return entriesList.filter((e) => {
+    let matchQuery = true
+    if (q) {
+      const inTitle = (e.title || '').toLowerCase().includes(q)
+      const inContent = (e.content || '').toLowerCase().includes(q)
+      const inLocation = (e.location || '').toLowerCase().includes(q)
+      const inMeta = (e.meta || '').toLowerCase().includes(q)
+      const inTags = (e.tags || '').toLowerCase().includes(q)
+      matchQuery = inTitle || inContent || inLocation || inMeta || inTags
+    }
+
+    let matchTag = true
+    if (t) {
+      const inTags = (e.tags || '').toLowerCase()
+      matchTag = inTags.includes(t)
+    }
+
+    return matchQuery && matchTag
+  })
+}
+
+export function useArchive() {
   const allTags = computed(() => extractAllTags(entries.value))
 
-  // 纯前端秒级全文模糊检索
-  const searchResults = computed(() => {
-    const q = searchQuery.value.trim().toLowerCase()
-    const tag = activeTag.value.trim().toLowerCase()
+  let entriesFetchSeq = 0
 
-    if (!q && !tag) return []
-
-    return entries.value.filter((e) => {
-      let matchQuery = true
-      if (q) {
-        const inTitle = (e.title || '').toLowerCase().includes(q)
-        const inContent = (e.content || '').toLowerCase().includes(q)
-        const inLocation = (e.location || '').toLowerCase().includes(q)
-        const inMeta = (e.meta || '').toLowerCase().includes(q)
-        const inTags = (e.tags || '').toLowerCase().includes(q)
-        matchQuery = inTitle || inContent || inLocation || inMeta || inTags
-      }
-
-      let matchTag = true
-      if (tag) {
-        const eTags = (e.tags || '').toLowerCase()
-        matchTag = eTags.includes(tag)
-      }
-
-      return matchQuery && matchTag
-    })
-  })
-
-  // 刷新拉取后端数据 (Stale-While-Revalidate)
+  // 刷新拉取后端数据 (Stale-While-Revalidate，带竞态防御与请求时序保护 FE-08)
   const loadRemoteEntries = async () => {
+    const seq = ++entriesFetchSeq
     try {
       const data = await fetchEntries({ page: 1, page_size: 100 })
-      if (data && data.length > 0) {
+      if (seq !== entriesFetchSeq) return
+      if (Array.isArray(data)) {
         entries.value = data
-        saveToCache(data)
+        throttledSaveEntries(data)
       }
-    } catch (err) {
-      console.warn('Backend entries unreachable, serving local cache/defaults:', err)
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return
+      console.warn('Backend entries unreachable, serving local cache:', err)
     }
   }
 
   const addEntry = (newEntry: LifeEntry) => {
     entries.value = [newEntry, ...entries.value.filter((e) => e.id !== newEntry.id)]
-    saveToCache(entries.value)
+    throttledSaveEntries(entries.value)
   }
 
   const updateEntry = (updated: LifeEntry) => {
@@ -379,21 +113,18 @@ export function useArchive() {
     if (idx !== -1) {
       entries.value[idx] = updated
     }
-    saveToCache(entries.value)
+    throttledSaveEntries(entries.value)
   }
 
   const removeEntry = (id: number) => {
     entries.value = entries.value.filter((e) => e.id !== id)
-    saveToCache(entries.value)
+    throttledSaveEntries(entries.value)
   }
 
   return {
     entries,
-    searchQuery,
-    activeTag,
     currentCategory,
     allTags,
-    searchResults,
     loadRemoteEntries,
     addEntry,
     updateEntry,

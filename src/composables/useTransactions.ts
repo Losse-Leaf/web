@@ -4,63 +4,35 @@ import { fetchTransactions } from '../utils/api'
 
 const TX_CACHE_KEY = 'looseleaf_cached_transactions'
 
-export const DEFAULT_TRANSACTIONS: Transaction[] = [
-  {
-    id: 1,
-    amount: 12900,
-    type: 'expense',
-    category: '购物',
-    title: 'MCHOSE A7 无线鼠标',
-    note: '替换用了四年的旧鼠标',
-    payment_method: '微信支付',
-    occurred_at: '2026-10-09T14:20:00Z',
-  },
-  {
-    id: 2,
-    amount: 1800,
-    type: 'expense',
-    category: '餐饮',
-    title: '午饭面条',
-    note: '公司楼下片儿川',
-    payment_method: '支付宝',
-    occurred_at: '2026-10-09T12:15:00Z',
-  },
-  {
-    id: 3,
-    amount: 6800,
-    type: 'expense',
-    category: '餐饮',
-    title: '埃塞俄比亚咖啡生豆',
-    note: '浅烘花魁 250g',
-    payment_method: '微信支付',
-    occurred_at: '2026-10-08T16:30:00Z',
-  },
-  {
-    id: 4,
-    amount: 500000,
-    type: 'income',
-    category: '其他',
-    title: '稿酬与项目结项',
-    note: '校园开源平台二期补贴',
-    payment_method: '银行转账',
-    occurred_at: '2026-10-07T10:00:00Z',
-  },
-]
+// 真实记账数据统一管理 (真实空态，遵循单一事实来源 RC-38)
+export const DEFAULT_TRANSACTIONS: Transaction[] = []
 
 function getInitialTransactions(): Transaction[] {
   try {
-    const cached = localStorage.getItem(TX_CACHE_KEY) || localStorage.getItem('chimu_cached_transactions')
-    if (cached) {
-      const parsed = JSON.parse(cached)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
+    const raw = localStorage.getItem(TX_CACHE_KEY) || localStorage.getItem('chimu_cached_transactions')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const list = Array.isArray(parsed) ? parsed : parsed?.data
+      if (Array.isArray(list)) {
+        return list
       }
     }
   } catch {}
-  return [...DEFAULT_TRANSACTIONS]
+  return []
 }
 
 const transactions = ref<Transaction[]>(getInitialTransactions())
+
+// 节流写入本地存储并附带时间戳 (FE-06)
+let saveTxTimer: number | null = null
+function throttledSaveTransactions(list: Transaction[]) {
+  if (saveTxTimer) clearTimeout(saveTxTimer)
+  saveTxTimer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(TX_CACHE_KEY, JSON.stringify({ cached_at: Date.now(), data: list }))
+    } catch {}
+  }, 400)
+}
 
 export const txToEntry = (tx: Transaction): LifeEntry => {
   const d = new Date(tx.occurred_at)
@@ -90,18 +62,12 @@ export const txToEntry = (tx: Transaction): LifeEntry => {
 }
 
 export function useTransactions() {
-  const saveToCache = (list: Transaction[]) => {
-    try {
-      localStorage.setItem(TX_CACHE_KEY, JSON.stringify(list))
-    } catch {}
-  }
-
   const loadRemoteTransactions = async (params?: { year?: number; month?: number }) => {
     try {
       const data = await fetchTransactions(params)
-      if (data && data.length > 0) {
+      if (Array.isArray(data)) {
         transactions.value = data
-        saveToCache(data)
+        throttledSaveTransactions(data)
       }
     } catch (err) {
       console.warn('Backend transactions unreachable, serving local cache:', err)
@@ -110,7 +76,7 @@ export function useTransactions() {
 
   const addTransaction = (tx: Transaction) => {
     transactions.value = [tx, ...transactions.value.filter((t) => t.id !== tx.id)]
-    saveToCache(transactions.value)
+    throttledSaveTransactions(transactions.value)
   }
 
   const updateTransactionItem = (tx: Transaction) => {
@@ -118,12 +84,12 @@ export function useTransactions() {
     if (idx !== -1) {
       transactions.value[idx] = tx
     }
-    saveToCache(transactions.value)
+    throttledSaveTransactions(transactions.value)
   }
 
   const removeTransaction = (id: number) => {
     transactions.value = transactions.value.filter((t) => t.id !== id)
-    saveToCache(transactions.value)
+    throttledSaveTransactions(transactions.value)
   }
 
   return {

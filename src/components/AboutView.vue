@@ -11,6 +11,7 @@ import {
   Compass,
   Coffee,
   Laptop,
+  User,
 } from 'lucide-vue-next'
 import type { UserProfile, CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
@@ -201,11 +202,18 @@ onMounted(() => {
           <!-- 照片本体 -->
           <div class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] aspect-square border border-[var(--border-subtle)]/60">
             <img
+              v-if="localProfile.avatar"
               :src="localProfile.avatar"
               :alt="localProfile.name"
               class="w-full h-full object-cover group-hover:scale-[1.025] transition-transform duration-700 ease-out"
-              onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'"
             />
+            <div
+              v-else
+              class="w-full h-full flex flex-col items-center justify-center bg-[var(--bg-subtle)] text-[var(--ink-muted)] space-y-2 select-none"
+            >
+              <User class="w-12 h-12 stroke-1" />
+              <span class="text-[11px] font-mono-archive tracking-wider">暂未上传肖像</span>
+            </div>
             
             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-300 pointer-events-none" />
 
@@ -407,7 +415,14 @@ onMounted(() => {
       </div>
 
       <!-- 纸本器物图鉴卡片网格 (Editorial Index Card Layout) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div
+        v-if="filteredGear.length === 0"
+        class="py-16 text-center space-y-2 font-serif-editorial text-[var(--ink-muted)] border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 rounded-xs"
+      >
+        <p class="text-base text-[var(--ink-secondary)]">暂无器物收录</p>
+        <p class="font-mono-archive text-xs">点击上方「编辑主理人档案」可登记属于你的随行器材与工坊装备</p>
+      </div>
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <article
           v-for="(gear, idx) in filteredGear"
           :key="gear.id || gear.name"
