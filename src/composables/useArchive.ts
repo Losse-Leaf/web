@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import type { LifeEntry, ArchiveCategory } from '../types'
 import { entryMatchesCategory } from '../types'
-import { fetchEntries } from '../utils/api'
+import { fetchEntries, resetEntriesETag } from '../utils/api'
 
 const ENTRIES_CACHE_KEY = 'looseleaf_cached_entries'
 
@@ -87,12 +87,14 @@ export function useArchive() {
 
   let entriesFetchSeq = 0
 
-  // 刷新拉取后端数据 (Stale-While-Revalidate，带竞态防御与请求时序保护 FE-08)
+  // 刷新拉取后端数据 (Stale-While-Revalidate，带竞态防御与请求时序保护 FE-08, FE-10)
   const loadRemoteEntries = async () => {
     const seq = ++entriesFetchSeq
     try {
       const data = await fetchEntries({ page: 1, page_size: 100 })
       if (seq !== entriesFetchSeq) return
+      // 命中 304 缓存协商：保持已有数据引用，跳过重渲染与磁盘写入 (FE-10)
+      if (data === null) return
       if (Array.isArray(data)) {
         entries.value = data
         throttledSaveEntries(data)
@@ -104,11 +106,13 @@ export function useArchive() {
   }
 
   const addEntry = (newEntry: LifeEntry) => {
+    resetEntriesETag()
     entries.value = [newEntry, ...entries.value.filter((e) => e.id !== newEntry.id)]
     throttledSaveEntries(entries.value)
   }
 
   const updateEntry = (updated: LifeEntry) => {
+    resetEntriesETag()
     const idx = entries.value.findIndex((e) => e.id === updated.id)
     if (idx !== -1) {
       entries.value[idx] = updated
@@ -117,6 +121,7 @@ export function useArchive() {
   }
 
   const removeEntry = (id: number) => {
+    resetEntriesETag()
     entries.value = entries.value.filter((e) => e.id !== id)
     throttledSaveEntries(entries.value)
   }

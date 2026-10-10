@@ -81,6 +81,19 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 // 1. Life Entries
 let entriesAbortController: AbortController | null = null
 
+const ENTRIES_ETAG_KEY = 'looseleaf_entries_etag'
+let entriesETag = ''
+try {
+  entriesETag = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
+} catch {}
+
+export function resetEntriesETag(): void {
+  entriesETag = ''
+  try {
+    localStorage.removeItem(ENTRIES_ETAG_KEY)
+  } catch {}
+}
+
 export async function fetchEntries(params?: {
   page?: number
   page_size?: number
@@ -88,7 +101,7 @@ export async function fetchEntries(params?: {
   category?: string
   year?: string
   signal?: AbortSignal
-}): Promise<LifeEntry[]> {
+}): Promise<LifeEntry[] | null> {
   // 竞态保护：未指定外部 signal 时自动终止上一次未完成的请求 (FE-08)
   if (!params?.signal) {
     if (entriesAbortController) {
@@ -106,9 +119,54 @@ export async function fetchEntries(params?: {
 
   const url = `${API_BASE}/entries?${query.toString()}`
   const signal = params?.signal || entriesAbortController?.signal
+
+  const token = getAdminToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Client-Platform': 'web',
+    'X-Client-Version': '1.1.0',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  // 默认首页无过滤列表启用 If-None-Match 缓存协商 (FE-10)
+  const isDefaultList = !params?.type && !params?.category && !params?.year && (params?.page || 1) === 1
+  if (isDefaultList && entriesETag) {
+    headers['If-None-Match'] = entriesETag
+  }
+
   try {
-    const data = await request<{ entries: LifeEntry[]; total: number }>(url, { signal })
-    return data.entries || []
+    const res = await fetch(url, {
+      headers,
+      signal,
+    })
+
+    // 命中 304 缓存协商：返回 null 告知调用方保持现有引用，跳过重渲染 (FE-10)
+    if (res.status === 304) {
+      return null
+    }
+
+    if (!res.ok) {
+      let msg = `HTTP error ${res.status}`
+      try {
+        const errJson = await res.json()
+        if (errJson.message) msg = errJson.message
+      } catch {}
+      throw new Error(msg)
+    }
+
+    const newEtag = res.headers.get('ETag')
+    if (isDefaultList && newEtag) {
+      entriesETag = newEtag
+      try {
+        localStorage.setItem(ENTRIES_ETAG_KEY, newEtag)
+      } catch {}
+    }
+
+    const json = await res.json()
+    const data = (json && typeof json === 'object' && 'code' in json && 'data' in json) ? json.data : json
+    return data?.entries || []
   } catch (err: any) {
     if (err?.name === 'AbortError') {
       return []
@@ -131,10 +189,12 @@ export async function createLifeEntry(data: {
   project_id?: number | null
   attachment_ids?: number[]
 }): Promise<LifeEntry> {
-  return request<LifeEntry>(`${API_BASE}/entries`, {
+  const result = await request<LifeEntry>(`${API_BASE}/entries`, {
     method: 'POST',
     body: JSON.stringify(data),
   })
+  resetEntriesETag()
+  return result
 }
 
 export async function updateLifeEntry(
@@ -150,16 +210,19 @@ export async function updateLifeEntry(
     attachment_ids?: number[]
   }
 ): Promise<LifeEntry> {
-  return request<LifeEntry>(`${API_BASE}/entries/${id}`, {
+  const result = await request<LifeEntry>(`${API_BASE}/entries/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   })
+  resetEntriesETag()
+  return result
 }
 
 export async function deleteLifeEntry(id: number): Promise<boolean> {
   await request(`${API_BASE}/entries/${id}`, {
     method: 'DELETE',
   })
+  resetEntriesETag()
   return true
 }
 
