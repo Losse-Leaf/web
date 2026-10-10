@@ -359,7 +359,10 @@ const handleHashChange = async () => {
     return
   }
 
-  if (['home', 'life', 'transactions', 'archive', 'projects', 'about'].includes(hash)) {
+  if (!hash || hash === 'home' || hash === 'life') {
+    currentView.value = 'home'
+    selectedEntry.value = null
+  } else if (['transactions', 'archive', 'projects', 'about'].includes(hash)) {
     currentView.value = hash
     selectedEntry.value = null
   }

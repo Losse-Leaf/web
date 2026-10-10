@@ -32,29 +32,7 @@ const countdownSeconds = ref(300)
 const copied = ref(false)
 let countdownTimer: number | null = null
 
-// 默认离线演练设备数据
-const DEFAULT_MOCK_DEVICES: TrustedDevice[] = [
-  {
-    id: 1,
-    device_id: 'dev_mac_71a0b3f1',
-    name: 'MacBook Pro 14 (M3 Max)',
-    platform: 'macos',
-    device_model: 'Mac15,6',
-    paired_at: '2026-10-09T10:00:00Z',
-    last_active_at: '2026-10-09T16:20:00Z',
-    status: 'active',
-  },
-  {
-    id: 2,
-    device_id: 'dev_ios_48b19a27',
-    name: 'iPhone 16 Pro',
-    platform: 'ios',
-    device_model: 'iPhone17,1',
-    paired_at: '2026-10-09T16:31:00Z',
-    last_active_at: '2026-10-09T16:32:00Z',
-    status: 'active',
-  },
-]
+
 
 const startCountdown = (sec: number) => {
   if (countdownTimer) clearInterval(countdownTimer)
@@ -97,13 +75,9 @@ const loadDevices = async () => {
   isLoadingDevices.value = true
   try {
     const res = await fetchTrustedDevices()
-    if (res && res.length > 0) {
-      devices.value = res
-    } else {
-      devices.value = [...DEFAULT_MOCK_DEVICES]
-    }
+    devices.value = res || []
   } catch {
-    devices.value = [...DEFAULT_MOCK_DEVICES]
+    devices.value = []
   } finally {
     isLoadingDevices.value = false
   }
