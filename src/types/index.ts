@@ -155,22 +155,8 @@ export interface GlobalStats {
   current_month: number
 }
 
-export interface NowStatus {
-  id?: number
-  building: string
-  learning: string
-  playing: string
-  listening: string
-  reading: string
-  thinking: string
-  using: string
-  location: string
-  last_updated: string
-}
-
 export interface Project {
   id: number
-  name?: string
   title: string
   subtitle?: string
   description: string
@@ -178,19 +164,10 @@ export interface Project {
   story?: string
   category: string
   tags: string
-  demo_url?: string
   github_url: string
   status: string
   featured?: boolean
   order?: number
-  started_at?: string
-}
-
-export interface YearArchiveStat {
-  year: string
-  total_count: number
-  type_counts: Record<string, number>
-  months: string[]
 }
 
 export interface SiteConfig {

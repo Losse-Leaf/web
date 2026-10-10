@@ -6,7 +6,6 @@ import type {
   StorageStatus,
   GlobalStats,
   Project,
-  NowStatus,
   TrustedDevice,
   PairingTicketResult,
   SiteConfig,
@@ -20,11 +19,11 @@ import type {
 } from '../types'
 
 const API_BASE = '/api/v1'
-const ADMIN_TOKEN_KEY = 'chimu_admin_token'
+const ADMIN_TOKEN_KEY = 'looseleaf_admin_token'
 
 export function getAdminToken(): string {
   try {
-    return localStorage.getItem(ADMIN_TOKEN_KEY) || ''
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem('chimu_admin_token') || ''
   } catch {
     return ''
   }
@@ -33,12 +32,14 @@ export function getAdminToken(): string {
 export function setAdminToken(token: string): void {
   try {
     localStorage.setItem(ADMIN_TOKEN_KEY, token.trim())
+    localStorage.removeItem('chimu_admin_token')
   } catch {}
 }
 
 export function removeAdminToken(): void {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
+    localStorage.removeItem('chimu_admin_token')
   } catch {}
 }
 
@@ -96,13 +97,8 @@ export async function fetchEntries(params?: {
   if (params?.year && params.year !== 'all') query.set('year', params.year)
 
   const url = `${API_BASE}/entries?${query.toString()}`
-  try {
-    const data = await request<{ entries: LifeEntry[]; total: number }>(url)
-    return data.entries || []
-  } catch {
-    // 降级兼容 /api/entries
-    return request<LifeEntry[]>(`/api/entries?${query.toString()}`)
-  }
+  const data = await request<{ entries: LifeEntry[]; total: number }>(url)
+  return data.entries || []
 }
 
 export async function fetchEntryById(id: number): Promise<LifeEntry> {
@@ -351,11 +347,7 @@ export async function deleteTransaction(id: number): Promise<boolean> {
 
 // 4. Projects
 export async function fetchProjects(): Promise<Project[]> {
-  try {
-    return await request<Project[]>(`${API_BASE}/projects`)
-  } catch {
-    return request<Project[]>('/api/projects')
-  }
+  return request<Project[]>(`${API_BASE}/projects`)
 }
 
 export async function createProject(data: {
@@ -398,41 +390,9 @@ export async function revokeTrustedDevice(id: number): Promise<boolean> {
   return true
 }
 
-// 7. Now Status Live Update (现场更新此刻的我)
-export async function updateNowStatus(data: Partial<NowStatus>): Promise<NowStatus> {
-  try {
-    return await request<NowStatus>(`${API_BASE}/now`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  } catch {
-    // 降级兼容 /api/now
-    return request<NowStatus>('/api/now', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-}
-
-// 8. Site Config (站点配置，全端动态驱动)
+// 7. Site Config (站点配置，全端动态驱动)
 export async function fetchSiteConfig(): Promise<SiteConfig> {
-  try {
-    return await request<SiteConfig>(`${API_BASE}/config`)
-  } catch {
-    try {
-      return await request<SiteConfig>('/api/config')
-    } catch {
-      return {
-        site_name: '散页',
-        site_subtitle: '时光手账与生活档案',
-        curator_name: '迟暮',
-        default_location: '中国 · 杭州',
-        domain: 'codeactivityhub.top',
-        icp_number: '浙ICP备2026081664号',
-        icp_link: 'https://beian.miit.gov.cn',
-      }
-    }
-  }
+  return request<SiteConfig>(`${API_BASE}/config`)
 }
 
 // 9. Curator Profile (主理人身份档案中枢，全端动态驱动)
@@ -453,17 +413,7 @@ export async function updateCuratorProfile(data: Partial<CuratorProfile>): Promi
 
 // 10. 系统生命周期与冷启动装帧 (System Lifecycle & Bootstrap)
 export async function fetchSystemStatus(): Promise<SystemStatus> {
-  try {
-    return await request<SystemStatus>(`${API_BASE}/system/status`)
-  } catch {
-    // 降级兜底：若后端未实现该探针，视为已初始化
-    return {
-      initialized: true,
-      site_name: '散页 · 时光手账与生活档案',
-      curator_name: '迟暮',
-      has_master_key_configured: false,
-    }
-  }
+  return request<SystemStatus>(`${API_BASE}/system/status`)
 }
 
 export async function bootstrapSystem(data: BootstrapPayload): Promise<BootstrapResult> {
