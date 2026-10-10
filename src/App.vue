@@ -4,6 +4,7 @@ import HeaderNav from './components/HeaderNav.vue'
 import HomeView from './components/HomeView.vue'
 import ArchiveView from './components/ArchiveView.vue'
 import ProjectsView from './components/ProjectsView.vue'
+import WishlistView from './components/WishlistView.vue'
 import AboutView from './components/AboutView.vue'
 import FooterArchive from './components/FooterArchive.vue'
 import TransactionsView from './components/TransactionsView.vue'
@@ -443,6 +444,11 @@ watch(currentView, (newV) => {
         @projectCreated="handleProjectCreated"
         @projectUpdated="handleProjectUpdated"
         @projectDeleted="handleProjectDeleted"
+      />
+
+      <!-- 5. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
+      <WishlistView
+        v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
       />
 
       <!-- 6. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
