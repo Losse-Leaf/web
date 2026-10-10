@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { BookOpen } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { parseOccurredDate } from '../utils/format'
+import AlmanacModal from './AlmanacModal.vue'
 
 const props = defineProps<{
   entries: LifeEntry[]
@@ -13,6 +15,7 @@ const emit = defineEmits<{
 
 const currentYearStr = new Date().getFullYear().toString()
 const selectedYear = ref(currentYearStr)
+const isAlmanacOpen = ref(false)
 
 // 获取所有出现的年份 (RC-48)
 const years = computed(() => {
@@ -120,18 +123,30 @@ const formatMonthDay = (occurredAt?: string) => {
       </p>
     </header>
 
-    <!-- 年份切换（文本式，非按钮 Card） -->
-    <div class="flex items-center gap-6 mb-8 font-mono-archive text-sm">
+    <!-- 年份切换（文本式，非按钮 Card）与 年度生活年鉴入口 (FE-14) -->
+    <div class="flex items-center justify-between gap-4 mb-8 font-mono-archive text-sm">
+      <div class="flex items-center gap-6">
+        <button
+          v-for="y in years"
+          :key="y"
+          @click="selectedYear = y"
+          class="transition-colors cursor-pointer py-1"
+          :class="selectedYear === y 
+            ? 'text-[var(--ink-primary)] font-bold border-b-2 border-[var(--ink-primary)]' 
+            : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+        >
+          {{ y }}年
+        </button>
+      </div>
+
       <button
-        v-for="y in years"
-        :key="y"
-        @click="selectedYear = y"
-        class="transition-colors cursor-pointer py-1"
-        :class="selectedYear === y 
-          ? 'text-[var(--ink-primary)] font-bold border-b-2 border-[var(--ink-primary)]' 
-          : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+        @click="isAlmanacOpen = true"
+        type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer"
+        title="翻阅五幕式年度生活年鉴"
       >
-        {{ y }}年
+        <BookOpen class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+        <span>翻阅 {{ selectedYear }} 年度年鉴 ↗</span>
       </button>
     </div>
 
@@ -192,6 +207,14 @@ const formatMonthDay = (occurredAt?: string) => {
         </div>
       </section>
     </div>
+
+    <!-- 年度生活年鉴画卷弹窗 (FE-14) -->
+    <AlmanacModal
+      v-if="isAlmanacOpen"
+      :isOpen="isAlmanacOpen"
+      :initialYear="parseInt(selectedYear) || 2026"
+      @close="isAlmanacOpen = false"
+    />
 
   </div>
 </template>
