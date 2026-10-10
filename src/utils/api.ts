@@ -358,7 +358,8 @@ export async function fetchWishes(params?: { kind?: string; status?: string }): 
   if (params?.status) query.set('status', params.status)
   const qs = query.toString()
   try {
-    return await request<Wish[]>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
+    const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
+    return Array.isArray(res) ? res : (res?.wishes || [])
   } catch {
     return []
   }
@@ -582,9 +583,18 @@ export async function verifyMasterPasscode(passcode: string): Promise<{ token: s
   return res
 }
 
-// 12. 资产管理中枢与信贷渠道 (Assets & Credit Channels RC-53, FE-15)
+// 12. 资产管理中枢与信贷渠道 (Assets & Credit Channels RC-53, FE-15, RG-20)
 export async function fetchAssetsOverview(): Promise<AssetsOverview> {
   return request<AssetsOverview>(`${API_BASE}/assets/overview`)
+}
+
+export async function updateInitialLiquidBalance(
+  initial_liquid_balance: number
+): Promise<{ initial_liquid_balance: number }> {
+  return request<{ initial_liquid_balance: number }>(`${API_BASE}/assets/liquid-balance`, {
+    method: 'PUT',
+    body: JSON.stringify({ initial_liquid_balance }),
+  })
 }
 
 export async function fetchCreditChannels(): Promise<CreditChannel[]> {
@@ -694,9 +704,114 @@ export async function deleteFootprint(id: number, purge?: boolean): Promise<bool
   return true
 }
 
-// 14. 年度生活年鉴画卷 (Annual Almanac Summary FE-14)
+// 14. 年度生活年鉴画卷 (Annual Almanac Summary FE-14, RG-17)
 export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlmanacSummary> {
-  return request<AnnualAlmanacSummary>(`${API_BASE}/almanac/summary?year=${year}`)
+  const raw = await request<any>(`${API_BASE}/almanac/summary?year=${year}`)
+
+  const rawPrologue = raw?.prologue || {}
+  const rawAtlas = raw?.atlas_journey || raw?.atlas || {}
+  const rawWishes = raw?.wishes_milestones || raw?.wishes || {}
+  const rawHighlights = raw?.life_highlights || raw?.highlights || {}
+  const rawFinances = raw?.financial_spectrum || raw?.finances || {}
+
+  const citiesVisited: { city_code: string; city_name: string }[] = Array.isArray(rawAtlas.cities_visited)
+    ? rawAtlas.cities_visited
+    : Array.isArray(rawAtlas.cities)
+      ? rawAtlas.cities
+      : []
+
+  const footprints: Footprint[] = Array.isArray(rawAtlas.footprints) ? rawAtlas.footprints : []
+
+  const fulfilledWishes: Wish[] = Array.isArray(rawWishes.fulfilled_wishes)
+    ? rawWishes.fulfilled_wishes
+    : Array.isArray(rawWishes.wishes)
+      ? rawWishes.wishes
+      : []
+
+  const filmGallery = Array.isArray(rawHighlights.film_gallery)
+    ? rawHighlights.film_gallery
+    : Array.isArray(rawHighlights.photos)
+      ? rawHighlights.photos
+      : []
+
+  const activeDays = Number(rawPrologue.active_days ?? rawPrologue.distinct_days ?? 0)
+  const totalBudget = Number(rawWishes.total_wish_budget ?? rawWishes.total_budget ?? 0)
+  const totalActual = Number(rawWishes.total_wish_actual ?? rawWishes.total_actual ?? 0)
+  const wantingCount = Number(rawWishes.wanting_wish_count ?? rawWishes.wanting_count ?? 0)
+
+  const rawRatio = Number(rawFinances.wish_expense_ratio ?? 0)
+  const wishSpendingPercent =
+    typeof rawFinances.wish_spending_ratio === 'number'
+      ? rawFinances.wish_spending_ratio
+      : rawRatio * 100
+
+  const categories = Array.isArray(rawFinances.categories) ? rawFinances.categories : []
+
+  return {
+    year: Number(raw?.year || year),
+    prologue: {
+      total_entries: Number(rawPrologue.total_entries || 0),
+      active_days: activeDays,
+      distinct_days: activeDays,
+      total_words: Number(rawPrologue.total_words || 0),
+      first_date: rawPrologue.first_date || '',
+      last_date: rawPrologue.last_date || '',
+      wishes_fulfilled: Number(rawPrologue.wishes_fulfilled ?? fulfilledWishes.length),
+      cities_visited: Number(rawPrologue.cities_visited ?? citiesVisited.length),
+      tx_count: Number(rawPrologue.tx_count ?? 0),
+    },
+    atlas_journey: {
+      cities_visited: citiesVisited,
+      footprints,
+    },
+    atlas: {
+      total_cities: Number(rawAtlas.total_cities ?? rawPrologue.cities_visited ?? citiesVisited.length),
+      cities: citiesVisited,
+      footprints,
+    },
+    wishes_milestones: {
+      fulfilled_wishes: fulfilledWishes,
+      total_wish_budget: totalBudget,
+      total_wish_actual: totalActual,
+      wanting_wish_count: wantingCount,
+    },
+    wishes: {
+      fulfilled_count: Number(rawWishes.fulfilled_count ?? fulfilledWishes.length),
+      wanting_count: wantingCount,
+      total_budget: totalBudget,
+      total_actual: totalActual,
+      wishes: fulfilledWishes,
+    },
+    life_highlights: {
+      spring: rawHighlights.spring || undefined,
+      summer: rawHighlights.summer || undefined,
+      autumn: rawHighlights.autumn || undefined,
+      winter: rawHighlights.winter || undefined,
+      film_gallery: filmGallery,
+    },
+    highlights: {
+      spring: rawHighlights.spring || undefined,
+      summer: rawHighlights.summer || undefined,
+      autumn: rawHighlights.autumn || undefined,
+      winter: rawHighlights.winter || undefined,
+      photos: filmGallery,
+    },
+    financial_spectrum: {
+      total_income: Number(rawFinances.total_income || 0),
+      total_expense: Number(rawFinances.total_expense || 0),
+      balance: Number(rawFinances.balance || 0),
+      wish_expenses: Number(rawFinances.wish_expenses || 0),
+      wish_expense_ratio: rawRatio,
+      categories,
+    },
+    finances: {
+      total_expense: Number(rawFinances.total_expense || 0),
+      total_income: Number(rawFinances.total_income || 0),
+      balance: Number(rawFinances.balance || 0),
+      wish_spending_ratio: wishSpendingPercent,
+      categories,
+    },
+  }
 }
 
 

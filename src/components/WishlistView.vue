@@ -173,7 +173,7 @@ onMounted(() => {
           <span class="font-serif-editorial text-2xl text-[var(--accent-moss)] font-medium">
             {{ fulfilledWishes.length }} 项
           </span>
-          <span v-if="totalFulfilledActual > 0" class="text-[11px] text-[var(--ink-muted)]">
+          <span v-if="isAdmin && totalFulfilledActual > 0" class="text-[11px] text-[var(--ink-muted)]">
             (投入 ¥{{ formatMoney(totalFulfilledActual) }})
           </span>
         </div>
@@ -307,12 +307,12 @@ onMounted(() => {
               </span>
             </div>
 
-            <!-- 预算或花费 -->
+            <!-- 预算或花费 (访客模式脱敏隐藏实付开销 RC-57) -->
             <div>
               <span v-if="w.status === 'relinquished'" class="text-emerald-700 font-medium">
                 省下 ¥{{ formatMoney(w.budget) }}
               </span>
-              <span v-else-if="w.status === 'fulfilled' && (w.actual_cost || w.budget)" class="text-[var(--accent-moss)] font-medium">
+              <span v-else-if="isAdmin && w.status === 'fulfilled' && (w.actual_cost || w.budget)" class="text-[var(--accent-moss)] font-medium">
                 实付 ¥{{ formatMoney(w.actual_cost || w.budget) }}
               </span>
               <span v-else-if="w.budget > 0" class="text-[var(--ink-primary)] font-medium">

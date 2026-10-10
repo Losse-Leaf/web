@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   X,
   MapPin,
 } from 'lucide-vue-next'
-import { fetchCityMemoryDrawer } from '../utils/api'
+import { fetchCityMemoryDrawer, getAdminToken } from '../utils/api'
 import { formatMoney } from '../utils/format'
-import type { CityMemoryDrawerData } from '../types'
+import type { CityMemoryDrawerData, Attachment } from '../types'
 
 const props = defineProps<{
   isOpen: boolean
@@ -19,9 +19,37 @@ const emit = defineEmits<{
   (e: 'selectEntry', entry: any): void
 }>()
 
+const isAdmin = computed(() => Boolean(getAdminToken()))
 const drawerData = ref<CityMemoryDrawerData | null>(null)
 const isLoading = ref(false)
 const errorMsg = ref('')
+
+// 汇总该城市 footprints 与 entries 的全部图片附件并去重 (RC-58)
+const cityPhotos = computed<Attachment[]>(() => {
+  if (!drawerData.value) return []
+  const seen = new Set<string>()
+  const list: Attachment[] = []
+
+  const addAtt = (att: Attachment) => {
+    if (!att || !att.url) return
+    const key = att.id ? `id:${att.id}` : `url:${att.url}`
+    if (seen.has(key)) return
+    seen.add(key)
+    list.push(att)
+  }
+
+  for (const fp of drawerData.value.footprints || []) {
+    for (const att of fp.attachments || []) {
+      addAtt(att)
+    }
+  }
+  for (const entry of drawerData.value.entries || []) {
+    for (const att of entry.attachments || []) {
+      addAtt(att)
+    }
+  }
+  return list
+})
 
 const loadData = async (code: string) => {
   if (!code) return
@@ -140,27 +168,28 @@ const formatDate = (dateStr?: string) => {
             <span class="text-xs font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
               CHAPTER II · 菲林画廊
             </span>
+            <span v-if="cityPhotos.length > 0" class="text-xs font-mono-archive text-[var(--ink-muted)]">
+              {{ cityPhotos.length }} 张
+            </span>
           </div>
 
           <!-- 横向滚动相片流 -->
           <div
-            v-if="drawerData.footprints.some(f => f.attachments && f.attachments.length > 0)"
+            v-if="cityPhotos.length > 0"
             class="flex items-center gap-3 overflow-x-auto pb-2"
           >
-            <template v-for="f in drawerData.footprints" :key="f.id">
-              <div
-                v-for="att in f.attachments"
-                :key="att.id"
-                class="w-32 h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs overflow-hidden"
-              >
-                <img
-                  :src="att.url"
-                  loading="lazy"
-                  class="w-full h-full object-cover"
-                  alt="城市菲林"
-                />
-              </div>
-            </template>
+            <div
+              v-for="att in cityPhotos"
+              :key="att.id || att.url"
+              class="w-32 h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs overflow-hidden"
+            >
+              <img
+                :src="att.url"
+                loading="lazy"
+                class="w-full h-full object-cover"
+                alt="城市菲林"
+              />
+            </div>
           </div>
           <p v-else class="text-xs font-serif-editorial text-[var(--ink-muted)] italic">
             在这座城市暂未收录影像胶片。
@@ -203,8 +232,8 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第四章：城市账单光谱 (City Ledger Breakdown) -->
-        <section class="space-y-3">
+        <!-- 第四章：城市账单光谱 (City Ledger Breakdown，仅主理人可见 RC-57) -->
+        <section v-if="isAdmin" class="space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
               CHAPTER IV · 城市账单光谱

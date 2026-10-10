@@ -193,6 +193,7 @@ export interface GearItem {
   price_cents?: number
   purchase_date?: string
   sold_price?: number
+  sold_price_cents?: number
   sold_date?: string
 }
 
@@ -330,11 +331,12 @@ export interface GearSummary {
 }
 
 export interface AssetsOverview {
-  net_worth: number           // 分
-  liquid_balance: number      // 分
-  fixed_assets: number        // 分
-  total_liabilities: number   // 分
-  monthly_liabilities: number // 分
+  net_worth: number               // 分
+  liquid_balance: number          // 分
+  initial_liquid_balance?: number // 分 (BE-15, RG-20)
+  fixed_assets: number            // 分
+  total_liabilities: number       // 分
+  monthly_liabilities: number     // 分
   gear_summary: GearSummary
   channel_liabilities: ChannelLiabilitySummary[]
 }
@@ -389,15 +391,29 @@ export interface AnnualAlmanacSummary {
   year: number
   prologue: {
     total_entries: number
+    active_days: number
     distinct_days: number
     total_words: number
     first_date: string
     last_date: string
+    wishes_fulfilled?: number
+    cities_visited?: number
+    tx_count?: number
+  }
+  atlas_journey: {
+    cities_visited: { city_code: string; city_name: string }[]
+    footprints: Footprint[]
   }
   atlas: {
     total_cities: number
     cities: { city_code: string; city_name: string }[]
     footprints: Footprint[]
+  }
+  wishes_milestones: {
+    fulfilled_wishes: Wish[]
+    total_wish_budget: number
+    total_wish_actual: number
+    wanting_wish_count: number
   }
   wishes: {
     fulfilled_count: number
@@ -406,12 +422,27 @@ export interface AnnualAlmanacSummary {
     total_actual: number
     wishes: Wish[]
   }
+  life_highlights: {
+    spring?: LifeEntry
+    summer?: LifeEntry
+    autumn?: LifeEntry
+    winter?: LifeEntry
+    film_gallery: Attachment[]
+  }
   highlights: {
     spring?: LifeEntry
     summer?: LifeEntry
     autumn?: LifeEntry
     winter?: LifeEntry
     photos: Attachment[]
+  }
+  financial_spectrum: {
+    total_income: number
+    total_expense: number
+    balance: number
+    wish_expenses: number
+    wish_expense_ratio: number
+    categories: { name: string; amount: number }[]
   }
   finances: {
     total_expense: number
