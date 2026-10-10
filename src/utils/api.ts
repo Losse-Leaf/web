@@ -16,6 +16,12 @@ import type {
   QRLoginPollResult,
   UnifiedUploadResult,
   Wish,
+  AssetsOverview,
+  CreditChannel,
+  Footprint,
+  FootprintsAtlasResponse,
+  CityMemoryDrawerData,
+  AnnualAlmanacSummary,
 } from '../types'
 
 const API_BASE = '/api/v1'
@@ -358,11 +364,35 @@ export async function fetchWishes(params?: { kind?: string; status?: string }): 
   }
 }
 
+export async function createWish(data: {
+  title: string
+  kind: 'item' | 'travel' | 'milestone'
+  note?: string
+  spec?: string
+  city_code?: string
+  city_name?: string
+  budget?: number
+  target_date?: string
+  attachment_ids?: number[]
+}): Promise<Wish> {
+  return request<Wish>(`${API_BASE}/wishes`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 export async function updateWish(id: number, data: Partial<Wish>): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   })
+}
+
+export async function deleteWish(id: number, purge?: boolean): Promise<boolean> {
+  await request(`${API_BASE}/wishes/${id}${purge ? '?purge=true' : ''}`, {
+    method: 'DELETE',
+  })
+  return true
 }
 
 export async function resolveWish(
@@ -373,7 +403,15 @@ export async function resolveWish(
     actual_title?: string
     fulfilled_at?: string
     create_transaction?: boolean
-    transaction_id?: number
+    create_gear_asset?: boolean
+    create_life_entry?: boolean
+    create_footprint?: boolean
+    entry_content?: string
+    attachment_ids?: number[]
+    is_installment?: boolean
+    installment_channel_code?: string
+    installment_months?: number
+    repayment_day?: number
   }
 ): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes/${id}/resolve`, {
@@ -543,6 +581,124 @@ export async function verifyMasterPasscode(passcode: string): Promise<{ token: s
   }
   return res
 }
+
+// 12. 资产管理中枢与信贷渠道 (Assets & Credit Channels RC-53, FE-15)
+export async function fetchAssetsOverview(): Promise<AssetsOverview> {
+  return request<AssetsOverview>(`${API_BASE}/assets/overview`)
+}
+
+export async function fetchCreditChannels(): Promise<CreditChannel[]> {
+  try {
+    return await request<CreditChannel[]>(`${API_BASE}/credit-channels`)
+  } catch {
+    return []
+  }
+}
+
+export async function createCreditChannel(data: {
+  name: string
+  repayment_day: number
+  code?: string
+  color?: string
+}): Promise<CreditChannel> {
+  return request<CreditChannel>(`${API_BASE}/credit-channels`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateCreditChannel(
+  id: number,
+  data: Partial<CreditChannel>
+): Promise<CreditChannel> {
+  return request<CreditChannel>(`${API_BASE}/credit-channels/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteCreditChannel(id: number): Promise<boolean> {
+  await request(`${API_BASE}/credit-channels/${id}`, {
+    method: 'DELETE',
+  })
+  return true
+}
+
+// 13. 空间旅游足迹与城市回忆抽屉 (Footprints & Atlas & Memory Drawer FE-12, FE-13)
+export async function fetchFootprints(params?: {
+  city_code?: string
+  year?: number
+  since?: string
+}): Promise<Footprint[]> {
+  const query = new URLSearchParams()
+  if (params?.city_code) query.set('city_code', params.city_code)
+  if (params?.year) query.set('year', String(params.year))
+  if (params?.since) query.set('since', params.since)
+  const qs = query.toString()
+  try {
+    return await request<Footprint[]>(`${API_BASE}/footprints${qs ? '?' + qs : ''}`)
+  } catch {
+    return []
+  }
+}
+
+export async function fetchFootprintsAtlas(): Promise<FootprintsAtlasResponse> {
+  return request<FootprintsAtlasResponse>(`${API_BASE}/footprints/atlas`)
+}
+
+export async function fetchCityMemoryDrawer(cityCode: string): Promise<CityMemoryDrawerData> {
+  return request<CityMemoryDrawerData>(`${API_BASE}/footprints/cities/${cityCode}/drawer`)
+}
+
+export async function createFootprint(data: {
+  city_code: string
+  city_name: string
+  visited_at: string
+  note?: string
+  life_entry_id?: number
+  wish_id?: number
+  latitude?: number
+  longitude?: number
+  attachment_ids?: number[]
+}): Promise<Footprint> {
+  return request<Footprint>(`${API_BASE}/footprints`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateFootprint(
+  id: number,
+  data: Partial<{
+    city_code: string
+    city_name: string
+    visited_at: string
+    note: string
+    life_entry_id: number | null
+    wish_id: number | null
+    latitude: number
+    longitude: number
+    attachment_ids: number[]
+  }>
+): Promise<Footprint> {
+  return request<Footprint>(`${API_BASE}/footprints/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteFootprint(id: number, purge?: boolean): Promise<boolean> {
+  await request(`${API_BASE}/footprints/${id}${purge ? '?purge=true' : ''}`, {
+    method: 'DELETE',
+  })
+  return true
+}
+
+// 14. 年度生活年鉴画卷 (Annual Almanac Summary FE-14)
+export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlmanacSummary> {
+  return request<AnnualAlmanacSummary>(`${API_BASE}/almanac/summary?year=${year}`)
+}
+
 
 
 

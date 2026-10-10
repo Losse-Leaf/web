@@ -308,4 +308,118 @@ export interface CreditChannel {
   color?: string
 }
 
+export interface ChannelLiabilitySummary {
+  channel_code: string
+  channel_name: string
+  repayment_day: number
+  color: string
+  total_debt: number          // 分
+  monthly_pay: number         // 分
+  days_until_repayment: number
+  active_count: number
+  installments?: Transaction[]
+}
+
+export interface GearSummary {
+  total_count: number
+  active_count: number
+  active_value: number         // 分
+  sold_count: number
+  sold_recovered_value: number // 分
+  items?: GearItem[]
+}
+
+export interface AssetsOverview {
+  net_worth: number           // 分
+  liquid_balance: number      // 分
+  fixed_assets: number        // 分
+  total_liabilities: number   // 分
+  monthly_liabilities: number // 分
+  gear_summary: GearSummary
+  channel_liabilities: ChannelLiabilitySummary[]
+}
+
+export interface Footprint {
+  id: number
+  city_code: string
+  city_name: string
+  visited_at: string
+  note?: string
+  life_entry_id?: number
+  wish_id?: number
+  latitude?: number
+  longitude?: number
+  attachments?: Attachment[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface AtlasCitySummary {
+  city_code: string
+  city_name: string
+  visit_count: number
+  first_visited_at: string
+  latest_visited_at: string
+}
+
+export interface FootprintsAtlasResponse {
+  total_footprints: number
+  total_cities: number
+  cities: AtlasCitySummary[]
+}
+
+export interface CityMemoryDrawerData {
+  city_code: string
+  city_name: string
+  visit_stats: {
+    total_visits: number
+    first_visited_at: string
+    latest_visited_at: string
+  }
+  footprints: Footprint[]
+  entries: LifeEntry[]
+  ledger_summary: {
+    total_spent: number
+    transaction_count: number
+    categories: { name: string; amount: number }[]
+  }
+}
+
+export interface AnnualAlmanacSummary {
+  year: number
+  prologue: {
+    total_entries: number
+    distinct_days: number
+    total_words: number
+    first_date: string
+    last_date: string
+  }
+  atlas: {
+    total_cities: number
+    cities: { city_code: string; city_name: string }[]
+    footprints: Footprint[]
+  }
+  wishes: {
+    fulfilled_count: number
+    wanting_count: number
+    total_budget: number
+    total_actual: number
+    wishes: Wish[]
+  }
+  highlights: {
+    spring?: LifeEntry
+    summer?: LifeEntry
+    autumn?: LifeEntry
+    winter?: LifeEntry
+    photos: Attachment[]
+  }
+  finances: {
+    total_expense: number
+    total_income: number
+    balance: number
+    wish_spending_ratio: number
+    categories: { name: string; amount: number }[]
+  }
+}
+
 

@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download, X } from 'lucide-vue-next'
-import { fetchTransactions, fetchTransactionSummary, deleteTransaction, updateTransaction } from '../utils/api'
-import type { Transaction, TransactionSummary, CuratorProfile } from '../types'
+import { Plus, ChevronLeft, ChevronRight, Trash2, Edit2, Wallet, Download, X, Settings } from 'lucide-vue-next'
+import {
+  fetchTransactions,
+  fetchTransactionSummary,
+  deleteTransaction,
+  updateTransaction,
+  fetchAssetsOverview,
+  fetchCreditChannels,
+} from '../utils/api'
+import type { Transaction, TransactionSummary, CuratorProfile, AssetsOverview, CreditChannel } from '../types'
 import { useExport } from '../composables/useExport'
 import { formatMoney } from '../utils/format'
 import { loadCuratorProfile } from '../utils/profile'
+import CreditChannelsModal from './CreditChannelsModal.vue'
 
 const props = defineProps<{
   transactions?: Transaction[]
@@ -25,6 +33,11 @@ const transactionsList = ref<Transaction[]>([])
 const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
 const selectedCategoryFilter = ref<string>('')
+
+// 信贷渠道与资产大盘 (RC-53, FE-15)
+const isCreditModalOpen = ref(false)
+const assetsOverview = ref<AssetsOverview | null>(null)
+const creditChannels = ref<CreditChannel[]>([])
 
 // 编辑态 (RG-11)
 const editingTx = ref<Transaction | null>(null)
@@ -90,12 +103,26 @@ const nextMonth = () => {
   currentDate.value = new Date(year.value, month.value, 1)
 }
 
+const loadAssetsOverview = async () => {
+  try {
+    const [overview, channels] = await Promise.all([
+      fetchAssetsOverview().catch(() => null),
+      fetchCreditChannels().catch(() => []),
+    ])
+    if (overview) assetsOverview.value = overview
+    creditChannels.value = channels
+  } catch (err) {
+    console.error('Failed to load assets overview:', err)
+  }
+}
+
 const loadData = async () => {
   try {
     isLoading.value = true
     const [txs, sum] = await Promise.all([
       fetchTransactions({ year: year.value, month: month.value }),
       fetchTransactionSummary({ year: year.value, month: month.value }),
+      loadAssetsOverview(),
     ])
     transactionsList.value = txs
     summary.value = sum
@@ -317,43 +344,81 @@ const spectrumItems = computed(() => {
       </div>
     </header>
 
-    <!-- 个人净资产与资产大盘指示纸签 (RC-53) -->
-    <div class="mb-10 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono-archive text-xs">
+    <!-- 个人净资产与资产大盘指示纸签 (RC-53, FE-15) -->
+    <div class="mb-10 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col md:flex-row md:items-center justify-between gap-5 font-mono-archive text-xs">
       <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
+        <!-- 流动可用资金池 (储蓄与余额) -->
         <div>
-          <span class="text-[var(--ink-muted)] block text-[11px]">固定资产沉淀 (随身硬件与桌面)</span>
-          <div class="flex items-baseline gap-1.5">
-            <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
-              ¥{{ formatMoney(totalFixedAssets) }}
-            </span>
-            <span class="text-[10px] text-[var(--ink-muted)]">({{ activeGearCount }} 件在用)</span>
-          </div>
-        </div>
-
-        <div v-if="totalInstallmentLiabilities > 0">
-          <span class="text-[var(--ink-muted)] block text-[11px]">待还信贷分期 (负债)</span>
-          <span class="font-serif-editorial text-lg text-[var(--accent-warm)] font-medium">
-            -¥{{ formatMoney(totalInstallmentLiabilities) }}
+          <span class="text-[var(--ink-muted)] block text-[11px]">流动资金池 (储蓄与结余)</span>
+          <span class="font-serif-editorial text-lg font-medium" :class="(assetsOverview?.liquid_balance ?? 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
+            {{ (assetsOverview?.liquid_balance ?? 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.liquid_balance ?? (summary?.balance || 0))) }}
           </span>
         </div>
 
+        <!-- 固定资产沉淀 -->
         <div>
-          <span class="text-[var(--ink-muted)] block text-[11px]">个人净资产 (固定资产+月结余-信贷)</span>
+          <span class="text-[var(--ink-muted)] block text-[11px]">固定资产沉淀 (在用设备)</span>
+          <div class="flex items-baseline gap-1.5">
+            <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
+              ¥{{ formatMoney(assetsOverview?.fixed_assets ?? totalFixedAssets) }}
+            </span>
+            <span class="text-[10px] text-[var(--ink-muted)]">({{ assetsOverview?.gear_summary?.active_count ?? activeGearCount }} 件在用)</span>
+          </div>
+        </div>
+
+        <!-- 待还信贷分期 -->
+        <div v-if="(assetsOverview?.total_liabilities ?? totalInstallmentLiabilities) > 0">
+          <span class="text-[var(--ink-muted)] block text-[11px]">待还信贷分期 (负债)</span>
+          <span class="font-serif-editorial text-lg text-[var(--accent-warm)] font-medium">
+            -¥{{ formatMoney(assetsOverview?.total_liabilities ?? totalInstallmentLiabilities) }}
+          </span>
+        </div>
+
+        <!-- 个人净资产 -->
+        <div>
+          <span class="text-[var(--ink-muted)] block text-[11px]">个人净资产 (流动资金+固资-负债)</span>
           <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-semibold">
-            ¥{{ formatMoney(estimatedNetWorth) }}
+            ¥{{ formatMoney(assetsOverview?.net_worth ?? estimatedNetWorth) }}
           </span>
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3 text-[11px]">
-        <div class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs">
-          <span class="text-[var(--ink-muted)]">花呗还款日</span>
-          <span class="text-[var(--ink-primary)] font-semibold">{{ huabeiCountdown === 0 ? '今日到期' : `${huabeiCountdown} 天后 (10日)` }}</span>
-        </div>
-        <div class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs">
-          <span class="text-[var(--ink-muted)]">白条还款日</span>
-          <span class="text-[var(--ink-primary)] font-semibold">{{ baitiaoCountdown === 0 ? '今日到期' : `${baitiaoCountdown} 天后 (20日)` }}</span>
-        </div>
+      <!-- 渠道独立还款日倒计时纸签与管理按钮 -->
+      <div class="flex flex-wrap items-center gap-2 text-[11px]">
+        <template v-if="assetsOverview?.channel_liabilities && assetsOverview.channel_liabilities.length > 0">
+          <div
+            v-for="ch in assetsOverview.channel_liabilities"
+            :key="ch.channel_code"
+            class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs"
+            :title="`每月 ${ch.repayment_day} 号还款 · 待还 ¥${formatMoney(ch.total_debt)}`"
+          >
+            <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: ch.color || 'var(--accent-warm)' }" />
+            <span class="text-[var(--ink-muted)]">{{ ch.channel_name }}</span>
+            <span class="text-[var(--ink-primary)] font-semibold">
+              {{ ch.days_until_repayment === 0 ? '今日还款' : `${ch.days_until_repayment} 天后 (${ch.repayment_day}日)` }}
+            </span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs">
+            <span class="text-[var(--ink-muted)]">花呗还款日</span>
+            <span class="text-[var(--ink-primary)] font-semibold">{{ huabeiCountdown === 0 ? '今日到期' : `${huabeiCountdown} 天后 (10日)` }}</span>
+          </div>
+          <div class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] flex items-center gap-1.5 shadow-2xs">
+            <span class="text-[var(--ink-muted)]">白条还款日</span>
+            <span class="text-[var(--ink-primary)] font-semibold">{{ baitiaoCountdown === 0 ? '今日到期' : `${baitiaoCountdown} 天后 (20日)` }}</span>
+          </div>
+        </template>
+
+        <button
+          @click="isCreditModalOpen = true"
+          type="button"
+          class="px-2.5 py-1 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer flex items-center gap-1"
+          title="管理信贷渠道与每月独立还款日"
+        >
+          <Settings class="w-3 h-3" />
+          <span>管理渠道</span>
+        </button>
       </div>
     </div>
 
@@ -652,6 +717,14 @@ const spectrumItems = computed(() => {
         </div>
       </div>
     </div>
+
+    <!-- 信贷渠道与独立还款日管理抽屉 (FE-15) -->
+    <CreditChannelsModal
+      v-if="isCreditModalOpen"
+      :isOpen="isCreditModalOpen"
+      @close="isCreditModalOpen = false"
+      @channelsUpdated="loadAssetsOverview"
+    />
 
   </div>
 </template>
