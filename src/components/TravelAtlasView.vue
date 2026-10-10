@@ -60,91 +60,17 @@ const coveragePercentage = computed(() => {
   return ((count / 333) * 100).toFixed(1)
 })
 
-// 城市重要坐标映射表 (用于在合规 SVG 轮廓上准确投射点亮墨印)
-const CITY_COORDINATES: Record<string, { x: number; y: number }> = {
-  // 直辖市
-  '110100': { x: 580, y: 220 }, // 北京
-  '120100': { x: 595, y: 235 }, // 天津
-  '310100': { x: 670, y: 355 }, // 上海
-  '500100': { x: 480, y: 380 }, // 重庆
-  // 浙江
-  '330100': { x: 650, y: 365 }, // 杭州
-  '330200': { x: 668, y: 375 }, // 宁波
-  '330300': { x: 655, y: 405 }, // 温州
-  // 江苏
-  '320100': { x: 630, y: 340 }, // 南京
-  '320500': { x: 655, y: 350 }, // 苏州
-  // 广东 / 港澳
-  '440100': { x: 560, y: 480 }, // 广州
-  '440300': { x: 575, y: 490 }, // 深圳
-  '810000': { x: 580, y: 495 }, // 香港
-  '820000': { x: 565, y: 498 }, // 澳门
-  // 台湾
-  '710000': { x: 685, y: 460 }, // 台北
-  // 四川 / 云南 / 西藏
-  '510100': { x: 450, y: 360 }, // 成都
-  '530100': { x: 440, y: 470 }, // 昆明
-  '532900': { x: 405, y: 455 }, // 大理
-  '530700': { x: 410, y: 435 }, // 丽江
-  '540100': { x: 260, y: 370 }, // 拉萨
-  // 陕西 / 湖北 / 湖南
-  '610100': { x: 510, y: 310 }, // 西安
-  '420100': { x: 575, y: 360 }, // 武汉
-  '430100': { x: 550, y: 410 }, // 长沙
-  // 江西 / 福建
-  '360200': { x: 615, y: 380 }, // 景德镇
-  '360100': { x: 600, y: 395 }, // 南昌
-  '350200': { x: 640, y: 450 }, // 厦门
-  // 北方
-  '370200': { x: 640, y: 265 }, // 青岛
-  '210100': { x: 680, y: 170 }, // 沈阳
-  '230100': { x: 700, y: 110 }, // 哈尔滨
-  '650100': { x: 200, y: 170 }, // 乌鲁木齐
-}
+import {
+  PROVINCES_DATA,
+  NATIONAL_OUTLINE_PATH,
+  DIAOYU_DAO,
+  SCS_INSET,
+  getCityProjectedPosition,
+} from '../utils/chinaMapData'
 
+// 根据 6 位行政区划代码获取权威 Albers 投影坐标
 const getCityDotPosition = (code: string) => {
-  if (CITY_COORDINATES[code]) {
-    return CITY_COORDINATES[code]
-  }
-  // 依据 6 位行政区划前两位省份给出一个温和的估算坐标
-  const prov = code.slice(0, 2)
-  const PROV_DEFAULT: Record<string, { x: number; y: number }> = {
-    '11': { x: 580, y: 220 }, // 京
-    '12': { x: 595, y: 235 }, // 津
-    '13': { x: 570, y: 240 }, // 冀
-    '14': { x: 540, y: 250 }, // 晋
-    '15': { x: 510, y: 180 }, // 蒙
-    '21': { x: 670, y: 180 }, // 辽
-    '22': { x: 700, y: 140 }, // 吉
-    '23': { x: 700, y: 100 }, // 黑
-    '31': { x: 670, y: 355 }, // 沪
-    '32': { x: 640, y: 340 }, // 苏
-    '33': { x: 650, y: 375 }, // 浙
-    '34': { x: 610, y: 340 }, // 皖
-    '35': { x: 635, y: 430 }, // 闽
-    '36': { x: 595, y: 400 }, // 赣
-    '37': { x: 620, y: 260 }, // 鲁
-    '41': { x: 550, y: 300 }, // 豫
-    '42': { x: 560, y: 350 }, // 鄂
-    '43': { x: 540, y: 410 }, // 湘
-    '44': { x: 565, y: 475 }, // 粤
-    '45': { x: 490, y: 470 }, // 桂
-    '46': { x: 520, y: 535 }, // 琼
-    '50': { x: 480, y: 380 }, // 渝
-    '51': { x: 440, y: 360 }, // 川
-    '52': { x: 470, y: 430 }, // 黔
-    '53': { x: 420, y: 460 }, // 滇
-    '54': { x: 260, y: 360 }, // 藏
-    '61': { x: 510, y: 310 }, // 陕
-    '62': { x: 420, y: 280 }, // 甘
-    '63': { x: 340, y: 290 }, // 青
-    '64': { x: 480, y: 250 }, // 宁
-    '65': { x: 200, y: 170 }, // 新
-    '71': { x: 685, y: 460 }, // 台
-    '81': { x: 580, y: 495 }, // 港
-    '82': { x: 565, y: 498 }, // 澳
-  }
-  return PROV_DEFAULT[prov] || { x: 500, y: 330 }
+  return getCityProjectedPosition(code)
 }
 
 onMounted(() => {
@@ -178,7 +104,7 @@ onMounted(() => {
       </div>
 
       <p class="font-serif-editorial text-xs text-[var(--ink-muted)] leading-relaxed">
-        纯合规市级自绘矢量图谱。以淡墨浸润每一个曾留下呼吸与脚步的城市，点击任意点亮城市展开侧滑纸本回忆抽屉。
+        中国标准 Albers 等面积圆锥投影矢量图谱（权威自然资源部标准地图与高德授权行政区划边界数据）。完整包含全国全境、台湾省、海南省、钓鱼岛及其附属岛屿与南海诸岛标准插框十段线。以淡墨浸润每一个曾留下足迹与呼吸的城市，点击任意点亮城市展开侧滑纸本回忆抽屉。
       </p>
     </header>
 
@@ -225,67 +151,127 @@ onMounted(() => {
           class="w-full max-w-2xl h-auto select-none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <!-- 背景浅色线稿基础轮廓示意 (合规全境 Albers 投影概貌) -->
-          <!-- 大陆主体外轮廓线 -->
+          <!-- 合规 34 个省级行政区 Albers 投影矢量底图 -->
+          <g class="provinces-layer">
+            <path
+              v-for="prov in PROVINCES_DATA"
+              :key="prov.adcode"
+              :d="prov.d"
+              fill="var(--bg-archive)"
+              stroke="var(--border-subtle)"
+              stroke-width="0.6"
+              stroke-linejoin="round"
+              class="transition-colors hover:fill-[var(--bg-subtle)]"
+            />
+          </g>
+
+          <!-- 全国主体外轮廓边界线 (权威 Albers 等面积圆锥投影) -->
           <path
-            d="M 180 160 Q 240 140 320 180 T 460 170 T 560 180 T 660 140 T 730 80 Q 750 120 720 170 T 670 210 T 630 250 T 660 320 T 640 400 T 600 460 T 540 500 T 470 480 T 410 440 T 360 410 T 260 370 T 160 300 Z"
-            fill="var(--bg-archive)"
+            :d="NATIONAL_OUTLINE_PATH"
+            fill="none"
             stroke="var(--border-strong)"
             stroke-width="1.2"
             stroke-linejoin="round"
-            class="opacity-70"
+            class="opacity-75 pointer-events-none"
           />
 
-          <!-- 台湾省轮廓线 (硬约束：必须包含台湾) -->
-          <path
-            d="M 680 440 C 690 445 695 460 690 480 C 685 490 678 485 675 470 C 674 455 676 445 680 440 Z"
-            fill="var(--bg-archive)"
-            stroke="var(--border-strong)"
-            stroke-width="1.2"
-            class="opacity-80"
-          />
-          <text x="682" y="465" font-size="9" fill="var(--ink-muted)" font-family="monospace">台</text>
+          <!-- 钓鱼岛及其附属岛屿标记与注记 (123.47°E, 25.75°N) -->
+          <g class="diaoyu-dao-marker">
+            <circle
+              :cx="DIAOYU_DAO.x"
+              :cy="DIAOYU_DAO.y"
+              r="2"
+              fill="var(--ink-secondary)"
+            />
+            <text
+              :x="DIAOYU_DAO.labelX"
+              :y="DIAOYU_DAO.labelY"
+              font-size="8"
+              fill="var(--ink-muted)"
+              font-family="serif"
+            >
+              {{ DIAOYU_DAO.name }}
+            </text>
+          </g>
 
-          <!-- 海南岛轮廓 -->
-          <path
-            d="M 510 525 C 525 520 535 530 530 545 C 520 550 510 545 505 535 Z"
-            fill="var(--bg-archive)"
-            stroke="var(--border-strong)"
-            stroke-width="1.2"
-            class="opacity-80"
-          />
-
-          <!-- 南海诸岛标准附框 (硬约束：南海诸岛及十段线插框) -->
-          <g transform="translate(680, 460)">
-            <!-- 插框边框 -->
+          <!-- 南海诸岛标准附框 (权威标准十段线与诸岛插框) -->
+          <g class="scs-inset-frame">
+            <!-- 插框外边框 -->
             <rect
-              x="0"
-              y="0"
-              width="100"
-              height="110"
+              :x="SCS_INSET.box.x"
+              :y="SCS_INSET.box.y"
+              :width="SCS_INSET.box.width"
+              :height="SCS_INSET.box.height"
               fill="var(--bg-archive)"
               stroke="var(--border-strong)"
               stroke-width="1"
             />
-            <text x="12" y="16" font-size="8" fill="var(--ink-muted)" font-family="monospace">南海诸岛</text>
-            <!-- 十段线虚线示意弧 -->
-            <path
-              d="M 20 28 Q 50 35 80 40 T 70 85 T 45 100 T 25 80"
-              fill="none"
-              stroke="var(--border-strong)"
-              stroke-width="0.8"
-              stroke-dasharray="2,2"
+            <!-- 插框标题 -->
+            <text
+              :x="SCS_INSET.box.x + SCS_INSET.box.width / 2"
+              :y="SCS_INSET.box.y + 16"
+              text-anchor="middle"
+              font-size="9"
+              font-family="serif"
+              font-weight="500"
+              fill="var(--ink-secondary)"
+            >
+              {{ SCS_INSET.title }}
+            </text>
+            <line
+              :x1="SCS_INSET.box.x"
+              :y1="SCS_INSET.box.y + 22"
+              :x2="SCS_INSET.box.x + SCS_INSET.box.width"
+              :y2="SCS_INSET.box.y + 22"
+              stroke="var(--border-subtle)"
+              stroke-width="0.6"
             />
-            <!-- 诸岛小岛礁印记点 (东沙、西沙、中沙、南沙、钓鱼岛附属) -->
-            <circle cx="55" cy="45" r="1.5" fill="var(--ink-muted)" />
-            <circle cx="45" cy="60" r="1.5" fill="var(--ink-muted)" />
-            <circle cx="60" cy="65" r="1.5" fill="var(--ink-muted)" />
-            <circle cx="48" cy="85" r="1.5" fill="var(--ink-muted)" />
-          </g>
 
-          <!-- 钓鱼岛及其附属岛屿标记 -->
-          <circle cx="705" cy="430" r="1.5" fill="var(--ink-muted)" />
-          <text x="712" y="433" font-size="7" fill="var(--ink-muted)" font-family="monospace">钓鱼岛</text>
+            <!-- 海南岛南部与台湾岛南部参考海岸线 -->
+            <path
+              :d="SCS_INSET.hainanCoast"
+              fill="var(--bg-subtle)"
+              stroke="var(--border-subtle)"
+              stroke-width="0.6"
+            />
+            <path
+              :d="SCS_INSET.taiwanCoast"
+              fill="var(--bg-subtle)"
+              stroke="var(--border-subtle)"
+              stroke-width="0.6"
+            />
+
+            <!-- 权威标准十段线 (10-dash line) -->
+            <g class="scs-dashes">
+              <path
+                v-for="(d, idx) in SCS_INSET.dashes"
+                :key="idx"
+                :d="d"
+                fill="var(--ink-secondary)"
+                stroke="none"
+                class="opacity-80"
+              />
+            </g>
+
+            <!-- 诸岛小岛礁与暗沙印记点 (东沙、西沙、中沙、黄岩岛、南沙、曾母暗沙) -->
+            <g v-for="isl in SCS_INSET.islands" :key="isl.name">
+              <circle
+                :cx="isl.x"
+                :cy="isl.y"
+                :r="isl.r"
+                fill="var(--ink-muted)"
+              />
+              <text
+                :x="isl.x + 3"
+                :y="isl.y + 2"
+                font-size="6.5"
+                font-family="serif"
+                fill="var(--ink-muted)"
+              >
+                {{ isl.name }}
+              </text>
+            </g>
+          </g>
 
           <!-- 点亮城市墨水浸润印记与光斑 (事件委托) -->
           <g>
