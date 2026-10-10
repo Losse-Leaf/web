@@ -328,17 +328,14 @@ const handleEntryDeleted = (id: number) => {
 
 const handleTxCreated = (tx: Transaction) => {
   addTransaction(tx)
-  loadRemoteTransactions()
 }
 
 const handleTxUpdated = (tx: Transaction) => {
   updateTransactionItem(tx)
-  loadRemoteTransactions()
 }
 
 const handleTxDeleted = (id: number) => {
   removeTransaction(id)
-  loadRemoteTransactions()
 }
 
 const handleProjectCreated = (newProj: Project) => {
@@ -572,6 +569,7 @@ watch(currentView, (newV) => {
       v-if="isSearchOpen"
       :isOpen="isSearchOpen"
       :entries="entries"
+      :tags="allTags"
       @close="isSearchOpen = false"
       @selectEntry="openEntryDetail"
     />

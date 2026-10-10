@@ -139,16 +139,29 @@ const saveEdit = async () => {
     note: editNote.value.trim(),
   })
 
+  const idx = transactionsList.value.findIndex((t) => t.id === updated.id)
+  if (idx !== -1) {
+    transactionsList.value[idx] = updated
+  }
   emit('transactionUpdated', updated)
   editingTx.value = null
-  loadData()
+  fetchTransactionSummary({ year: year.value, month: month.value })
+    .then((sum) => {
+      if (sum) summary.value = sum
+    })
+    .catch(() => {})
 }
 
 const removeTx = async (id: number) => {
   if (!confirm('确定删除这笔记录？')) return
   await deleteTransaction(id)
+  transactionsList.value = transactionsList.value.filter((t) => t.id !== id)
   emit('transactionDeleted', id)
-  loadData()
+  fetchTransactionSummary({ year: year.value, month: month.value })
+    .then((sum) => {
+      if (sum) summary.value = sum
+    })
+    .catch(() => {})
 }
 
 // 支出光谱细线条颜色与占比 (Earthy publication film palette)
