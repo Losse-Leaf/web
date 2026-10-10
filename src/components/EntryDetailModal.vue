@@ -26,6 +26,7 @@ const errorMsg = ref<string | null>(null)
 const editTitle = ref('')
 const editContent = ref('')
 const editLocation = ref('')
+const editTags = ref('')
 const editOccurredAt = ref('')
 const editProjectId = ref<number | null>(null)
 const editAttachmentIds = ref<number[]>([])
@@ -36,6 +37,7 @@ const startEdit = () => {
   editTitle.value = props.entry.title || ''
   editContent.value = props.entry.content || ''
   editLocation.value = props.entry.location || ''
+  editTags.value = props.entry.tags || ''
   editProjectId.value = props.entry.project_id || null
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
 
@@ -69,6 +71,7 @@ const handleSaveEdit = async () => {
       title: editTitle.value.trim(),
       content: editContent.value.trim(),
       location: editLocation.value.trim(),
+      tags: editTags.value.trim(),
       project_id: editProjectId.value,
       occurred_at: editOccurredAt.value,
       attachment_ids: editAttachmentIds.value,
@@ -268,6 +271,17 @@ const getKindLabel = (type: string) => {
             <option :value="null">不关联项目</option>
             <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.title }}</option>
           </select>
+        </div>
+
+        <!-- 标签分类 -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标签 (可选，逗号分隔)</label>
+          <input
+            v-model="editTags"
+            type="text"
+            placeholder="例如：摄影, 胶片, 满觉陇, 秋天"
+            class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+          />
         </div>
 
         <div class="pt-6 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
