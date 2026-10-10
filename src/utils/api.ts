@@ -1,6 +1,5 @@
 import type {
   LifeEntry,
-  Attachment,
   Transaction,
   TransactionSummary,
   StorageStatus,
@@ -165,79 +164,6 @@ export async function deleteLifeEntry(id: number): Promise<boolean> {
 }
 
 // 2. R2 Presigned Upload
-export interface PresignResult {
-  upload_id: string
-  object_key: string
-  upload_url: string
-  expires_in: number
-}
-
-export async function presignUpload(
-  filename: string,
-  contentType: string,
-  size: number
-): Promise<PresignResult> {
-  return request<PresignResult>(`${API_BASE}/uploads/presign`, {
-    method: 'POST',
-    body: JSON.stringify({
-      filename,
-      content_type: contentType,
-      size,
-    }),
-  })
-}
-
-// 客户端使用 XMLHttpRequest 直传 R2 预签名 URL，带进度回调
-export function uploadDirectToR2(
-  uploadUrl: string,
-  file: File,
-  onProgress?: (percent: number) => void
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', uploadUrl, true)
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
-
-    if (xhr.upload && onProgress) {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100)
-          onProgress(percent)
-        }
-      }
-    }
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve()
-      } else {
-        reject(new Error(`上传至存储桶失败 (HTTP ${xhr.status})`))
-      }
-    }
-
-    xhr.onerror = () => {
-      reject(new Error('网络中断或跨域限制，直传 R2 失败'))
-    }
-
-    xhr.send(file)
-  })
-}
-
-export async function completeUpload(data: {
-  upload_id: string
-  object_key: string
-  original_filename: string
-  mime_type: string
-  size: number
-  width?: number
-  height?: number
-}): Promise<Attachment> {
-  return request<Attachment>(`${API_BASE}/uploads/complete`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
 export async function cleanupUploads(objectKeys: string[]): Promise<void> {
   if (objectKeys.length === 0) return
   try {
