@@ -39,6 +39,15 @@ const isRainPlaying = ref(false)
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
+// 刊物品牌名（保证纯净无 ChiMu 拼音，默认始终为典雅中文《散页》）
+const displaySiteName = computed(() => {
+  const raw = props.config?.site_name?.split('·')?.[0]?.trim()
+  if (!raw || /chimu/i.test(raw)) {
+    return '散页'
+  }
+  return raw
+})
+
 // 核心导航栏目（单轨统一，消除双重导航冲突）
 const navItems = [
   { key: 'home', label: '时间流' },
@@ -136,7 +145,7 @@ onUnmounted(() => {
         class="text-left group cursor-pointer"
       >
         <span class="font-serif-editorial text-xl font-medium tracking-wider text-[var(--ink-primary)]">
-          {{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}
+          {{ displaySiteName }}
         </span>
         <span class="text-xs text-[var(--ink-muted)] ml-2.5 hidden sm:inline tracking-wider font-serif-editorial">
           时光手账与生活档案

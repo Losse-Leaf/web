@@ -29,6 +29,24 @@ const todayDisplay = computed(() => {
   return `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`
 })
 
+// 刊物品牌名（保证纯净无 ChiMu 拼音，默认始终为典雅中文《散页》）
+const displaySiteName = computed(() => {
+  const raw = props.config?.site_name?.split('·')?.[0]?.trim()
+  if (!raw || /chimu/i.test(raw)) {
+    return '散页'
+  }
+  return raw
+})
+
+// 刊物副标题（优雅稳健，消除 ChiMu 及生硬的个人档案馆拼凑）
+const displaySubtitle = computed(() => {
+  const sub = props.config?.site_subtitle
+  if (!sub || /chimu/i.test(sub) || sub.includes('档案馆')) {
+    return '时光手账与生活档案 · 记录真实可感的日子'
+  }
+  return sub
+})
+
 const heatmapEntries = computed(() => props.allEntries || props.entries)
 
 const handleDateSelect = (date: string) => {
@@ -86,7 +104,7 @@ const showHeatmap = ref(false)
       <div class="space-y-4">
         <div class="flex items-baseline justify-between">
           <h1 class="font-serif-editorial text-3xl sm:text-5xl font-medium tracking-tight text-[var(--ink-primary)]">
-            {{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}
+            {{ displaySiteName }}
           </h1>
           <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
             {{ profile?.current_city || profile?.location?.split('·')?.[1]?.trim() || config?.default_location?.split('·')?.[1]?.trim() || '杭州' }} · {{ todayDisplay }}
@@ -94,7 +112,7 @@ const showHeatmap = ref(false)
         </div>
 
         <p class="font-serif-editorial text-xs sm:text-sm tracking-wider text-[var(--ink-muted)]">
-          {{ (config?.site_subtitle && !config.site_subtitle.includes('档案馆')) ? config.site_subtitle : '时光手账与生活档案 · 记录真实可感的日子' }}
+          {{ displaySubtitle }}
         </p>
 
         <p class="font-serif-editorial text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed italic max-w-2xl pt-1">

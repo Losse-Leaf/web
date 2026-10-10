@@ -459,7 +459,7 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
     // 降级兜底：若后端未实现该探针，视为已初始化
     return {
       initialized: true,
-      site_name: '散页 · Living Archive',
+      site_name: '散页 · 时光手账与生活档案',
       curator_name: '迟暮',
       has_master_key_configured: false,
     }
