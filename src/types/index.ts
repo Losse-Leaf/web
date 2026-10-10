@@ -102,7 +102,6 @@ export interface LifeEntry {
   meta?: string
   tags?: string
   link?: string
-  related_project?: string
   featured?: boolean
 
   // 记账支持
@@ -160,7 +159,6 @@ export interface Project {
   title: string
   subtitle?: string
   description: string
-  content?: string
   story?: string
   category: string
   tags: string
@@ -223,18 +221,10 @@ export interface CuratorProfile {
   updated_at?: string
 }
 
-export interface UserProfile {
-  name: string
-  title: string
+// 统一主理人档案模型 (RC-29 ~ RC-32)
+export interface UserProfile extends CuratorProfile {
   avatar: string
-  avatar_key?: string
-  location: string
-  current_city?: string
-  bio: string
   philosophy: string
-  motto?: string
-  email: string
-  github: string
   gearList: GearItem[]
 }
 

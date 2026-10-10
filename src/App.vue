@@ -68,7 +68,7 @@ const syncProfileCache = (profile: CuratorProfile) => {
 const currentView = ref<string>('home')
 const { theme, toggleTheme } = useTheme()
 const siteConfig = ref<SiteConfig | null>(null)
-const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile() as unknown as CuratorProfile)
+const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile())
 
 // 2. 生活档案与即时搜索
 const {

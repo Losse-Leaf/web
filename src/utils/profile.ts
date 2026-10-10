@@ -6,6 +6,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   name: '迟暮',
   title: '独立开发者 · 胶片摄影与手冲咖啡学徒 · 城市漫游者',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
+  avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
   avatar_key: '',
   location: '中国 · 杭州 (西湖区 / 余杭)',
   current_city: '杭州',
@@ -160,10 +161,20 @@ export function loadCuratorProfile(): UserProfile {
     const raw = localStorage.getItem(PROFILE_STORAGE_KEY) || localStorage.getItem('chimu_curator_profile')
     if (raw) {
       const parsed = JSON.parse(raw)
+      const gears = Array.isArray(parsed.edc_gear)
+        ? parsed.edc_gear
+        : Array.isArray(parsed.gearList)
+        ? parsed.gearList
+        : DEFAULT_PROFILE.gearList
       return {
         ...DEFAULT_PROFILE,
         ...parsed,
-        gearList: Array.isArray(parsed.gearList) ? parsed.gearList : DEFAULT_PROFILE.gearList,
+        motto: parsed.motto || parsed.philosophy || DEFAULT_PROFILE.motto,
+        philosophy: parsed.motto || parsed.philosophy || DEFAULT_PROFILE.philosophy,
+        avatar_url: parsed.avatar_url || parsed.avatar || DEFAULT_PROFILE.avatar_url,
+        avatar: parsed.avatar_url || parsed.avatar || DEFAULT_PROFILE.avatar,
+        gearList: gears,
+        edc_gear: gears,
       }
     }
   } catch {
