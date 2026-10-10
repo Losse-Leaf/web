@@ -28,6 +28,8 @@ export function loadCuratorProfile(): CuratorProfile {
         ...DEFAULT_PROFILE,
         ...data,
         avatar_url: data.avatar_url || '',
+        email: data.email || data.social_links?.email || '',
+        github: data.github || data.social_links?.github || '',
         edc_gear: gears,
       }
     }

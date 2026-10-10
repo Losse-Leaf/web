@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
-import { Plus, X, RotateCcw, AlertCircle } from 'lucide-vue-next'
+import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { audio } from '../utils/audio'
 import type { Attachment } from '../types'
@@ -78,11 +78,6 @@ const handleFileProcess = async (file: File) => {
 
 const startUpload = async (item: UploadItem) => {
   if (!item.file) return
-  if (!props.storageConfigured) {
-    item.status = 'error'
-    item.errorMsg = 'R2 存储未配置'
-    return
-  }
 
   try {
     item.status = 'uploading'
@@ -142,11 +137,7 @@ onUnmounted(() => {
   <div class="space-y-3 select-none">
     <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
       <span>照片 / 附件</span>
-      <span v-if="!storageConfigured" class="text-[var(--accent-warm)] flex items-center gap-1 text-[11px]">
-        <AlertCircle class="w-3 h-3" />
-        <span>R2 存储未配置，媒体直传暂不可用</span>
-      </span>
-      <span v-else class="text-[11px]">
+      <span class="text-[11px]">
         单张图片最大 20MB
       </span>
     </div>
@@ -154,10 +145,7 @@ onUnmounted(() => {
     <!-- 缩略图列表与添加区域 -->
     <div
       class="border border-dashed rounded-xs p-4 transition-colors duration-150"
-      :class="[
-        isDragging ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] hover:border-[var(--border-divider)]',
-        !storageConfigured ? 'opacity-85' : ''
-      ]"
+      :class="isDragging ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] hover:border-[var(--border-divider)]'"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
@@ -208,7 +196,6 @@ onUnmounted(() => {
               {{ item.errorMsg || '上传失败' }}
             </span>
             <button
-              v-if="storageConfigured"
               type="button"
               @click.stop="startUpload(item)"
               class="mt-1 p-1 hover:bg-white/20 rounded-full cursor-pointer"
@@ -233,8 +220,7 @@ onUnmounted(() => {
         <button
           type="button"
           @click="triggerSelect"
-          :disabled="!storageConfigured"
-          class="w-24 h-24 border border-dashed border-[var(--border-subtle)] hover:border-[var(--ink-secondary)] rounded-xs flex flex-col items-center justify-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          class="w-24 h-24 border border-dashed border-[var(--border-subtle)] hover:border-[var(--ink-secondary)] rounded-xs flex flex-col items-center justify-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer shrink-0"
         >
           <Plus class="w-4 h-4" />
           <span class="text-[10px] font-mono-archive">添加照片</span>

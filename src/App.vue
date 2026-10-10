@@ -45,12 +45,13 @@ import {
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
 import { markEnteredArchive, clearEnteredArchive, hasEnteredArchiveSession } from './utils/auth'
 
-// 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32, RC-47)
+// 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32, RC-47, RG-09)
 const syncProfileCache = (profile: CuratorProfile) => {
   curatorProfile.value = profile
   saveCuratorProfile({
     ...DEFAULT_PROFILE,
     ...profile,
+    email: profile.email || profile.social_links?.email || '',
     github: profile.github || profile.social_links?.github || '',
     edc_gear: profile.edc_gear || [],
   })

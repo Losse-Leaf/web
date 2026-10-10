@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { X, Server, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import { X, Server, CheckCircle2 } from 'lucide-vue-next'
 import type { StorageStatus } from '../types'
 
 defineProps<{
@@ -38,31 +38,33 @@ const emit = defineEmits<{
 
       <div class="space-y-4 font-serif-editorial">
         <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
-          <span class="text-[var(--ink-muted)]">存储提供方</span>
-          <span class="text-[var(--ink-primary)] font-mono-archive text-xs">Cloudflare R2</span>
+          <span class="text-[var(--ink-muted)]">存储模式</span>
+          <span class="text-[var(--ink-primary)] font-mono-archive text-xs">
+            {{ status?.configured ? 'Cloudflare R2 云存储' : '本地磁盘存储模式 (/media)' }}
+          </span>
         </div>
 
         <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
-          <span class="text-[var(--ink-muted)]">连接状态</span>
+          <span class="text-[var(--ink-muted)]">运行状态</span>
           <div class="flex items-center gap-1.5 font-mono-archive text-xs">
             <span
               v-if="status?.configured"
               class="text-emerald-700 flex items-center gap-1"
             >
               <CheckCircle2 class="w-3.5 h-3.5" />
-              <span>已连接</span>
+              <span>已连接 R2 云端</span>
             </span>
             <span
               v-else
-              class="text-[var(--accent-warm)] flex items-center gap-1"
+              class="text-emerald-700 flex items-center gap-1"
             >
-              <AlertCircle class="w-3.5 h-3.5" />
-              <span>未配置</span>
+              <CheckCircle2 class="w-3.5 h-3.5" />
+              <span>本地直存已就绪</span>
             </span>
           </div>
         </div>
 
-        <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
+        <div v-if="status?.configured" class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
           <span class="text-[var(--ink-muted)]">存储桶 (Bucket)</span>
           <span class="text-[var(--ink-primary)] font-mono-archive text-xs">
             {{ status?.bucket || '—' }}
@@ -70,9 +72,9 @@ const emit = defineEmits<{
         </div>
 
         <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
-          <span class="text-[var(--ink-muted)]">公网域名 (Domain)</span>
+          <span class="text-[var(--ink-muted)]">{{ status?.configured ? '公网域名 (Domain)' : '本地访问路径' }}</span>
           <span class="text-[var(--ink-primary)] font-mono-archive text-xs truncate max-w-[200px]">
-            {{ status?.public_domain || '—' }}
+            {{ status?.configured ? (status?.public_domain || '—') : '/media' }}
           </span>
         </div>
       </div>
@@ -81,10 +83,10 @@ const emit = defineEmits<{
         v-if="!status?.configured"
         class="p-3 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed space-y-1"
       >
-        <p class="font-medium text-[var(--ink-primary)]">R2 存储未配置：</p>
-        <p>媒体照片上传暂不可用。如需开启直传，请在服务器环境变量或 <code>.env</code> 中配置 R2 凭据。</p>
+        <p class="font-medium text-[var(--ink-primary)]">本地磁盘存储模式（已就绪 · /media）：</p>
+        <p>当前未配置 Cloudflare R2，系统已自动启用服务端本地存储。生活记录照片与附件均直接保存在本地磁盘并通过 <code>/media</code> 正常消费，全部功能完整可用。</p>
         <p class="text-[11px] font-mono-archive text-[var(--ink-muted)] pt-1">
-          注：文字生活记录、随笔与记账功能无需 R2 即可 100% 正常使用。
+          若未来需要多端云存储或零出口费用直传，可在服务端环境变量中补充 R2 凭据。
         </p>
       </div>
 

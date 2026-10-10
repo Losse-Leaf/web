@@ -120,16 +120,16 @@ const handleSave = async () => {
   isSaving.value = true
   saveError.value = ''
 
-  // 1. 规范清洗字段：彻底杜绝英文名，信条与座右铭合一，城市与坐标合一 (RC-31)
+  // 1. 规范清洗字段：彻底杜绝英文名，信条与座右铭合一，城市与坐标合一 (RC-31, RC-52)
   if (!form.value.motto?.trim()) {
     form.value.motto = DEFAULT_PROFILE.motto
   }
-  if (!form.value.location.trim()) {
-    form.value.location = '中国 · 杭州'
+  if (!form.value.location?.trim()) {
+    form.value.location = ''
   }
-  form.value.current_city = form.value.location.split('·')[1]?.trim() || form.value.location.trim()
+  form.value.current_city = form.value.location ? (form.value.location.split('·')[1]?.trim() || form.value.location.trim()) : ''
 
-  // 2. 尝试向后端更新持久化 (PUT /api/v1/profile, RC-29, RC-31, RC-32)
+  // 2. 尝试向后端更新持久化 (PUT /api/v1/profile, RG-09, RC-29, RC-31, RC-32)
   try {
     await updateCuratorProfile({
       name: form.value.name,
@@ -142,6 +142,10 @@ const handleSave = async () => {
       motto: form.value.motto,
       email: form.value.email,
       github: form.value.github,
+      social_links: {
+        email: form.value.email || '',
+        github: form.value.github || '',
+      },
       edc_gear: form.value.edc_gear,
     })
   } catch (err: any) {
@@ -337,7 +341,7 @@ onMounted(() => {
               <input
                 v-model="form.name"
                 type="text"
-                placeholder="例如: 迟暮"
+                placeholder="例如: 散页主理人"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -347,7 +351,7 @@ onMounted(() => {
               <input
                 v-model="form.location"
                 type="text"
-                placeholder="例如: 中国 · 杭州"
+                placeholder="例如: 中国 · 杭州 / 旅居中"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -365,7 +369,7 @@ onMounted(() => {
             <input
               v-model="form.title"
               type="text"
-              placeholder="例如: 独立开发者 · 胶片摄影与手冲咖啡学徒 · 城市漫游者"
+              placeholder="例如: 独立创作者 · 摄影与阅读爱好者 · 城市漫游者"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -402,7 +406,7 @@ onMounted(() => {
               <input
                 v-model="form.email"
                 type="text"
-                placeholder="例如: contact@codeactivityhub.top"
+                placeholder="例如: curator@looseleaf.me"
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -412,7 +416,7 @@ onMounted(() => {
               <input
                 v-model="form.github"
                 type="text"
-                placeholder="例如: https://github.com/YN1753"
+                placeholder="例如: https://github.com/your-username"
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
