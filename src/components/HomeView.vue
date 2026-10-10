@@ -57,7 +57,7 @@ const currentCategoryInfo = computed(() => {
       return {
         label: '日常',
         title: '日常 · 生活时间流',
-        desc: '现实生活足迹：出门、吃饭、旅行、手冲、行迹与身边小事',
+        desc: '现实生活足迹：出门、吃饭、旅行、行迹与身边小事',
       }
     case 'thought':
       return {

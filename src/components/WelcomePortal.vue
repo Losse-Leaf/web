@@ -239,19 +239,19 @@ const archiveChapters = [
     num: '01',
     icon: Compass,
     title: '时间流与日常印记',
-    desc: '行迹、随笔、手冲水温曲线与具体的日常饭食。',
+    desc: '行迹、随笔、微小触动与具体的日常饭食。',
   },
   {
     num: '02',
     icon: Camera,
     title: '35mm 胶片暗房',
-    desc: '旁轴机械快门、银盐冲洗与四季街头的体温。',
+    desc: '光影定格、银盐暗房与四季街头的体温。',
   },
   {
     num: '03',
     icon: Layers,
     title: '手艺造物与收支光谱',
-    desc: '干净的高并发状态机、造物工坊与真实账簿。',
+    desc: '亲手创造的作品、造物工坊与真实账簿。',
   },
 ]
 
@@ -723,7 +723,7 @@ onUnmounted(() => {
                   <input
                     v-model="bootstrapForm.curator_name"
                     type="text"
-                    placeholder="请输入你的称谓，例如: 迟暮"
+                    placeholder="请输入你的称谓，例如: 主理人"
                     class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
                   />
                 </div>

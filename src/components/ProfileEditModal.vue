@@ -526,7 +526,7 @@ onMounted(() => {
               <input
                 v-model="newGearName"
                 type="text"
-                placeholder="例如: Contax T2"
+                placeholder="例如: 随身相机 / 笔记本电脑"
                 class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
               />
             </div>

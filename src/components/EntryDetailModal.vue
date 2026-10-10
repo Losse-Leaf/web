@@ -279,7 +279,7 @@ const getKindLabel = (type: string) => {
           <input
             v-model="editTags"
             type="text"
-            placeholder="例如：摄影, 胶片, 满觉陇, 秋天"
+            placeholder="例如：摄影, 胶片, 旅途, 记录"
             class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
           />
         </div>

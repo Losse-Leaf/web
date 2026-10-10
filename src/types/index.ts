@@ -112,11 +112,19 @@ export interface Transaction {
   id: number
   amount: number // 单位：分 (例如 1250 表示 12.50 元)
   type: 'income' | 'expense'
-  category: string // 餐饮, 交通, 购物, 娱乐, 学习, 住房, 医疗, 其他
+  category: string // 餐饮, 交通, 购物, 娱乐, 学习, 住房, 医疗, 二手回血, 其他
   title: string
   note?: string
   payment_method?: string
   occurred_at: string
+  wish_id?: number
+  is_installment?: boolean
+  installment_channel_code?: string
+  installment_total_amount?: number
+  installment_months?: number
+  installment_monthly_pay?: number
+  installment_remain_months?: number
+  repayment_day?: number
   created_at?: string
 }
 
@@ -268,6 +276,36 @@ export interface QRLoginSession {
 export interface QRLoginPollResult {
   status: 'pending' | 'authorized' | 'expired'
   token?: string
+}
+
+export interface Wish {
+  id: number
+  title: string
+  kind: 'item' | 'travel' | 'milestone'
+  note?: string
+  spec?: string
+  city_code?: string
+  city_name?: string
+  budget: number // 分
+  actual_cost: number // 分
+  target_date?: string | null
+  status: 'wanting' | 'fulfilled' | 'shelved' | 'relinquished'
+  fulfilled_at?: string | null
+  transaction_id?: number
+  life_entry_id?: number
+  footprint_id?: number
+  gear_id?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CreditChannel {
+  id?: number
+  code: string
+  name: string
+  repayment_day: number // 1~31
+  is_builtin?: boolean
+  color?: string
 }
 
 

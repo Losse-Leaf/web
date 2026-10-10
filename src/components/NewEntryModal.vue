@@ -2,10 +2,10 @@
 import { ref, computed, watch } from 'vue'
 import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
-import { createLifeEntry, createTransaction, createProject, updateCuratorProfile } from '../utils/api'
+import { createLifeEntry, createTransaction, createProject, updateCuratorProfile, fetchWishes } from '../utils/api'
 import { loadCuratorProfile, saveCuratorProfile } from '../utils/profile'
 import { audio } from '../utils/audio'
-import type { LifeEntry, Transaction, Project, GearItem } from '../types'
+import type { LifeEntry, Transaction, Project, GearItem, Wish } from '../types'
 
 export type EntryKind = 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction'
 
@@ -32,6 +32,7 @@ watch(
   [() => props.isOpen, () => props.initialKind],
   ([open, initKind]) => {
     if (open) {
+      loadAvailableWishes()
       if (initKind) {
         selectedKind.value = initKind
         step.value = 'form'
@@ -63,11 +64,56 @@ const txNote = ref<string>('')
 const syncToGear = ref(false)
 const gearCategory = ref('影像与暗房')
 
+// 心愿单与分期付款支持 (RG-11, RC-53)
+const availableWishes = ref<Wish[]>([])
+const selectedWishId = ref<number | null>(null)
+const isInstallment = ref(false)
+const installmentChannel = ref('huabei')
+const installmentMonths = ref(12)
+const customRepaymentDay = ref(15)
+
+const loadAvailableWishes = async () => {
+  try {
+    const list = await fetchWishes({ status: 'wanting' })
+    availableWishes.value = list
+  } catch {
+    availableWishes.value = []
+  }
+}
+
+const onWishSelected = () => {
+  if (!selectedWishId.value) return
+  const wish = availableWishes.value.find((w) => w.id === selectedWishId.value)
+  if (wish) {
+    if (!title.value.trim()) {
+      title.value = wish.title
+    }
+    if (!txAmount.value && wish.budget > 0) {
+      txAmount.value = (wish.budget / 100).toFixed(2)
+    }
+    if (txCategory.value === '餐饮') {
+      txCategory.value = '购物'
+    }
+  }
+}
+
+const calculatedMonthlyPay = computed(() => {
+  const amtFloat = parseFloat(txAmount.value)
+  if (isNaN(amtFloat) || amtFloat <= 0) return '0.00'
+  return (amtFloat / (installmentMonths.value || 1)).toFixed(2)
+})
+
+const effectiveRepaymentDay = computed(() => {
+  if (installmentChannel.value === 'huabei') return 10
+  if (installmentChannel.value === 'baitiao') return 20
+  return customRepaymentDay.value || 15
+})
+
 const txCategories = ['餐饮', '交通', '购物', '娱乐', '学习', '住房', '医疗', '其他']
 const paymentMethods = ['微信支付', '支付宝', '银行卡', '现金', '其他']
 
 const kindOptions: { key: EntryKind; label: string; desc: string }[] = [
-  { key: 'life', label: '生活记录', desc: '出门、吃饭、旅行、手冲或今天发生的小事' },
+  { key: 'life', label: '生活记录', desc: '出门、吃饭、旅行、行迹或今天发生的小事' },
   { key: 'thought', label: '想法', desc: '随笔、突发灵感、人生感悟与文字碎片' },
   { key: 'photo', label: '照片', desc: '胶卷底片、光影瞬间与视觉记忆' },
   { key: 'project', label: '项目', desc: '亲手创造的工具、设计实验与长线造物' },
@@ -109,6 +155,11 @@ const resetForm = () => {
   txNote.value = ''
   syncToGear.value = false
   gearCategory.value = '影像与暗房'
+  selectedWishId.value = null
+  isInstallment.value = false
+  installmentChannel.value = 'huabei'
+  installmentMonths.value = 12
+  customRepaymentDay.value = 15
   errorMsg.value = null
   isSubmitting.value = false
 }
@@ -150,6 +201,23 @@ const handleSubmit = async () => {
     }
     const amountInCents = Math.round(amtFloat * 100)
 
+    const repaymentDay = effectiveRepaymentDay.value
+    const installmentPay = isInstallment.value
+      ? Math.round(amountInCents / (installmentMonths.value || 1))
+      : undefined
+
+    let noteText = txNote.value.trim()
+    if (isInstallment.value && !noteText.includes('期')) {
+      const channelLabel = installmentChannel.value === 'huabei'
+        ? '花呗'
+        : installmentChannel.value === 'baitiao'
+          ? '京东白条'
+          : '信贷分期'
+      const monthlyYuan = ((installmentPay || 0) / 100).toFixed(2)
+      const installmentTag = `[${channelLabel} ${installmentMonths.value}期 · 每月${repaymentDay}日还款 · 每期¥${monthlyYuan}]`
+      noteText = noteText ? `${noteText} ${installmentTag}` : installmentTag
+    }
+
     try {
       isSubmitting.value = true
       const createdTx = await createTransaction({
@@ -157,9 +225,23 @@ const handleSubmit = async () => {
         type: txType.value,
         category: txCategory.value,
         title: title.value.trim() || txCategory.value,
-        note: txNote.value.trim(),
-        payment_method: txPaymentMethod.value,
+        note: noteText,
+        payment_method: isInstallment.value
+          ? (installmentChannel.value === 'huabei'
+              ? '支付宝 (花呗分期)'
+              : installmentChannel.value === 'baitiao'
+                ? '京东支付 (白条分期)'
+                : txPaymentMethod.value)
+          : txPaymentMethod.value,
         occurred_at: occurredAt.value,
+        wish_id: selectedWishId.value || undefined,
+        is_installment: isInstallment.value,
+        installment_channel_code: isInstallment.value ? installmentChannel.value : undefined,
+        installment_total_amount: isInstallment.value ? amountInCents : undefined,
+        installment_months: isInstallment.value ? installmentMonths.value : undefined,
+        installment_monthly_pay: isInstallment.value ? installmentPay : undefined,
+        installment_remain_months: isInstallment.value ? installmentMonths.value : undefined,
+        repayment_day: isInstallment.value ? repaymentDay : undefined,
       })
 
       // 路径 B：记账大件同步收录至随身设备库 (RC-53)
@@ -409,6 +491,83 @@ const handleSubmit = async () => {
             />
           </div>
 
+          <!-- 联动心愿单 (RG-11, RC-53) -->
+          <div v-if="txType === 'expense' && availableWishes.length > 0" class="space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联心愿清单 (可选)</label>
+            <select
+              v-model="selectedWishId"
+              @change="onWishSelected"
+              class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
+            >
+              <option :value="null">-- 不关联心愿 --</option>
+              <option v-for="w in availableWishes" :key="w.id" :value="w.id">
+                {{ w.title }} (预算: ¥{{ (w.budget / 100).toFixed(2) }})
+              </option>
+            </select>
+          </div>
+
+          <!-- 分期付款支持 (RG-11, RC-53) -->
+          <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5">
+            <div class="flex items-center gap-2">
+              <input
+                id="isInstallmentCheckbox"
+                v-model="isInstallment"
+                type="checkbox"
+                class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
+              />
+              <label for="isInstallmentCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none">
+                分期付款 (花呗 / 京东白条 / 信贷分期)
+              </label>
+            </div>
+
+            <div v-if="isInstallment" class="space-y-3 pt-1 text-xs font-mono-archive">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
+                  <select
+                    v-model="installmentChannel"
+                    class="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none font-mono-archive"
+                  >
+                    <option value="huabei">花呗 (每月 10 日还款)</option>
+                    <option value="baitiao">京东白条 (每月 20 日还款)</option>
+                    <option value="custom">信用卡 / 自定义分期</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[var(--ink-muted)] mb-1">分期期数</label>
+                  <div class="flex gap-1.5">
+                    <button
+                      v-for="m in [3, 6, 12, 24]"
+                      :key="m"
+                      type="button"
+                      @click="installmentMonths = m"
+                      class="flex-1 py-1 text-xs border rounded-xs transition-colors cursor-pointer text-center"
+                      :class="installmentMonths === m ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+                    >
+                      {{ m }}期
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="installmentChannel === 'custom'" class="space-y-1">
+                <label class="block text-[var(--ink-muted)]">每月独立还款日 (1~31)</label>
+                <input
+                  v-model.number="customRepaymentDay"
+                  type="number"
+                  min="1"
+                  max="31"
+                  class="w-32 px-2 py-1 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent"
+                />
+              </div>
+
+              <div class="p-2 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[11px] text-[var(--ink-secondary)] flex items-center justify-between">
+                <span>每期月供测算：<strong class="text-[var(--ink-primary)]">¥{{ calculatedMonthlyPay }}</strong> / 期</span>
+                <span>绑定还款日：<strong>每月 {{ effectiveRepaymentDay }} 日</strong></span>
+              </div>
+            </div>
+          </div>
+
           <!-- 同步收录至随身设备库 (RC-53) -->
           <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2">
             <div class="flex items-center gap-2">
@@ -456,7 +615,7 @@ const handleSubmit = async () => {
             <input
               v-model="title"
               type="text"
-              :placeholder="selectedKind === 'project' ? '项目名称 (例如: ArchCanvas)' : '给这条记录一个简短标题……'"
+              :placeholder="selectedKind === 'project' ? '项目名称 (例如: 个人主页与生活档案)' : '给这条记录一个简短标题……'"
               class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -496,7 +655,7 @@ const handleSubmit = async () => {
               <input
                 v-model="location"
                 type="text"
-                placeholder="例如：杭州 · 满觉陇"
+                placeholder="例如：城市 · 地点"
                 class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>

@@ -15,6 +15,7 @@ import type {
   QRLoginSession,
   QRLoginPollResult,
   UnifiedUploadResult,
+  Wish,
 } from '../types'
 
 const API_BASE = '/api/v1'
@@ -329,11 +330,32 @@ export async function createTransaction(data: {
   note?: string
   payment_method?: string
   occurred_at?: string
+  wish_id?: number
+  is_installment?: boolean
+  installment_channel_code?: string
+  installment_total_amount?: number
+  installment_months?: number
+  installment_monthly_pay?: number
+  installment_remain_months?: number
+  repayment_day?: number
 }): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions`, {
     method: 'POST',
     body: JSON.stringify(data),
   })
+}
+
+// 3.1 Wishes (心愿单，公开只读与联动)
+export async function fetchWishes(params?: { kind?: string; status?: string }): Promise<Wish[]> {
+  const query = new URLSearchParams()
+  if (params?.kind) query.set('kind', params.kind)
+  if (params?.status) query.set('status', params.status)
+  const qs = query.toString()
+  try {
+    return await request<Wish[]>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
+  } catch {
+    return []
+  }
 }
 
 export async function updateTransaction(

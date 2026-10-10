@@ -54,6 +54,17 @@ const activeGearCount = computed(() => {
   return gears.filter((g) => g.status !== '已出二手').length
 })
 
+const totalInstallmentLiabilities = computed(() => {
+  return transactionsList.value
+    .filter((t) => t.is_installment)
+    .reduce((sum, t) => sum + (t.installment_total_amount || t.amount), 0)
+})
+
+const estimatedNetWorth = computed(() => {
+  const balance = summary.value?.balance || 0
+  return totalFixedAssets.value + balance - totalInstallmentLiabilities.value
+})
+
 const getDaysUntilDay = (targetDay: number) => {
   const now = new Date()
   const currentDay = now.getDate()
@@ -308,13 +319,29 @@ const spectrumItems = computed(() => {
 
     <!-- 个人净资产与资产大盘指示纸签 (RC-53) -->
     <div class="mb-10 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono-archive text-xs">
-      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
         <div>
           <span class="text-[var(--ink-muted)] block text-[11px]">固定资产沉淀 (随身硬件与桌面)</span>
-          <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
-            ¥{{ formatMoney(totalFixedAssets) }}
+          <div class="flex items-baseline gap-1.5">
+            <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
+              ¥{{ formatMoney(totalFixedAssets) }}
+            </span>
+            <span class="text-[10px] text-[var(--ink-muted)]">({{ activeGearCount }} 件在用)</span>
+          </div>
+        </div>
+
+        <div v-if="totalInstallmentLiabilities > 0">
+          <span class="text-[var(--ink-muted)] block text-[11px]">待还信贷分期 (负债)</span>
+          <span class="font-serif-editorial text-lg text-[var(--accent-warm)] font-medium">
+            -¥{{ formatMoney(totalInstallmentLiabilities) }}
           </span>
-          <span class="text-[10px] text-[var(--ink-muted)] ml-1">({{ activeGearCount }} 件在用)</span>
+        </div>
+
+        <div>
+          <span class="text-[var(--ink-muted)] block text-[11px]">个人净资产 (固定资产+月结余-信贷)</span>
+          <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-semibold">
+            ¥{{ formatMoney(estimatedNetWorth) }}
+          </span>
         </div>
       </div>
 
@@ -456,6 +483,12 @@ const spectrumItems = computed(() => {
                 </span>
                 <span class="text-[10px] font-mono-archive tracking-wider text-[var(--ink-muted)] border border-[var(--border-subtle)] px-1.5 py-0.2 rounded-xs">
                   {{ tx.category }}
+                </span>
+                <span
+                  v-if="tx.is_installment"
+                  class="text-[10px] font-mono-archive tracking-wider text-[var(--accent-warm)] border border-[var(--accent-warm)]/40 px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/5"
+                >
+                  {{ tx.installment_channel_code === 'huabei' ? '花呗' : tx.installment_channel_code === 'baitiao' ? '白条' : '分期' }}{{ tx.installment_months ? ' ' + tx.installment_months + '期' : '' }} ({{ tx.repayment_day || 10 }}日)
                 </span>
               </div>
               <p v-if="tx.note" class="text-xs font-serif-editorial text-[var(--ink-muted)]">
