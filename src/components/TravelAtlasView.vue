@@ -6,9 +6,13 @@ import {
   ChevronRight,
 } from 'lucide-vue-next'
 import { fetchFootprintsAtlas, getAdminToken } from '../utils/api'
-import type { AtlasCitySummary } from '../types'
+import type { AtlasCitySummary, LifeEntry } from '../types'
 import AddFootprintModal from './AddFootprintModal.vue'
 import CityMemoryDrawerModal from './CityMemoryDrawerModal.vue'
+
+const emit = defineEmits<{
+  (e: 'selectEntry', entry: LifeEntry): void
+}>()
 
 const atlasData = ref<{
   total_footprints: number
@@ -375,6 +379,7 @@ onMounted(() => {
       :cityCode="selectedCityCode"
       :cityName="selectedCityName"
       @close="isDrawerOpen = false"
+      @selectEntry="(entry) => { isDrawerOpen = false; emit('selectEntry', entry) }"
     />
 
   </div>

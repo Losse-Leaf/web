@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { X, Sparkles } from 'lucide-vue-next'
 import { createWish, updateWish } from '../utils/api'
 import type { Wish } from '../types'
+import CityPicker from './CityPicker.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -24,6 +25,11 @@ const budgetYuan = ref('')
 const targetDate = ref('')
 const isSubmitting = ref(false)
 const errorMsg = ref('')
+
+const onCityPicked = (city: { code: string; name: string }) => {
+  cityCode.value = city.code
+  cityName.value = city.name
+}
 
 watch(
   () => props.editingWish,
@@ -195,25 +201,35 @@ const handleSubmit = async () => {
           />
         </div>
 
-        <!-- 旅程专属：目标城市 -->
-        <div v-if="kind === 'travel'" class="grid grid-cols-2 gap-3">
+        <!-- 旅程专属：目标城市 (接入 CityPicker.vue 自动绑定行政代码 RC-58) -->
+        <div v-if="kind === 'travel'" class="space-y-3">
           <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市名</label>
-            <input
-              v-model="cityName"
-              type="text"
-              placeholder="例如: 景德镇市 / 大理"
-              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">快速检索目的地城市 (归册时将自动点亮地图足迹)</label>
+            <CityPicker
+              v-model="cityCode"
+              placeholder="输入城市名称检索并自动填入名称与行政代码..."
+              @select="onCityPicked"
             />
           </div>
-          <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行政代码 (选填)</label>
-            <input
-              v-model="cityCode"
-              type="text"
-              placeholder="例如: 360200"
-              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
-            />
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市名</label>
+              <input
+                v-model="cityName"
+                type="text"
+                placeholder="例如: 景德镇市 / 大理"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行政代码 (选填)</label>
+              <input
+                v-model="cityCode"
+                type="text"
+                placeholder="例如: 360200"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
+              />
+            </div>
           </div>
         </div>
 

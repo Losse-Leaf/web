@@ -49,7 +49,7 @@ const emit = defineEmits<{
         </div>
         <div class="flex items-center gap-4">
           <a
-            href="https://github.com/YN1753/Loose-Leaf"
+            href="https://github.com/Losse-Leaf"
             target="_blank"
             rel="noopener noreferrer"
             class="hover:text-[var(--ink-primary)] inline-flex items-center gap-1 transition-colors"

@@ -271,14 +271,18 @@ const handleHashChange = async () => {
   if (!hash || hash === 'home' || hash === 'life') {
     currentView.value = 'home'
     selectedEntry.value = null
-  } else if (['transactions', 'archive', 'projects', 'about'].includes(hash)) {
+  } else if (
+    ['transactions', 'archive', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
+  ) {
     if (['transactions', 'assets'].includes(hash) && !getAdminToken()) {
       currentView.value = 'archive'
       window.location.hash = 'archive'
       selectedEntry.value = null
       return
     }
-    currentView.value = hash
+    const normalizedHash =
+      hash === 'wishlist' ? 'wishes' : hash === 'footprints' ? 'atlas' : hash
+    currentView.value = normalizedHash
     selectedEntry.value = null
   }
 }
@@ -455,6 +459,7 @@ watch(currentView, (newV) => {
       <!-- 6. ATLAS 视图：全国市级旅游足迹地图与城市回忆 (FE-12, FE-13) -->
       <TravelAtlasView
         v-else-if="currentView === 'atlas' || currentView === 'footprints'"
+        @selectEntry="openEntryDetail"
       />
 
       <!-- 7. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->

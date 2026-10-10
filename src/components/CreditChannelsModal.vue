@@ -147,9 +147,6 @@ onMounted(() => {
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               信贷渠道与独立还款日
             </h2>
-            <span class="text-[10px] font-mono-archive px-1.5 py-0.5 border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
-              RC-53 / FE-15
-            </span>
           </div>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
             为各信贷渠道（花呗、白条、信用卡等）独立绑定每月还款日 (1~31 日)，资产大盘将精准测算还款倒计时与信贷负债。

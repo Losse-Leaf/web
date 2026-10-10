@@ -161,6 +161,7 @@ const graphTab = ref<'time' | 'space'>('time')
         />
         <TravelAtlasView
           v-else
+          @selectEntry="emit('selectEntry', $event)"
         />
       </div>
     </section>
