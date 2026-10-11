@@ -54,10 +54,13 @@ const handleFootprintSaved = () => {
   loadAtlas()
 }
 
-// 全国市级覆盖率 (全国约 333 个地级行政区)
+import { CHINA_CITIES } from '../utils/cities'
+
+// 全国市级覆盖率 (由单一事实来源 CHINA_CITIES 派生，上限 100%，RC-76)
 const coveragePercentage = computed(() => {
   const count = atlasData.value.total_cities || 0
-  return ((count / 333) * 100).toFixed(1)
+  const denominator = CHINA_CITIES.length || 375
+  return Math.min(100, Number(((count / denominator) * 100).toFixed(1))).toFixed(1)
 })
 
 import {

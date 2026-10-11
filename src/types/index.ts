@@ -175,11 +175,6 @@ export interface SiteConfig {
   site_desc?: string
   curator_name?: string
   default_location?: string
-  domain: string
-  icp_number?: string
-  icp_link?: string
-  police_number?: string
-  police_code?: string
 }
 
 export interface GearItem {
@@ -192,7 +187,6 @@ export interface GearItem {
   link?: string
   price_cents?: number
   purchase_date?: string
-  sold_price?: number
   sold_price_cents?: number
   sold_date?: string
 }
@@ -382,8 +376,6 @@ export interface Footprint {
   note?: string
   life_entry_id?: number
   wish_id?: number
-  latitude?: number
-  longitude?: number
   attachments?: Attachment[]
   created_at?: string
   updated_at?: string

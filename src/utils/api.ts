@@ -709,8 +709,6 @@ export async function createFootprint(data: {
   note?: string
   life_entry_id?: number
   wish_id?: number
-  latitude?: number
-  longitude?: number
   attachment_ids?: number[]
 }): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints`, {
@@ -728,8 +726,6 @@ export async function updateFootprint(
     note: string
     life_entry_id: number | null
     wish_id: number | null
-    latitude: number
-    longitude: number
     attachment_ids: number[]
   }>
 ): Promise<Footprint> {

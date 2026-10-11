@@ -258,7 +258,6 @@ const confirmSellGear = async () => {
 
   const soldCents = Math.round(soldFloat * 100)
   item.status = 'sold'
-  item.sold_price = soldCents
   item.sold_price_cents = soldCents
   item.sold_date = sellingDateInput.value || new Date().toISOString().slice(0, 10)
 
@@ -683,8 +682,8 @@ onMounted(() => {
                   <span v-if="item.price_cents" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
                     (购入 ¥{{ (item.price_cents / 100).toFixed(2) }})
                   </span>
-                  <span v-if="item.sold_price_cents || item.sold_price" class="text-[10px] font-mono-archive text-emerald-700">
-                    (回血 ¥{{ (((item.sold_price_cents ?? item.sold_price) || 0) / 100).toFixed(2) }})
+                  <span v-if="item.sold_price_cents" class="text-[10px] font-mono-archive text-emerald-700">
+                    (回血 ¥{{ ((item.sold_price_cents || 0) / 100).toFixed(2) }})
                   </span>
                 </div>
                 <p v-if="item.spec" class="text-xs font-mono-archive text-[var(--ink-muted)]">
