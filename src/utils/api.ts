@@ -23,6 +23,7 @@ import type {
   Footprint,
   FootprintsAtlasResponse,
   CityMemoryDrawerData,
+  ProvinceMemoryDrawerData,
   AnnualAlmanacSummary,
 } from '../types'
 
@@ -700,6 +701,148 @@ export async function fetchFootprintsAtlas(): Promise<FootprintsAtlasResponse> {
 
 export async function fetchCityMemoryDrawer(cityCode: string): Promise<CityMemoryDrawerData> {
   return request<CityMemoryDrawerData>(`${API_BASE}/footprints/cities/${cityCode}/drawer`)
+}
+
+export async function fetchProvinceMemoryDrawer(
+  adcode: string,
+  provinceName?: string,
+  cityCodes?: string[]
+): Promise<ProvinceMemoryDrawerData> {
+  // 1. 优先尝试直接请求后端省级回忆抽屉接口 (RC-91 规范接口)
+  try {
+    return await request<ProvinceMemoryDrawerData>(`${API_BASE}/footprints/provinces/${adcode}/drawer`)
+  } catch {
+    // 2. 平滑过渡：若后端尚未上线省级聚合接口或返回 404，由前端并发聚合该省下属城市的抽屉数据
+    let targetCodes = cityCodes
+    if (!targetCodes || targetCodes.length === 0) {
+      try {
+        const atlas = await fetchFootprintsAtlas()
+        targetCodes = (atlas.cities || [])
+          .filter((c) => c.city_code.startsWith(adcode.slice(0, 2)))
+          .map((c) => c.city_code)
+      } catch {
+        targetCodes = []
+      }
+    }
+
+    if (!targetCodes || targetCodes.length === 0) {
+      return {
+        adcode,
+        province_name: provinceName || '',
+        total_cities: 0,
+        visit_stats: {
+          total_visits: 0,
+          first_visited_at: '',
+          latest_visited_at: '',
+        },
+        cities_summary: [],
+        footprints: [],
+        entries: [],
+        ledger_summary: {
+          total_spent: 0,
+          transaction_count: 0,
+          categories: [],
+        },
+      }
+    }
+
+    // 并发聚合该省去过的各个城市的抽屉数据
+    const cityDrawers = await Promise.allSettled(
+      targetCodes.map((code) => fetchCityMemoryDrawer(code))
+    )
+
+    const fulfilledDrawers = cityDrawers
+      .filter((r): r is PromiseFulfilledResult<CityMemoryDrawerData> => r.status === 'fulfilled')
+      .map((r) => r.value)
+
+    let totalVisits = 0
+    let firstVisit = ''
+    let latestVisit = ''
+    let totalSpent = 0
+    let txCount = 0
+    const catMap = new Map<string, number>()
+    const allFootprints: Footprint[] = []
+    const allEntries: LifeEntry[] = []
+    const citiesSummary: Array<{
+      city_code: string
+      city_name: string
+      visit_count: number
+      latest_visited_at?: string
+    }> = []
+
+    const seenFootprintIds = new Set<number>()
+    const seenEntryIds = new Set<number>()
+
+    for (const cd of fulfilledDrawers) {
+      totalVisits += cd.visit_stats?.total_visits || 0
+      if (cd.visit_stats?.first_visited_at) {
+        if (!firstVisit || cd.visit_stats.first_visited_at < firstVisit) {
+          firstVisit = cd.visit_stats.first_visited_at
+        }
+      }
+      if (cd.visit_stats?.latest_visited_at) {
+        if (!latestVisit || cd.visit_stats.latest_visited_at > latestVisit) {
+          latestVisit = cd.visit_stats.latest_visited_at
+        }
+      }
+
+      citiesSummary.push({
+        city_code: cd.city_code,
+        city_name: cd.city_name,
+        visit_count: cd.visit_stats?.total_visits || 0,
+        latest_visited_at: cd.visit_stats?.latest_visited_at,
+      })
+
+      for (const fp of cd.footprints || []) {
+        if (!seenFootprintIds.has(fp.id)) {
+          seenFootprintIds.add(fp.id)
+          allFootprints.push(fp)
+        }
+      }
+
+      for (const entry of cd.entries || []) {
+        if (!seenEntryIds.has(entry.id)) {
+          seenEntryIds.add(entry.id)
+          allEntries.push(entry)
+        }
+      }
+
+      if (cd.ledger_summary) {
+        totalSpent += cd.ledger_summary.total_spent || 0
+        txCount += cd.ledger_summary.transaction_count || 0
+        for (const cat of cd.ledger_summary.categories || []) {
+          catMap.set(cat.name, (catMap.get(cat.name) || 0) + cat.amount)
+        }
+      }
+    }
+
+    allFootprints.sort((a, b) => new Date(b.visited_at || '').getTime() - new Date(a.visited_at || '').getTime())
+    allEntries.sort((a, b) => new Date(b.occurred_at || '').getTime() - new Date(a.occurred_at || '').getTime())
+
+    const categories = Array.from(catMap.entries()).map(([name, amount]) => ({
+      name,
+      amount,
+    }))
+
+    return {
+      adcode,
+      province_name: provinceName || fulfilledDrawers[0]?.city_name || '',
+      total_cities: fulfilledDrawers.length,
+      visit_stats: {
+        total_visits: totalVisits,
+        first_visited_at: firstVisit,
+        latest_visited_at: latestVisit,
+      },
+      cities_summary: citiesSummary,
+      footprints: allFootprints,
+      entries: allEntries,
+      ledger_summary: {
+        total_spent: totalSpent,
+        transaction_count: txCount,
+        categories,
+      },
+    }
+  }
 }
 
 export async function createFootprint(data: {

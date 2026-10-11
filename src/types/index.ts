@@ -412,6 +412,38 @@ export interface CityMemoryDrawerData {
   }
 }
 
+export interface ProvinceMemoryDrawerData {
+  adcode?: string
+  province_adcode?: string
+  province_name: string
+  total_cities?: number
+  visit_stats: {
+    city_count?: number
+    total_visits: number
+    first_visited_at: string
+    latest_visited_at: string
+  }
+  visited_cities?: Array<{
+    city_code: string
+    city_name: string
+    visit_count: number
+    latest_visited_at?: string
+  }>
+  cities_summary?: Array<{
+    city_code: string
+    city_name: string
+    visit_count: number
+    latest_visited_at?: string
+  }>
+  footprints: Footprint[]
+  entries: LifeEntry[]
+  ledger_summary: {
+    total_spent: number
+    transaction_count: number
+    categories: { name: string; amount: number }[]
+  }
+}
+
 export interface AnnualAlmanacSummary {
   year: number
   prologue: {
