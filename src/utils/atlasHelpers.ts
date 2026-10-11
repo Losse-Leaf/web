@@ -9,12 +9,12 @@ export interface RegionGroup {
 // 典藏大区归类
 export const REGION_GROUPS: RegionGroup[] = [
   {
-    name: '江南与华东',
-    provinces: ['浙江', '江苏', '上海', '安徽', '福建', '江西', '山东'],
-  },
-  {
     name: '蜀川与西南',
     provinces: ['四川', '重庆', '云南', '贵州', '西藏'],
+  },
+  {
+    name: '江南与华东',
+    provinces: ['浙江', '江苏', '上海', '安徽', '福建', '江西', '山东'],
   },
   {
     name: '岭南与华南',
@@ -158,10 +158,12 @@ const CITY_IATA_CODES: Record<string, string> = {
   '441300': 'HUZ', // 惠州
   '440500': 'SWA', // 汕头
   '510100': 'CTU', // 成都
+  '511800': 'YAA', // 雅安
   '510700': 'MIG', // 绵阳
   '511100': 'LES', // 乐山
   '513200': 'ABA', // 阿坝
   '513300': 'GZI', // 甘孜
+  '513400': 'XIC', // 凉山
   '420100': 'WUH', // 武汉
   '420500': 'YIH', // 宜昌
   '430100': 'CSX', // 长沙
@@ -221,6 +223,36 @@ const CITY_IATA_CODES: Record<string, string> = {
   '820000': 'MFM', // 澳门
 }
 
+// 城市古雅风物别称与文化笺注 (为票根与星图提供人文底蕴)
+export const CITY_EPITHETS: Record<string, string> = {
+  '511800': '雨城 · 川藏茶马古道门户',
+  '510100': '锦官城 · 蓉城慢调天府',
+  '330100': '钱塘 · 临安水驿西子湖',
+  '310100': '申城 · 沪上云影外滩风',
+  '110100': '幽燕 · 京华烟云故宫雪',
+  '540100': '雪域 · 日光之城布达拉',
+  '530100': '春城 · 滇池水暖滇越迹',
+  '532900': '苍洱 · 南诏故都文献邦',
+  '530700': '雪山 · 纳西古乐玉龙行',
+  '610100': '长安 · 汉唐盛景丝路源',
+  '620900': '沙洲 · 鸣沙月泉莫高窟',
+  '440100': '羊城 · 越秀花开珠水阔',
+  '440300': '鹏城 · 伶仃洋畔海潮生',
+  '350200': '鹭岛 · 鼓浪琴音海风咸',
+  '320500': '姑苏 · 枫桥夜泊烟雨桥',
+  '320100': '金陵 · 秦淮烟柳钟山翠',
+  '500100': '山城 · 嘉陵江畔雾笼峦',
+  '420100': '江城 · 黄鹤楼空晴川历',
+  '430100': '星城 · 橘子洲头岳麓秋',
+  '230100': '冰城 · 松花江畔索菲亚',
+}
+
+// 获取城市诗意笺注
+export const getCityEpithet = (code: string, cityName?: string): string => {
+  if (CITY_EPITHETS[code]) return CITY_EPITHETS[code]
+  return `${cityName?.replace(/市|特别行政区/g, '') || '山川'} · 岁月留步之城`
+}
+
 // 获取城市票根 3 字母缩写代码
 export const getCityTicketCode = (code: string, pinyin?: string): string => {
   if (CITY_IATA_CODES[code]) {
@@ -254,7 +286,6 @@ export const calculateStarTrailCurve = (
   const mx = (x1 + x2) / 2
   const my = (y1 + y2) / 2
 
-  // 垂直法向量位移，制造优美天体航线弧度
   const dx = x2 - x1
   const dy = y2 - y1
   const dist = Math.sqrt(dx * dx + dy * dy)
@@ -265,3 +296,27 @@ export const calculateStarTrailCurve = (
 
   return `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`
 }
+
+// 历史古风行道虚线参考线 (为天球星野提供宏大的人文地理背景架构，0 地图标注争议)
+export const ANCIENT_ROUTES = [
+  {
+    name: '茶马古道 (川藏线)',
+    // 雅安 -> 康定 -> 昌都 -> 拉萨
+    path: 'M 353 365 Q 280 375 220 378 Q 160 380 135 380',
+  },
+  {
+    name: '丝绸之路 (西域道)',
+    // 西安 -> 兰州 -> 张掖 -> 敦煌 -> 乌鲁木齐
+    path: 'M 405 305 Q 350 280 300 240 Q 220 200 140 160',
+  },
+  {
+    name: '京杭古水驿 (大运河)',
+    // 北京 -> 天津 -> 济南 -> 扬州 -> 苏州 -> 杭州
+    path: 'M 462 220 Q 470 240 480 270 Q 510 320 520 360',
+  },
+  {
+    name: '蜀道故道 (秦岭金牛道)',
+    // 西安 -> 汉中 -> 广元 -> 成都
+    path: 'M 405 305 Q 380 325 365 350',
+  },
+]
