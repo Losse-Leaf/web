@@ -86,7 +86,7 @@ const currentCategoryInfo = computed(() => {
       }
   }
 })
-const showGraph = ref(false)
+const showGraph = ref(true)
 const graphTab = ref<'time' | 'space'>('time')
 </script>
 
@@ -101,7 +101,7 @@ const graphTab = ref<'time' | 'space'>('time')
             {{ displaySiteName }}
           </h1>
           <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
-            {{ profile?.current_city || profile?.location?.split('·')?.[1]?.trim() || config?.default_location?.split('·')?.[1]?.trim() || '杭州' }} · {{ todayDisplay }}
+            {{ profile?.current_city || profile?.location?.split('·')?.[1]?.trim() || config?.default_location?.split('·')?.[1]?.trim() || '未知' }} · {{ todayDisplay }}
           </span>
         </div>
 

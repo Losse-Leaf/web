@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import {
   X,
   MapPin,
+  ArrowLeft,
 } from 'lucide-vue-next'
 import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken } from '../utils/api'
 import { formatMoney } from '../utils/format'
@@ -12,7 +13,6 @@ const props = defineProps<{
   isOpen: boolean
   adcode?: string
   provinceName?: string
-  cityCodes?: string[]
   cityCode?: string
   cityName?: string
 }>()
@@ -26,6 +26,14 @@ const isAdmin = computed(() => Boolean(getAdminToken()))
 const drawerData = ref<(CityMemoryDrawerData | ProvinceMemoryDrawerData) | null>(null)
 const isLoading = ref(false)
 const errorMsg = ref('')
+
+// 支持从省级抽屉第一章「到访城市清单」点击下钻至对应城市抽屉，并支持一键返回省级抽屉 (RC-93)
+const drilldownCityCode = ref('')
+const drilldownCityName = ref('')
+const activeLightboxUrl = ref('')
+
+const effectiveCityCode = computed(() => drilldownCityCode.value || props.cityCode || '')
+const effectiveAdcode = computed(() => (effectiveCityCode.value ? '' : props.adcode || ''))
 
 // 汇总该城市/省份 footprints 与 entries 的全部图片附件并去重 (RC-58)
 const photos = computed<Attachment[]>(() => {
@@ -58,11 +66,11 @@ const loadData = async () => {
   try {
     isLoading.value = true
     errorMsg.value = ''
-    if (props.adcode) {
-      const data = await fetchProvinceMemoryDrawer(props.adcode, props.provinceName, props.cityCodes)
+    if (effectiveCityCode.value) {
+      const data = await fetchCityMemoryDrawer(effectiveCityCode.value)
       drawerData.value = data
-    } else if (props.cityCode) {
-      const data = await fetchCityMemoryDrawer(props.cityCode)
+    } else if (effectiveAdcode.value) {
+      const data = await fetchProvinceMemoryDrawer(effectiveAdcode.value)
       drawerData.value = data
     }
   } catch (err: any) {
@@ -75,6 +83,9 @@ const loadData = async () => {
 watch(
   () => [props.adcode, props.cityCode, props.isOpen],
   () => {
+    drilldownCityCode.value = ''
+    drilldownCityName.value = ''
+    activeLightboxUrl.value = ''
     if (props.isOpen && (props.adcode || props.cityCode)) {
       loadData()
     }
@@ -82,39 +93,55 @@ watch(
   { immediate: true }
 )
 
+const handleSelectCityInProvince = (cityCode: string, cityName: string) => {
+  drilldownCityCode.value = cityCode
+  drilldownCityName.value = cityName
+  loadData()
+}
+
+const handleBackToProvince = () => {
+  drilldownCityCode.value = ''
+  drilldownCityName.value = ''
+  loadData()
+}
+
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return ''
   return dateStr.slice(0, 10).replace(/-/g, '.')
 }
 
+const isProvinceMode = computed(() => {
+  return Boolean(!effectiveCityCode.value && effectiveAdcode.value)
+})
+
 const displayName = computed(() => {
-  if (drawerData.value && 'province_name' in drawerData.value && drawerData.value.province_name) {
-    return drawerData.value.province_name
+  if (isProvinceMode.value) {
+    if (drawerData.value && 'province_name' in drawerData.value && drawerData.value.province_name) {
+      return drawerData.value.province_name
+    }
+    return props.provinceName || '省份回忆'
   }
-  if (props.provinceName) return props.provinceName
   if (drawerData.value && 'city_name' in drawerData.value && drawerData.value.city_name) {
     return drawerData.value.city_name
   }
-  return props.cityName || '空间回忆'
+  return drilldownCityName.value || props.cityName || '城市回忆'
 })
 
 const displayCode = computed(() => {
-  if (drawerData.value && 'province_adcode' in drawerData.value && drawerData.value.province_adcode) {
-    return drawerData.value.province_adcode
+  if (isProvinceMode.value) {
+    if (drawerData.value && 'province_adcode' in drawerData.value && drawerData.value.province_adcode) {
+      return drawerData.value.province_adcode
+    }
+    return effectiveAdcode.value
   }
-  return props.adcode || props.cityCode || ''
-})
-
-const isProvinceMode = computed(() => {
-  return Boolean(
-    props.adcode ||
-    props.provinceName ||
-    (drawerData.value && ('province_adcode' in drawerData.value || 'province_name' in drawerData.value || 'visited_cities' in drawerData.value || 'total_cities' in drawerData.value))
-  )
+  if (drawerData.value && 'city_code' in drawerData.value && drawerData.value.city_code) {
+    return drawerData.value.city_code
+  }
+  return effectiveCityCode.value
 })
 
 const citiesSummary = computed(() => {
-  if (!drawerData.value) return []
+  if (!drawerData.value || !isProvinceMode.value) return []
   if ('visited_cities' in drawerData.value && drawerData.value.visited_cities) {
     return drawerData.value.visited_cities
   }
@@ -133,7 +160,7 @@ const totalCitiesCount = computed(() => {
   if ('total_cities' in drawerData.value && typeof drawerData.value.total_cities === 'number' && drawerData.value.total_cities > 0) {
     return drawerData.value.total_cities
   }
-  return citiesSummary.value.length || 1
+  return citiesSummary.value.length
 })
 </script>
 
@@ -143,21 +170,34 @@ const totalCitiesCount = computed(() => {
     class="fixed inset-0 z-50 flex justify-end bg-[var(--ink-primary)]/40 backdrop-blur-2xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >
-    <!-- 侧滑纸本抽屉 (桌面端从右侧滑出，移动端占满屏 RC-91 / §12.6) -->
+    <!-- 侧滑纸本抽屉 (桌面端从右侧滑出，移动端占满屏 RC-93 / §5.12) -->
     <div
       class="w-full sm:max-w-lg bg-[var(--bg-archive)] border-l border-[var(--border-subtle)] h-full overflow-y-auto p-6 sm:p-8 space-y-8 text-left shadow-2xl animate-in slide-in-from-right duration-250"
     >
       <!-- 标头与关闭 -->
       <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)]">
-        <div class="space-y-1">
+        <div class="space-y-1.5">
+          <!-- 若从省级抽屉下钻至城市抽屉，提供返回省级抽屉按钮 -->
+          <button
+            v-if="drilldownCityCode && props.adcode"
+            @click="handleBackToProvince"
+            class="inline-flex items-center gap-1 text-[11px] font-mono-archive text-[var(--accent-warm)] hover:underline cursor-pointer mb-1"
+          >
+            <ArrowLeft class="w-3 h-3" />
+            <span>返回 {{ props.provinceName || '省级' }} 回忆总览</span>
+          </button>
+
           <div class="flex items-center gap-2">
             <MapPin class="w-5 h-5 text-[var(--accent-warm)]" />
             <h2 class="font-serif-editorial text-2xl sm:text-3xl font-medium text-[var(--ink-primary)]">
               {{ displayName }}
             </h2>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono-archive border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
+              {{ isProvinceMode ? '省级抽屉' : '城市抽屉' }}
+            </span>
           </div>
-          <span class="text-xs font-mono-archive text-[var(--ink-muted)]">
-            {{ isProvinceMode ? '省级行政区划代码' : '行政区划代码' }}: {{ displayCode }}
+          <span class="text-xs font-mono-archive text-[var(--ink-muted)] block">
+            {{ isProvinceMode ? '省级行政区划代码' : '市级行政区划代码' }}: {{ displayCode }}
           </span>
         </div>
 
@@ -179,7 +219,7 @@ const totalCitiesCount = computed(() => {
         {{ errorMsg }}
       </div>
 
-      <!-- 四大递进章节 (RC-91 四重聚合) -->
+      <!-- 四大递进章节 (RC-93 省市两级四重聚合) -->
       <div v-else-if="drawerData" class="space-y-8">
         
         <!-- 第一章：履迹简志 (Visits Summary) -->
@@ -196,18 +236,22 @@ const totalCitiesCount = computed(() => {
             </span>
           </div>
 
-          <!-- 省级模式下的去过城市清单 (RC-91) -->
-          <div v-if="citiesSummary.length > 0" class="pt-1 pb-1">
-            <span class="text-[10px] text-[var(--ink-muted)] block mb-1.5">到访城市清单</span>
+          <!-- 省级模式下的去过城市清单（点击可下钻至该城市的独立回忆抽屉 RC-93） -->
+          <div v-if="isProvinceMode && citiesSummary.length > 0" class="pt-1 pb-1">
+            <span class="text-[10px] text-[var(--ink-muted)] block mb-1.5">
+              到访城市清单 (点击城市切换至市级回忆抽屉 ↗)
+            </span>
             <div class="flex flex-wrap gap-1.5">
-              <span
+              <button
                 v-for="c in citiesSummary"
                 :key="c.city_code"
-                class="px-2 py-0.5 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[11px] text-[var(--ink-secondary)] inline-flex items-center gap-1"
+                type="button"
+                @click="handleSelectCityInProvince(c.city_code, c.city_name)"
+                class="px-2 py-0.5 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] inline-flex items-center gap-1 cursor-pointer transition-colors"
               >
                 <span class="font-medium text-[var(--ink-primary)]">{{ c.city_name }}</span>
                 <span class="text-[10px] text-[var(--ink-muted)]">({{ c.visit_count }}次)</span>
-              </span>
+              </button>
             </div>
           </div>
 
@@ -234,10 +278,20 @@ const totalCitiesCount = computed(() => {
               class="text-[11px] text-[var(--ink-secondary)] flex items-start gap-1.5"
             >
               <span class="text-[var(--ink-muted)] shrink-0">{{ formatDate(fp.visited_at) }}:</span>
-              <span v-if="isProvinceMode && fp.city_name" class="text-[var(--accent-warm)] shrink-0 font-medium">[{{ fp.city_name }}]</span>
+              <button
+                v-if="isProvinceMode && fp.city_name && fp.city_code"
+                type="button"
+                @click="handleSelectCityInProvince(fp.city_code, fp.city_name)"
+                class="text-[var(--accent-warm)] hover:underline shrink-0 font-medium cursor-pointer"
+              >
+                [{{ fp.city_name }}]
+              </button>
               <span class="font-serif-editorial italic">{{ fp.note || '到访打卡' }}</span>
             </div>
           </div>
+          <p v-else class="text-[11px] font-serif-editorial text-[var(--ink-muted)] italic pt-1">
+            该{{ isProvinceMode ? '省份' : '城市' }}暂未录入打卡足迹。
+          </p>
         </section>
 
         <!-- 第二章：菲林画廊 (Film Gallery) -->
@@ -251,23 +305,25 @@ const totalCitiesCount = computed(() => {
             </span>
           </div>
 
-          <!-- 横向滚动相片流 -->
+          <!-- 横向滚动相片流（支持点击打开全屏暗房底片灯箱） -->
           <div
             v-if="photos.length > 0"
             class="flex items-center gap-3 overflow-x-auto pb-2"
           >
-            <div
+            <button
               v-for="att in photos"
               :key="att.id || att.url"
-              class="w-32 h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs overflow-hidden"
+              type="button"
+              @click="activeLightboxUrl = att.url"
+              class="w-32 h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs overflow-hidden cursor-zoom-in transition-colors"
             >
               <img
                 :src="att.url"
                 loading="lazy"
-                class="w-full h-full object-cover"
+                class="w-full h-full object-cover editorial-image"
                 alt="旅途菲林"
               />
-            </div>
+            </button>
           </div>
           <p v-else class="text-xs font-serif-editorial text-[var(--ink-muted)] italic">
             暂未收录影像胶片。
@@ -303,14 +359,14 @@ const totalCitiesCount = computed(() => {
               <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
                 {{ entry.title }}
               </h4>
-              <p v-if="entry.content" class="font-serif-editorial text-xs text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
-                {{ entry.content }}
+              <p v-if="entry.content || (entry as any).summary" class="font-serif-editorial text-xs text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
+                {{ entry.content || (entry as any).summary }}
               </p>
             </div>
           </div>
         </section>
 
-        <!-- 第四章：账单光谱 (Ledger Breakdown，仅主理人可见 RC-57) -->
+        <!-- 第四章：账单光谱 (Ledger Breakdown，仅主理人可见 RC-57 / RC-93) -->
         <section v-if="isAdmin" class="space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
@@ -340,6 +396,19 @@ const totalCitiesCount = computed(() => {
         </section>
 
       </div>
+    </div>
+
+    <!-- 全屏暗房底片灯箱 (点击第二章相片唤起) -->
+    <div
+      v-if="activeLightboxUrl"
+      class="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-4 cursor-zoom-out"
+      @click.stop="activeLightboxUrl = ''"
+    >
+      <img
+        :src="activeLightboxUrl"
+        class="max-w-full max-h-[90vh] object-contain rounded-xs shadow-2xl"
+        alt="旅途底片大图"
+      />
     </div>
   </div>
 </template>

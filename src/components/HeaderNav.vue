@@ -54,6 +54,7 @@ const navItems = computed(() => {
   }
   items.push(
     { key: 'wishes', label: '心愿' },
+    { key: 'atlas', label: '足迹' },
     { key: 'projects', label: '项目' },
     { key: 'archive', label: '归档' },
     { key: 'about', label: '主理人' }

@@ -37,6 +37,9 @@ export default defineConfig({
           if (id.includes('node_modules/lucide-vue-next')) {
             return 'vendor-lucide'
           }
+          if (id.includes('src/utils/chinaMapData') || id.includes('src/utils/cities')) {
+            return 'atlas-geo-data'
+          }
         },
       },
     },
