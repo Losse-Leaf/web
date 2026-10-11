@@ -348,7 +348,7 @@ onMounted(() => {
               v-if="gear.status"
               class="px-2 py-0.5 rounded-xs text-[10px] font-medium border"
               :class="
-                gear.status === 'sold' || gear.status === '已出二手'
+                gear.status === 'sold'
                   ? 'border-amber-600/30 bg-amber-600/5 text-amber-600'
                   : 'border-[var(--accent-warm)]/30 bg-[var(--accent-warm)]/5 text-[var(--accent-warm)]'
               "

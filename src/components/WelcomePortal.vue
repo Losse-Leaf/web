@@ -189,21 +189,12 @@ const handleBootstrapStep1Submit = async () => {
       hub_url: window.location.origin,
     })
 
-    // 若后端返回了首台设备配对工单 (ticket / pin_code)，进入 Step 2 等待首台设备绑定激活
+    // 后端返回首台设备配对工单 (ticket / pin_code)，进入 Step 2 等待首台设备绑定激活
     if (res.ticket) {
       bootstrapTicket.value = res
       bootstrapStep.value = 2
       startBootstrapCountdown(res.expires_in_seconds || 300)
       startBootstrapStatusPolling(res.ticket)
-    } else {
-      // 兼容直接返回 token 的情况
-      if (res.token) setAdminToken(res.token)
-      audio.playShutter()
-      status.value.initialized = true
-      isCurator.value = true
-      markEnteredArchive()
-      emit('bootstrapped')
-      emit('enter')
     }
   } catch (err: any) {
     bootstrapError.value = err?.message || '发起首次装帧失败，请检查后端服务连接'

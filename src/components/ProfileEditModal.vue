@@ -213,12 +213,12 @@ const handleAddGear = async () => {
   showAddGear.value = false
 }
 
-// 设备状态兼容判断与中文映射 (RG-19)
-const isGearSold = (status?: string) => status === 'sold' || status === '已出二手'
+// 设备状态判断与中文映射 (RC-90)
+const isGearSold = (status?: string) => status === 'sold'
 
 const formatGearStatus = (status?: string) => {
   if (!status || status === 'active') return '日常自用'
-  if (status === 'sold' || status === '已出二手') return '已出二手'
+  if (status === 'sold') return '已出二手'
   return status
 }
 

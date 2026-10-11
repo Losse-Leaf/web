@@ -87,14 +87,14 @@ const totalFixedAssets = computed(() => {
   const profile = props.profile || loadCuratorProfile()
   const gears = profile.edc_gear || []
   return gears
-    .filter((g) => g.status !== 'sold' && g.status !== '已出二手')
+    .filter((g) => g.status !== 'sold')
     .reduce((sum, g) => sum + (g.price_cents || 0), 0)
 })
 
 const activeGearCount = computed(() => {
   const profile = props.profile || loadCuratorProfile()
   const gears = profile.edc_gear || []
-  return gears.filter((g) => g.status !== 'sold' && g.status !== '已出二手').length
+  return gears.filter((g) => g.status !== 'sold').length
 })
 
 const totalInstallmentLiabilities = computed(() => {
