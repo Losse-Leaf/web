@@ -30,6 +30,8 @@ const emit = defineEmits<{
   (e: 'openSearch'): void
   (e: 'openExport'): void
   (e: 'openPairing'): void
+  (e: 'openUpdateCheck'): void
+  (e: 'openUpdateNotices'): void
   (e: 'toggleTheme'): void
 }>()
 
@@ -62,29 +64,46 @@ const navItems = computed(() => {
   return items
 })
 
-// 辅助工具与设置（纯净无赘述）
-const toolOptions = computed(() => [
-  {
-    key: 'pair',
-    label: '设备配对',
-    action: () => emit('openPairing'),
-  },
-  {
-    key: 'export',
-    label: '数据备份',
-    action: () => emit('openExport'),
-  },
-  {
-    key: 'stats',
-    label: '生活统计',
-    action: () => emit('openStats'),
-  },
-  {
-    key: 'storage',
-    label: '存储设置',
-    action: () => emit('openStorage'),
-  },
-])
+// 辅助工具与设置（纯净无赘述；检查更新与更新公告仅管理端可见 RC-97）
+const toolOptions = computed(() => {
+  const opts = [
+    {
+      key: 'pair',
+      label: '设备配对',
+      action: () => emit('openPairing'),
+    },
+    {
+      key: 'export',
+      label: '数据备份',
+      action: () => emit('openExport'),
+    },
+    {
+      key: 'stats',
+      label: '生活统计',
+      action: () => emit('openStats'),
+    },
+    {
+      key: 'storage',
+      label: '存储设置',
+      action: () => emit('openStorage'),
+    },
+  ]
+  if (isAdmin.value) {
+    opts.push(
+      {
+        key: 'update-check',
+        label: '检查更新',
+        action: () => emit('openUpdateCheck'),
+      },
+      {
+        key: 'update-notices',
+        label: '更新公告',
+        action: () => emit('openUpdateNotices'),
+      }
+    )
+  }
+  return opts
+})
 
 const setView = (view: string) => {
   audio.playTink()

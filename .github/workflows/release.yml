@@ -20,11 +20,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
           cache: npm
 
       - name: Install Dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Production Build
         run: npm run build
@@ -38,15 +38,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Loose Leaf Web Release ${{ github.ref_name }}"
+          name: "《散页》Web 展厅构建产物 ${{ github.ref_name }}"
           draft: false
           prerelease: false
           files: |
             web-dist.tar.gz
             web-dist.tar.gz.sha256
           body: |
-            ## 《散页》Web 展厅构建产物 (Web Showcase Distribution)
+            ## 《散页》Web 展厅构建产物
 
             - **版本**：`${{ github.ref_name }}`
-            - **产物用途**：供 Go 后端单二进制嵌入流水线 (`//go:embed web/dist/*`) 消费，实现单可执行文件开箱即用极简分发。
+            - **产物用途**：供 Go 后端单二进制嵌入流水线 (`//go:embed all:web/dist`) 通过 `WEB_VERSION` 锁定拉取消费，实现单可执行文件开箱即用极简分发。
             - **校验和**：见附带的 `web-dist.tar.gz.sha256`。

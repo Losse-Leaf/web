@@ -16,6 +16,7 @@ import StatsModal from './components/StatsModal.vue'
 import SearchModal from './components/SearchModal.vue'
 import ExportModal from './components/ExportModal.vue'
 import DevicePairingModal from './components/DevicePairingModal.vue'
+import UpdateNoticeModal from './components/UpdateNoticeModal.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 import FloatingActionButton from './components/FloatingActionButton.vue'
 import { getAdminToken, removeAdminToken } from './utils/api'
@@ -104,6 +105,14 @@ const isStatsOpen = ref(false)
 const isSearchOpen = ref(false)
 const isExportOpen = ref(false)
 const isPairingOpen = ref(false)
+const isUpdateModalOpen = ref(false)
+const updateModalInitialTab = ref<'check' | 'notices'>('check')
+
+const openUpdateModal = (tab: 'check' | 'notices') => {
+  if (!getAdminToken()) return
+  updateModalInitialTab.value = tab
+  isUpdateModalOpen.value = true
+}
 
 const systemStatus = ref<SystemStatus | null>(null)
 const storageStatus = ref<StorageStatus | null>(null)
@@ -414,6 +423,8 @@ watch(currentView, (newV) => {
       @openSearch="isSearchOpen = true"
       @openExport="isExportOpen = true"
       @openPairing="isPairingOpen = true"
+      @openUpdateCheck="openUpdateModal('check')"
+      @openUpdateNotices="openUpdateModal('notices')"
       @toggleTheme="toggleTheme"
       @openStats="openStatsModal"
       @openStorage="openStorageModal"
@@ -558,6 +569,14 @@ watch(currentView, (newV) => {
       v-if="isPairingOpen"
       :isOpen="isPairingOpen"
       @close="isPairingOpen = false"
+    />
+
+    <!-- 8. 系统版本检测与更新公告存档 弹窗（管理端专用 RC-97） -->
+    <UpdateNoticeModal
+      v-if="isUpdateModalOpen"
+      :isOpen="isUpdateModalOpen"
+      :initialTab="updateModalInitialTab"
+      @close="isUpdateModalOpen = false"
     />
 
   </div>

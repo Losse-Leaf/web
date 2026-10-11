@@ -510,4 +510,25 @@ export interface AnnualAlmanacSummary {
   }
 }
 
+export interface UpdateCheckResult {
+  current_version: string
+  latest_version: string
+  has_update: boolean
+  release_url?: string
+  published_at?: string
+  checked_at?: string
+  check_error?: string
+}
+
+export interface UpdateNotice {
+  id: number
+  version: string
+  title: string
+  body: string
+  released_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
+
 

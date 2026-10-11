@@ -25,6 +25,8 @@ import type {
   CityMemoryDrawerData,
   ProvinceMemoryDrawerData,
   AnnualAlmanacSummary,
+  UpdateCheckResult,
+  UpdateNotice,
 } from '../types'
 
 const API_BASE = '/api/v1'
@@ -856,6 +858,51 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
     },
   }
 }
+
+// 15. 系统版本检测与更新公告存档 (System Update Check & Update Notices · 管理端专用 RC-97)
+export async function checkSystemUpdate(): Promise<UpdateCheckResult> {
+  return request<UpdateCheckResult>(`${API_BASE}/system/update-check`)
+}
+
+export async function fetchUpdateNotices(): Promise<UpdateNotice[]> {
+  const res = await request<UpdateNotice[]>(`${API_BASE}/system/update-notices`)
+  return Array.isArray(res) ? res : []
+}
+
+export async function createUpdateNotice(data: {
+  version: string
+  title: string
+  body: string
+  released_at?: string
+}): Promise<UpdateNotice> {
+  return request<UpdateNotice>(`${API_BASE}/system/update-notices`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateUpdateNotice(
+  id: number,
+  data: Partial<{
+    version: string
+    title: string
+    body: string
+    released_at: string
+  }>
+): Promise<UpdateNotice> {
+  return request<UpdateNotice>(`${API_BASE}/system/update-notices/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteUpdateNotice(id: number): Promise<boolean> {
+  await request(`${API_BASE}/system/update-notices/${id}`, {
+    method: 'DELETE',
+  })
+  return true
+}
+
 
 
 
