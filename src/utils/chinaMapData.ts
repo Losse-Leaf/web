@@ -1,11 +1,11 @@
 /**
  * 中国地图省市两级合规矢量数据与 Albers 等面积圆锥投影
- * 
- * 依据 docs/wishlist-travel.md §五/§六 及 docs/web.md §5.11 规范由 scripts/build-china-map.mjs 生成 (RC-86 / RC-91 / RC-93)：
- * 1. 行政区划与城市数据（34 条省级轮廓 PROVINCES_DATA、370 条市级轮廓 CITIES_BOUNDARY_DATA、100000_JD 南海十段线）
- *    由构建脚本从本地离线存档 scripts/geo/china/ (源自阿里云 DataV GeoAtlas / 高德开放平台，2026-10-11 归档) 经
- *    统一 albersProject + geometryToSvgPath 数学投影正算生成；
- * 2. 南海诸岛插框参考海岸线、岛礁点位 (SCS_INSET) 与钓鱼岛注记 (DIAOYU_DAO) 为一次性固化的静态资产，来源、获取方式与固化日期均已注明。
+ *
+ * 依据 docs/wishlist-travel.md §五/§六 及 docs/web.md §5.11 规范一次性固化 (RC-86 / RC-91 / RC-93 / RC-95)：
+ * 1. 行政区划与城市数据（34 条省级轮廓 PROVINCES_DATA、370 条市级轮廓 CITIES_BOUNDARY_DATA、全国外轮廓 NATIONAL_OUTLINE_PATH、100000_JD 南海十段线）
+ *    源自本地离线存档 scripts/geo/china/ (阿里云 DataV GeoAtlas / 高德开放平台，2026-10-11 归档)，经中国标准 Albers 等面积圆锥投影
+ *    （双标准纬线 25°N / 47°N，中央经线 105°E）数学正算后一次性固化；
+ * 2. 南海诸岛插框参考海岸线、岛礁点位 (SCS_INSET) 与钓鱼岛注记 (DIAOYU_DAO) 同样源自官方边界与标准坐标一次性固化，来源、获取方式与固化日期均已注明。
  */
 
 import { CHINA_CITIES } from './cities'

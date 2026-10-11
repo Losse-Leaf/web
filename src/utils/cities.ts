@@ -1,6 +1,6 @@
 // 中国合规地级行政区划、直辖市、特别行政区与台湾省全量标准字典 (共 375 个地级单位)
-// 依据 docs/wishlist-travel.md §六 及 docs/web.md §5.11 合规要求由 scripts/build-china-map.mjs 自动生成
-// 数据源凭据：scripts/geo/china/ 离线存档 (源自阿里云 DataV GeoAtlas / 高德开放平台，2026-10-11 固化)；Albers 等面积圆锥投影正算 (中央经线 105°E)
+// 依据 docs/wishlist-travel.md §六 及 docs/web.md §5.11 合规要求一次性固化 (RC-86 / RC-95)
+// 数据源凭据：scripts/geo/china/ 离线存档 (源自阿里云 DataV GeoAtlas / 高德开放平台，2026-10-11 归档)；中国标准 Albers 等面积圆锥投影正算 (标准纬线 25°N / 47°N，中央经线 105°E)
 
 export interface CityOption {
   code: string
