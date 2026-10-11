@@ -18,7 +18,6 @@ const emit = defineEmits<{
   (e: 'navigate', view: string): void
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'selectEntry', entry: LifeEntry): void
-  (e: 'selectTag', tag: string): void
   (e: 'openAdd'): void
 }>()
 
@@ -204,7 +203,6 @@ const graphTab = ref<'time' | 'space'>('time')
         @clearDateFilter="selectedDate = ''"
         @changeCategory="emit('changeCategory', $event)"
         @selectEntry="emit('selectEntry', $event)"
-        @selectTag="emit('selectTag', $event)"
         @openAdd="emit('openAdd')"
       />
 

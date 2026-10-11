@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { Search, X, Calendar, Tag, ArrowRight } from 'lucide-vue-next'
+import { Search, X, Calendar, ArrowRight } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { audio } from '../utils/audio'
-import { extractAllTags, filterEntriesBySearch } from '../composables/useArchive'
+import { filterEntriesBySearch } from '../composables/useArchive'
 import { parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   isOpen: boolean
   entries: LifeEntry[]
-  tags?: { name: string; count: number }[]
 }>()
 
 const emit = defineEmits<{
@@ -19,7 +18,6 @@ const emit = defineEmits<{
 
 const query = ref('')
 const debouncedQuery = ref('')
-const selectedTag = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 let debounceTimer: number | null = null
 
@@ -34,17 +32,9 @@ onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
 })
 
-// 提取前 10 个高频标签 (优先复用父级传参或 useArchive.ts 中的单一实现，消除 RC-22 重复逻辑)
-const popularTags = computed(() => {
-  if (props.tags && props.tags.length > 0) {
-    return props.tags.slice(0, 10)
-  }
-  return extractAllTags(props.entries).slice(0, 10)
-})
-
 // 带防抖的检索结果 (复用单一检索实现 RC-23 / FE-05)
 const results = computed(() => {
-  return filterEntriesBySearch(props.entries, debouncedQuery.value, selectedTag.value)
+  return filterEntriesBySearch(props.entries, debouncedQuery.value)
 })
 
 const handleSelect = (entry: LifeEntry) => {
@@ -53,20 +43,10 @@ const handleSelect = (entry: LifeEntry) => {
   emit('close')
 }
 
-const toggleTag = (tagName: string) => {
-  audio.playTink()
-  if (selectedTag.value === tagName) {
-    selectedTag.value = ''
-  } else {
-    selectedTag.value = tagName
-  }
-}
-
 const clearSearch = () => {
   if (debounceTimer) clearTimeout(debounceTimer)
   query.value = ''
   debouncedQuery.value = ''
-  selectedTag.value = ''
 }
 
 watch(
@@ -119,11 +99,11 @@ onUnmounted(() => {
           ref="inputRef"
           v-model="query"
           type="text"
-          placeholder="搜索生活记录、随笔思考、器材底片、地点或标签..."
+          placeholder="搜索生活记录、随笔思考、器材底片或所在城市地点..."
           class="w-full bg-transparent text-sm sm:text-base text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-hidden font-serif-editorial"
         />
         <button
-          v-if="query || selectedTag"
+          v-if="query"
           @click="clearSearch"
           class="text-xs text-[var(--ink-muted)] hover:text-[var(--ink-primary)] px-1.5 py-0.5 border border-[var(--border-subtle)] rounded-xs cursor-pointer"
         >
@@ -137,30 +117,11 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- 快捷标签胶囊推荐 -->
-      <div class="px-4 py-2.5 bg-[var(--bg-subtle)]/50 border-b border-[var(--border-subtle)] flex flex-wrap items-center gap-1.5 text-xs font-mono-archive">
-        <span class="text-[var(--ink-muted)] flex items-center gap-1 mr-1">
-          <Tag class="w-3 h-3" />
-          <span>常用标签:</span>
-        </span>
-        <button
-          v-for="t in popularTags"
-          :key="t.name"
-          @click="toggleTag(t.name)"
-          class="px-2 py-0.5 rounded-xs border transition-colors cursor-pointer text-[11px]"
-          :class="selectedTag === t.name
-            ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)] text-white'
-            : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-muted)]'"
-        >
-          #{{ t.name }} <span class="opacity-60 text-[10px]">({{ t.count }})</span>
-        </button>
-      </div>
-
       <!-- 搜索结果列表区 -->
       <div class="flex-grow overflow-y-auto p-4 divide-y divide-[var(--border-subtle)]/60">
-        <div v-if="!query && !selectedTag" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)] space-y-2">
-          <p>输入关键词，或点击上方标签开始检索档案</p>
-          <p class="text-[11px] opacity-70">支持模糊搜索标题、正文、地点、拍摄器材与感悟</p>
+        <div v-if="!query" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)] space-y-2">
+          <p>输入关键词开始检索生活档案</p>
+          <p class="text-[11px] opacity-70">支持模糊搜索标题、正文、城市地点、拍摄器材与感悟</p>
         </div>
 
         <div v-else-if="results.length === 0" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)]">

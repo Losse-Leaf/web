@@ -20,15 +20,22 @@ import {
   REGION_GROUPS,
   PROVINCE_SHORT_MAP,
   PROVINCE_ADCODE_MAP,
-  getCityTicketCode,
   getCityEpithet,
   formatVisitStampCount,
-  calculateStarTrailCurve,
-  ANCIENT_ROUTES,
 } from '../utils/atlasHelpers'
+
+withDefaults(
+  defineProps<{
+    storageConfigured?: boolean
+  }>(),
+  {
+    storageConfigured: true,
+  }
+)
 
 const emit = defineEmits<{
   (e: 'selectEntry', entry: LifeEntry): void
+  (e: 'footprintSaved'): void
 }>()
 
 const atlasData = ref<{
@@ -109,9 +116,9 @@ const chinaCityOptionMap = computed<Map<string, CityOption>>(() => {
 export interface LitCityItem {
   code: string
   name: string
+  shortName: string
   province: string
   pinyin: string
-  ticketCode: string
   epithet: string
   visitCount: number
   firstVisitedAt: string
@@ -128,9 +135,9 @@ const litCitiesList = computed<LitCityItem[]>(() => {
   for (const summary of atlasData.value.cities || []) {
     const base = chinaCityOptionMap.value.get(summary.city_code)
     const name = summary.city_name || base?.name || '未知城市'
+    const shortName = name.replace(/市|地区|自治州|特别行政区|盟/g, '') || name
     const province = base?.province || '其他'
     const pinyin = base?.pinyin || ''
-    const ticketCode = getCityTicketCode(summary.city_code, pinyin)
     const epithet = getCityEpithet(summary.city_code, name)
     const x = base?.x ?? 450
     const y = base?.y ?? 280
@@ -156,9 +163,9 @@ const litCitiesList = computed<LitCityItem[]>(() => {
     list.push({
       code: summary.city_code,
       name,
+      shortName,
       province,
       pinyin,
-      ticketCode,
       epithet,
       visitCount: summary.visit_count || 1,
       firstVisitedAt: summary.first_visited_at || '',
@@ -200,28 +207,6 @@ const cityCoveragePercentage = computed(() => {
 })
 const provinceCoveragePercentage = computed(() => {
   return Math.min(100, Number(((litProvinceCount.value / 34) * 100).toFixed(1))).toFixed(1)
-})
-
-// 星轨航线 (按首次到访时间正序串联)
-const celestialVoyageTrails = computed(() => {
-  if (litCitiesList.value.length < 2) return []
-
-  const sortedChronological = [...litCitiesList.value].sort((a, b) => {
-    return (a.firstVisitedAt || '').localeCompare(b.firstVisitedAt || '')
-  })
-
-  const trails: { path: string; from: string; to: string }[] = []
-  for (let i = 0; i < sortedChronological.length - 1; i++) {
-    const curr = sortedChronological[i]
-    const next = sortedChronological[i + 1]
-    const curve = calculateStarTrailCurve(curr.x, curr.y, next.x, next.y)
-    trails.push({
-      path: curve,
-      from: curr.name,
-      to: next.name,
-    })
-  }
-  return trails
 })
 
 // 票根架：按地域大区归类
@@ -305,6 +290,7 @@ const openProvinceDrawer = (adcode: string, provName: string) => {
 
 const handleFootprintSaved = () => {
   loadAtlas()
+  emit('footprintSaved')
 }
 
 onMounted(() => {
@@ -318,8 +304,8 @@ onMounted(() => {
     <header class="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--border-subtle)]">
       <div class="space-y-2">
         <div class="flex items-center gap-2.5">
-          <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase">
-            Travel Archive & Celestial Atlas
+          <span class="text-xs font-serif-editorial tracking-wider text-[var(--ink-muted)]">
+            散页山川卷
           </span>
           <span class="w-1.5 h-1.5 rounded-full bg-[var(--ink-muted)]/40"></span>
           <span class="text-xs font-serif-editorial text-[var(--ink-muted)]">
@@ -381,8 +367,8 @@ onMounted(() => {
     <!-- 三联生活指标纸签 -->
     <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
-        <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider mb-1">
-          LIT CITIES · 点亮地级市
+        <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider mb-1">
+          点亮地级市 · 驻足城邑
         </div>
         <div class="flex items-baseline gap-2">
           <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
@@ -395,8 +381,8 @@ onMounted(() => {
       </div>
 
       <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
-        <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider mb-1">
-          ROAMED PROVINCES · 踏足省级区
+        <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider mb-1">
+          踏足省级区 · 山河疆域
         </div>
         <div class="flex items-baseline gap-2">
           <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
@@ -409,14 +395,14 @@ onMounted(() => {
       </div>
 
       <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
-        <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider mb-1">
-          TOTAL FOOTPRINTS · 漫游足迹总数
+        <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider mb-1">
+          漫游足迹总数 · 岁月印信
         </div>
         <div class="flex items-baseline gap-2">
           <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
             {{ atlasData.total_footprints }}
           </span>
-          <span class="text-xs text-[var(--ink-muted)] font-mono-archive">
+          <span class="text-xs text-[var(--ink-muted)] font-serif-editorial">
             次行迹刻度
           </span>
         </div>
@@ -425,20 +411,20 @@ onMounted(() => {
 
     <!-- ================================================================================== -->
     <!-- 视角 A：【山川经纬星野】(Celestial Voyage Cartography)                             -->
-    <!-- 采用宽屏双栏工作台排版：左侧天球星野仪 ＋ 右侧驻足城市星野档案卡，告别大屏空白      -->
+    <!-- 采用宽屏双栏工作台排版：左侧纯粹经纬天球星野 ＋ 右侧驻足城市星野档案卡              -->
     <!-- ================================================================================== -->
     <section v-if="currentViewMode === 'celestial'" class="space-y-6">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        <!-- 左侧 8 栏：宏大深邃的天球星野图 -->
+        <!-- 左侧 8 栏：纯粹宁静的天球经纬星野图 -->
         <div class="lg:col-span-8 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-4 sm:p-6 shadow-sm overflow-hidden relative">
           <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--border-subtle)]/60 text-xs font-serif-editorial text-[var(--ink-secondary)]">
             <div class="flex items-center gap-2">
               <Sparkles class="w-3.5 h-3.5 text-[var(--ink-muted)]" />
-              <span>天球经纬坐标星图 · 罗盘玫瑰与古风茶马古道星野参考</span>
+              <span>山川经纬星野图 · 375 城星宿坐标与航海罗盘</span>
             </div>
-            <div class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-              ALBERS CELESTIAL PROJECTION
+            <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">
+              东经 85°~125° · 北纬 22°~45°
             </div>
           </div>
 
@@ -458,16 +444,10 @@ onMounted(() => {
                 </filter>
               </defs>
 
-              <!-- 1. 复古天球经纬大环与双线纸本边框 -->
+              <!-- 1. 双线纸本外框与四角复古裁切标 -->
               <rect x="25" y="20" width="790" height="540" fill="none" stroke="var(--border-subtle)" stroke-width="1.2" />
               <rect x="29" y="24" width="782" height="532" fill="none" stroke="var(--border-subtle)" stroke-width="0.6" stroke-dasharray="8 4" />
 
-              <!-- 天球赤道环与黄道弧线示意 (丰富古典天文质感，消除画面空洞) -->
-              <circle cx="420" cy="290" r="240" fill="none" stroke="var(--border-subtle)" stroke-width="0.8" opacity="0.35" />
-              <circle cx="420" cy="290" r="160" fill="none" stroke="var(--border-subtle)" stroke-width="0.6" stroke-dasharray="3 3" opacity="0.3" />
-              <ellipse cx="420" cy="290" rx="340" ry="190" fill="none" stroke="var(--border-subtle)" stroke-width="0.7" stroke-dasharray="10 5" opacity="0.25" />
-
-              <!-- 四角复古裁切标与星图题头 -->
               <path d="M 25 35 L 40 35 M 25 35 L 25 50" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
               <path d="M 815 35 L 800 35 M 815 35 L 815 50" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
               <path d="M 25 545 L 40 545 M 25 545 L 25 530" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
@@ -500,17 +480,7 @@ onMounted(() => {
                 <text x="38" y="413" text-anchor="start">22°N</text>
               </g>
 
-              <!-- 3. 古典人文行道星野弧线 (茶马古道/丝绸之路，带文字标注，解决画面单调) -->
-              <g fill="none" stroke="var(--ink-muted)" stroke-width="0.8" stroke-dasharray="3 4" opacity="0.35">
-                <path v-for="route in ANCIENT_ROUTES" :key="route.name" :d="route.path" />
-              </g>
-              <g font-size="8" font-family="serif" fill="var(--ink-muted)" opacity="0.45">
-                <text x="155" y="375" text-anchor="start">茶马川藏古道 ──</text>
-                <text x="180" y="215" text-anchor="start">丝路西域道 ──</text>
-                <text x="525" y="325" text-anchor="start">京杭水驿 ──</text>
-              </g>
-
-              <!-- 4. 左下角复古航海罗盘玫瑰 -->
+              <!-- 3. 左下角复古航海罗盘玫瑰 -->
               <g transform="translate(90, 485)" opacity="0.75">
                 <circle cx="0" cy="0" r="26" fill="none" stroke="var(--border-subtle)" stroke-width="0.8" />
                 <circle cx="0" cy="0" r="13" fill="none" stroke="var(--border-subtle)" stroke-width="0.6" stroke-dasharray="2 2" />
@@ -518,13 +488,13 @@ onMounted(() => {
                 <path d="M 0 24 L 4 0 L 0 -5 L -4 0 Z" fill="var(--border-divider)" />
                 <path d="M -24 0 L 0 4 L 5 0 L 0 -4 Z" fill="var(--border-divider)" />
                 <path d="M 24 0 L 0 4 L -5 0 L 0 -4 Z" fill="var(--border-divider)" />
-                <text x="0" y="-28" font-size="8" font-family="monospace" text-anchor="middle" fill="var(--ink-primary)">N</text>
-                <text x="0" y="36" font-size="8" font-family="monospace" text-anchor="middle" fill="var(--ink-muted)">S</text>
-                <text x="34" y="3" font-size="8" font-family="monospace" text-anchor="middle" fill="var(--ink-muted)">E</text>
-                <text x="-34" y="3" font-size="8" font-family="monospace" text-anchor="middle" fill="var(--ink-muted)">W</text>
+                <text x="0" y="-28" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-primary)">北</text>
+                <text x="0" y="36" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-muted)">南</text>
+                <text x="34" y="3" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-muted)">东</text>
+                <text x="-34" y="3" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-muted)">西</text>
               </g>
 
-              <!-- 5. 全量 375 座城市的微尘星点 (呈现壮阔星象底座) -->
+              <!-- 4. 全量 375 座城市的微尘星点 (呈现宁静壮阔的星象底座) -->
               <g fill="var(--ink-muted)" opacity="0.18">
                 <circle
                   v-for="city in CHINA_CITIES"
@@ -535,16 +505,7 @@ onMounted(() => {
                 />
               </g>
 
-              <!-- 6. 旅途星轨航线 (连接点亮城市) -->
-              <g fill="none" stroke="var(--ink-secondary)" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.5">
-                <path
-                  v-for="(trail, idx) in celestialVoyageTrails"
-                  :key="idx"
-                  :d="trail.path"
-                />
-              </g>
-
-              <!-- 7. 点亮城市的星芒节点 (焦点城市多重光晕) -->
+              <!-- 5. 点亮城市的星芒节点 (真实点亮，不绘虚假航线与雷达圈) -->
               <g>
                 <g
                   v-for="c in litCitiesList"
@@ -553,34 +514,22 @@ onMounted(() => {
                   @mouseenter="focusedCityCode = c.code"
                   @click="openCityDrawer(c.code, c.name)"
                 >
-                  <!-- 焦点城市的超大漫射星盘光晕 -->
-                  <circle
-                    v-if="focusedCityCode === c.code"
-                    :cx="c.x"
-                    :cy="c.y"
-                    r="22"
-                    fill="none"
-                    stroke="#b94a3b"
-                    stroke-width="0.8"
-                    stroke-dasharray="3 3"
-                    opacity="0.45"
-                  />
-                  <!-- 节点常规光晕 -->
+                  <!-- 节点温润光晕 -->
                   <circle
                     :cx="c.x"
                     :cy="c.y"
-                    :r="focusedCityCode === c.code ? 12 : 8"
+                    :r="focusedCityCode === c.code ? 11 : 7.5"
                     fill="none"
                     :stroke="c.code === '511800' || c.visitCount >= 3 ? '#b94a3b' : 'var(--ink-secondary)'"
-                    stroke-width="1.2"
-                    opacity="0.6"
+                    stroke-width="1.1"
+                    opacity="0.55"
                     filter="url(#focus-glow)"
                   />
                   <!-- 节点中心实心星芒 -->
                   <circle
                     :cx="c.x"
                     :cy="c.y"
-                    :r="focusedCityCode === c.code ? 5 : 3.5"
+                    :r="focusedCityCode === c.code ? 4.8 : 3.5"
                     :fill="c.code === '511800' || c.visitCount >= 3 ? '#b94a3b' : 'var(--ink-primary)'"
                   />
                   <!-- 城市名称常驻注记 -->
@@ -593,7 +542,7 @@ onMounted(() => {
                     class="font-semibold transition-all"
                     style="paint-order: stroke; stroke: var(--bg-archive); stroke-width: 3px; stroke-linejoin: round;"
                   >
-                    {{ c.name.replace(/市|特别行政区/g, '') }}
+                    {{ c.shortName }}
                   </text>
                 </g>
               </g>
@@ -607,11 +556,11 @@ onMounted(() => {
             v-if="currentFocusedCity"
             class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-5 sm:p-6 shadow-sm space-y-5 relative overflow-hidden"
           >
-            <!-- 顶栏：代码徽章与所属省份 -->
+            <!-- 顶栏：真实中文省市题记与省份印章 -->
             <div class="flex items-start justify-between border-b border-[var(--border-subtle)]/70 pb-3">
               <div>
-                <span class="text-xs font-mono-archive font-bold text-[#b94a3b] tracking-wider">
-                  {{ currentFocusedCity.ticketCode }} · DESTINATION
+                <span class="text-xs font-serif-editorial font-medium text-[#b94a3b] tracking-wider">
+                  {{ currentFocusedCity.province }} · 驻足城邑
                 </span>
                 <h3 class="font-serif-editorial text-2xl font-medium text-[var(--ink-primary)] mt-0.5">
                   {{ currentFocusedCity.name }}
@@ -647,7 +596,7 @@ onMounted(() => {
 
             <!-- 旅途随笔手札引用 -->
             <div v-if="currentFocusedCity.latestNote" class="text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed bg-[var(--bg-subtle)]/30 p-3 rounded-xs border-l-2 border-[#b94a3b]">
-              <span class="text-[var(--ink-muted)] block text-[10px] uppercase font-mono-archive mb-1">VOYAGE NOTE:</span>
+              <span class="text-[var(--ink-muted)] block text-[11px] font-serif-editorial mb-1">行旅随笔：</span>
               “{{ currentFocusedCity.latestNote }}”
             </div>
 
@@ -689,15 +638,15 @@ onMounted(() => {
 
           <!-- 备忘与漫游箴言纸签 (充实右侧视觉高度) -->
           <div class="bg-[var(--bg-subtle)]/50 border border-[var(--border-subtle)] rounded-xs p-5 space-y-3">
-            <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-              VOYAGE CHRONICLE · 散页山川录
+            <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider">
+              散页山川录 · 行迹手记
             </div>
             <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
               “凡是走过的山川，皆成岁月星芒。不必丈量走得多远，只在乎留下了多少真实的生活刻度。”
             </p>
-            <div class="pt-2 border-t border-[var(--border-subtle)]/60 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
-              <span>ACTIVE NODES: {{ litCityCount }}</span>
-              <span>COVERAGE: {{ cityCoveragePercentage }}%</span>
+            <div class="pt-2 border-t border-[var(--border-subtle)]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]">
+              <span>已点亮星宿：{{ litCityCount }} 座</span>
+              <span>山河涉猎：{{ cityCoveragePercentage }}%</span>
             </div>
           </div>
         </div>
@@ -707,7 +656,7 @@ onMounted(() => {
 
     <!-- ================================================================================== -->
     <!-- 视角 B：【典藏票根印信架】(Authentic Vintage Voyage Tickets Rack)                   -->
-    <!-- 彻底重塑为两段式经典复古特种纸车票、双圈波浪邮戳、虚线针孔打孔与备忘插槽           -->
+    <!-- 两段式经典复古特种纸车票、双圈波浪邮戳、虚线针孔打孔与备忘插槽                     -->
     <!-- ================================================================================== -->
     <section v-else class="space-y-10">
       <!-- 票根架控制工具栏 -->
@@ -817,7 +766,7 @@ onMounted(() => {
               @click="openCityDrawer(city.code, city.name)"
               class="vintage-ticket-card relative bg-[#FAF7F0] dark:bg-[#1C1A18] border border-[#D5CDC0] dark:border-[#383430] rounded-xs shadow-[0_6px_24px_rgba(0,0,0,0.06)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden flex flex-col md:flex-row cursor-pointer group"
             >
-              <!-- 1. 左联：副券 / 旅客存根 (Counterfoil / Passenger Stub) -->
+              <!-- 1. 左联：副券 / 旅客存根 -->
               <div class="w-full md:w-52 shrink-0 bg-[#F2EDE2] dark:bg-[#23201D] border-b md:border-b-0 md:border-r-2 border-dashed border-[#C5BBAA] dark:border-[#423D38] p-5 flex flex-col justify-between relative overflow-hidden">
                 <!-- 针孔咬痕咬角 (上下两处半圆切口) -->
                 <div class="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
@@ -826,8 +775,8 @@ onMounted(() => {
                 <div class="space-y-3">
                   <!-- 存根抬头与仿真条形码 -->
                   <div class="flex items-center justify-between">
-                    <span class="text-[9px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                      STUB #{{ city.code.slice(0, 4) }}
+                    <span class="text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
+                      存根 #{{ city.code.slice(0, 4) }}
                     </span>
                     <!-- 仿真条形码 -->
                     <div class="flex items-center gap-[1.5px] h-3.5 opacity-65">
@@ -840,16 +789,13 @@ onMounted(() => {
                     </div>
                   </div>
 
-                  <!-- 核心大号三字代码与城市全称 -->
-                  <div>
-                    <div class="font-mono-archive text-3xl font-extrabold tracking-widest text-[var(--ink-primary)] group-hover:text-[#b94a3b] transition-colors">
-                      {{ city.ticketCode }}
+                  <!-- 真实中文省市题记与城市全称 -->
+                  <div class="space-y-1">
+                    <div class="text-xs font-serif-editorial text-[#b94a3b] font-medium tracking-wider">
+                      {{ city.province }} · {{ city.shortName }}
                     </div>
-                    <div class="font-serif-editorial text-base font-semibold text-[var(--ink-primary)]">
+                    <div class="font-serif-editorial text-2xl font-bold tracking-wide text-[var(--ink-primary)] group-hover:text-[#b94a3b] transition-colors">
                       {{ city.name }}
-                    </div>
-                    <div class="text-[10px] font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
-                      {{ city.pinyin }}
                     </div>
                   </div>
                 </div>
@@ -863,19 +809,19 @@ onMounted(() => {
                 </div>
               </div>
 
-              <!-- 2. 右联：正券 / 乘车票面 (Main Boarding Pass) -->
+              <!-- 2. 右联：正券 / 乘车票面 -->
               <div class="flex-1 p-5 sm:p-6 flex flex-col justify-between space-y-4 relative">
                 <!-- 票面顶栏：出版物客票信息 -->
-                <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                  <span>LOOSE LEAF TRAVEL PASS · 散页客票</span>
-                  <span>CLASS: FIRST · 登程</span>
-                  <span class="hidden sm:inline">NO. {{ city.code }}</span>
+                <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[11px] font-serif-editorial text-[var(--ink-muted)] tracking-wider">
+                  <span>散页客票 · 山川行迹</span>
+                  <span>头等舱 · 登程</span>
+                  <span class="hidden sm:inline font-mono-archive text-[10px]">编号 {{ city.code }}</span>
                 </div>
 
                 <!-- 路线段：起步 ➔ 到达 -->
                 <div class="flex items-center justify-between gap-4">
                   <div>
-                    <div class="text-[10px] font-mono-archive text-[var(--ink-muted)] uppercase">ORIGIN</div>
+                    <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">出发地</div>
                     <div class="font-serif-editorial text-sm font-medium text-[var(--ink-secondary)]">起步站</div>
                   </div>
 
@@ -886,7 +832,7 @@ onMounted(() => {
                   </div>
 
                   <div class="text-right">
-                    <div class="text-[10px] font-mono-archive text-[#b94a3b] font-bold uppercase">DESTINATION</div>
+                    <div class="text-[11px] font-serif-editorial text-[#b94a3b] font-medium">目的地</div>
                     <div class="font-serif-editorial text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
                       {{ city.name }}
                     </div>
@@ -911,11 +857,11 @@ onMounted(() => {
                     </div>
                   </div>
 
-                  <!-- 右侧：倾斜复古红色双圈波浪橡皮邮戳 (SVG Rubber Stamp) -->
+                  <!-- 右侧：倾斜复古红色双圈波浪橡皮邮戳 -->
                   <div class="shrink-0 transform rotate-[-6deg] group-hover:rotate-0 transition-transform duration-300">
                     <div class="border-2 border-[#b94a3b]/80 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative">
                       <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center">
-                        <span class="text-[7px] font-mono-archive font-bold uppercase tracking-widest">LOOSE LEAF</span>
+                        <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
                         <span class="text-[9px] font-serif-editorial font-bold my-0.5">
                           {{ city.latestVisitedAt || city.firstVisitedAt || '留步' }}
                         </span>
@@ -935,7 +881,7 @@ onMounted(() => {
 
                 <!-- 票面底栏：点阵打码 ＋ 翻阅抽屉入口 -->
                 <div class="pt-2.5 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)] transition-colors">
-                  <span class="font-mono-archive text-[10px]">STATUS: STAMPED · 已钤印归档</span>
+                  <span>已钤印归册 · {{ city.province }}</span>
                   <div class="flex items-center gap-1 font-medium text-[var(--ink-primary)]">
                     <span>翻阅回忆抽屉 (4章节)</span>
                     <ChevronRight class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
@@ -962,11 +908,11 @@ onMounted(() => {
                   {{ isAdmin ? '“山川尚远，步履不停。点击录入新一站行迹，装订专属车票。”' : '“山川尚远，步履不停。岁序常新，静候下一次出发。”' }}
                 </p>
               </div>
-              <span v-if="isAdmin" class="text-[11px] font-mono-archive text-[var(--ink-secondary)] group-hover:text-[var(--ink-primary)]">
-                + ADD NEXT VOYAGE TICKET
+              <span v-if="isAdmin" class="text-xs font-serif-editorial text-[var(--ink-secondary)] group-hover:text-[var(--ink-primary)]">
+                ＋ 装订下一站车票
               </span>
-              <span v-else class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                NEXT HORIZON AWAITS
+              <span v-else class="text-xs font-serif-editorial text-[var(--ink-muted)]">
+                静候下一段山海旅程
               </span>
             </div>
           </div>
@@ -1029,7 +975,7 @@ onMounted(() => {
 
                 <div class="space-y-3">
                   <div class="flex items-center justify-between">
-                    <span class="text-[9px] font-mono-archive text-[var(--ink-muted)]">STUB #{{ city.code.slice(0, 4) }}</span>
+                    <span class="text-[10px] font-mono-archive text-[var(--ink-muted)]">存根 #{{ city.code.slice(0, 4) }}</span>
                     <div class="flex items-center gap-[1.5px] h-3.5 opacity-65">
                       <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
                       <div class="w-[2px] h-full bg-[var(--ink-primary)]"></div>
@@ -1037,11 +983,11 @@ onMounted(() => {
                       <div class="w-[3px] h-full bg-[var(--ink-primary)]"></div>
                     </div>
                   </div>
-                  <div>
-                    <div class="font-mono-archive text-3xl font-extrabold text-[var(--ink-primary)] group-hover:text-[#b94a3b] transition-colors">
-                      {{ city.ticketCode }}
+                  <div class="space-y-1">
+                    <div class="text-xs font-serif-editorial text-[#b94a3b] font-medium tracking-wider">
+                      {{ city.province }} · {{ city.shortName }}
                     </div>
-                    <div class="font-serif-editorial text-base font-semibold text-[var(--ink-primary)]">
+                    <div class="font-serif-editorial text-2xl font-bold tracking-wide text-[var(--ink-primary)] group-hover:text-[#b94a3b] transition-colors">
                       {{ city.name }}
                     </div>
                   </div>
@@ -1057,14 +1003,14 @@ onMounted(() => {
 
               <!-- 正券联 -->
               <div class="flex-1 p-5 sm:p-6 flex flex-col justify-between space-y-4">
-                <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[10px] font-mono-archive text-[var(--ink-muted)]">
-                  <span>LOOSE LEAF TRAVEL PASS · 编年行迹</span>
-                  <span>{{ group.year }} EDITION</span>
+                <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[11px] font-serif-editorial text-[var(--ink-muted)]">
+                  <span>散页客票 · 编年行迹</span>
+                  <span>{{ group.year }} 岁次卷</span>
                 </div>
 
                 <div class="flex items-center justify-between gap-4">
                   <div>
-                    <div class="text-[10px] font-mono-archive text-[var(--ink-muted)] uppercase">ORIGIN</div>
+                    <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">出发地</div>
                     <div class="font-serif-editorial text-sm font-medium text-[var(--ink-secondary)]">起步站</div>
                   </div>
                   <div class="flex-1 flex items-center justify-center gap-2 text-[var(--ink-muted)] opacity-60">
@@ -1073,7 +1019,7 @@ onMounted(() => {
                     <span class="w-full border-t border-dashed border-[var(--border-subtle)]"></span>
                   </div>
                   <div class="text-right">
-                    <div class="text-[10px] font-mono-archive text-[#b94a3b] font-bold uppercase">DESTINATION</div>
+                    <div class="text-[11px] font-serif-editorial text-[#b94a3b] font-medium">目的地</div>
                     <div class="font-serif-editorial text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
                       {{ city.name }}
                     </div>
@@ -1093,7 +1039,7 @@ onMounted(() => {
                   <div class="shrink-0 transform rotate-[-6deg] group-hover:rotate-0 transition-transform">
                     <div class="border-2 border-[#b94a3b]/80 rounded-full w-20 h-20 p-0.5 flex items-center justify-center">
                       <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center">
-                        <span class="text-[7px] font-mono-archive font-bold uppercase tracking-widest">LOOSE LEAF</span>
+                        <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
                         <span class="text-[9px] font-serif-editorial font-bold my-0.5">{{ city.latestVisitedAt }}</span>
                         <span class="text-[8px] font-serif-editorial border-t border-[#b94a3b]/60 px-1 pt-0.5">
                           {{ formatVisitStampCount(city.visitCount) }}
@@ -1104,7 +1050,7 @@ onMounted(() => {
                 </div>
 
                 <div class="pt-2.5 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)] transition-colors">
-                  <span class="font-mono-archive text-[10px]">ARCHIVED: {{ city.code }}</span>
+                  <span>已钤印归册 · 编号 {{ city.code }}</span>
                   <div class="flex items-center gap-1 font-medium text-[var(--ink-primary)]">
                     <span>翻阅回忆抽屉 (4章节)</span>
                     <ChevronRight class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
@@ -1131,11 +1077,11 @@ onMounted(() => {
                   {{ isAdmin ? '“记录岁序流转，新的远方即将在此钤印。”' : '“岁序常新，记录下一站时光故事。”' }}
                 </p>
               </div>
-              <span v-if="isAdmin" class="text-[11px] font-mono-archive text-[var(--ink-secondary)] group-hover:text-[var(--ink-primary)]">
-                + ADD NEXT VOYAGE TICKET
+              <span v-if="isAdmin" class="text-xs font-serif-editorial text-[var(--ink-secondary)] group-hover:text-[var(--ink-primary)]">
+                ＋ 装订下一站车票
               </span>
-              <span v-else class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                NEW JOURNEY TO UNFOLD
+              <span v-else class="text-xs font-serif-editorial text-[var(--ink-muted)]">
+                静候下一段山海旅程
               </span>
             </div>
           </div>
@@ -1151,8 +1097,8 @@ onMounted(() => {
               山川物候手记 · 旅途行历
             </h3>
           </div>
-          <span class="text-xs font-mono-archive text-[var(--ink-muted)]">
-            RECENT FOOTPRINT ENTRIES
+          <span class="text-xs font-serif-editorial text-[var(--ink-muted)]">
+            近期行迹归档
           </span>
         </div>
 
@@ -1192,6 +1138,7 @@ onMounted(() => {
     <!-- 录入足迹弹窗 -->
     <AddFootprintModal
       :isOpen="isAddModalOpen"
+      :storageConfigured="storageConfigured"
       @close="isAddModalOpen = false"
       @saved="handleFootprintSaved"
     />

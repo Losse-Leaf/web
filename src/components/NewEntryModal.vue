@@ -4,6 +4,13 @@ import { X, ArrowLeft, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
+import CityPicker from './CityPicker.vue'
+import {
+  matchCityFromLocation,
+  getFallbackDefaultCity,
+  resolveDefaultCity,
+  saveLastUsedCity,
+} from '../utils/cities'
 import {
   createLifeEntry,
   createTransaction,
@@ -43,7 +50,9 @@ const errorMsg = ref<string | null>(null)
 const title = ref('')
 const content = ref('')
 const location = ref('')
-const tags = ref('')
+const selectedCityCode = ref('')
+const selectedCityName = ref('')
+const userManuallyChangedCity = ref(false)
 const occurredAt = ref(getTodayDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const attachmentIds = ref<number[]>([])
@@ -55,7 +64,6 @@ const projCategory = ref('开源项目')
 const projStatus = ref('Active')
 const projDescription = ref('')
 const projStory = ref('')
-const projTags = ref('')
 const projGithubUrl = ref('')
 
 // 记账专用状态
@@ -84,6 +92,32 @@ const defaultCreditChannels: CreditChannel[] = [
 const displayCreditChannels = computed<CreditChannel[]>(() => {
   return creditChannels.value.length > 0 ? creditChannels.value : defaultCreditChannels
 })
+
+const applyDefaultCity = () => {
+  userManuallyChangedCity.value = false
+  const fallback = getFallbackDefaultCity()
+  if (fallback) {
+    selectedCityCode.value = fallback.code
+    selectedCityName.value = fallback.name
+    if (!location.value.trim()) {
+      location.value = fallback.name
+    }
+  } else {
+    selectedCityCode.value = ''
+    selectedCityName.value = ''
+  }
+
+  resolveDefaultCity().then((resolved) => {
+    if (!userManuallyChangedCity.value && resolved) {
+      const prevName = selectedCityName.value
+      selectedCityCode.value = resolved.code
+      selectedCityName.value = resolved.name
+      if (!location.value.trim() || location.value.trim() === prevName) {
+        location.value = resolved.name
+      }
+    }
+  })
+}
 
 const loadAvailableWishes = async () => {
   try {
@@ -118,6 +152,7 @@ watch(
     if (open) {
       loadAvailableWishes()
       loadCreditChannelsList()
+      applyDefaultCity()
       if (initKind) {
         selectedKind.value = initKind
         step.value = 'form'
@@ -190,6 +225,19 @@ const selectKind = (k: EntryKind) => {
   errorMsg.value = null
 }
 
+const handleEntryCitySelect = (city: { code: string; name: string }) => {
+  userManuallyChangedCity.value = true
+  const prevName = selectedCityName.value
+  selectedCityCode.value = city.code
+  selectedCityName.value = city.name
+  if (city.name && (!location.value.trim() || location.value.trim() === prevName)) {
+    location.value = city.name
+  }
+  if (city.code && city.name) {
+    saveLastUsedCity(city)
+  }
+}
+
 const resetForm = () => {
   if (props.initialKind) {
     selectedKind.value = props.initialKind
@@ -201,7 +249,8 @@ const resetForm = () => {
   title.value = ''
   content.value = ''
   location.value = ''
-  tags.value = ''
+  selectedCityCode.value = ''
+  selectedCityName.value = ''
   occurredAt.value = getTodayDateTimeString()
   selectedProjectId.value = null
   attachmentIds.value = []
@@ -223,7 +272,6 @@ const resetForm = () => {
   projStatus.value = 'Active'
   projDescription.value = ''
   projStory.value = ''
-  projTags.value = ''
   projGithubUrl.value = ''
   errorMsg.value = null
   isSubmitting.value = false
@@ -375,7 +423,6 @@ const handleSubmit = async () => {
         status: projStatus.value || 'Active',
         description: projDescription.value.trim(),
         story: projStory.value.trim(),
-        tags: projTags.value.trim(),
         github_url: projGithubUrl.value.trim(),
       })
 
@@ -385,7 +432,6 @@ const handleSubmit = async () => {
         title: projTitle.value.trim(),
         content: projDescription.value.trim() || projStory.value.trim() || '亲手创造的作品。',
         occurred_at: occurredAt.value,
-        tags: projTags.value.trim(),
         project_id: createdProj.id,
       })
 
@@ -415,13 +461,23 @@ const handleSubmit = async () => {
     isSubmitting.value = true
     let projId = selectedProjectId.value
 
+    const matchedCity = !selectedCityCode.value ? matchCityFromLocation(location.value) : null
+    const finalCityCode = selectedCityCode.value || matchedCity?.code || undefined
+    const finalCityName = selectedCityName.value || matchedCity?.name || undefined
+    const finalLocation = location.value.trim() || finalCityName || ''
+
+    if (finalCityCode && finalCityName) {
+      saveLastUsedCity({ code: finalCityCode, name: finalCityName })
+    }
+
     const created = await createLifeEntry({
       type: selectedKind.value,
       title: title.value.trim(),
       content: content.value.trim() || (selectedKind.value === 'photo' ? '定格的照片。' : ''),
       occurred_at: occurredAt.value,
-      location: location.value.trim(),
-      tags: tags.value.trim(),
+      location: finalLocation,
+      city_code: finalCityCode,
+      city_name: finalCityName,
       project_id: projId,
       attachment_ids: attachmentIds.value,
     })
@@ -790,26 +846,15 @@ const handleSubmit = async () => {
               ></textarea>
             </div>
 
-            <!-- 标签与代码仓链接 -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标签 (逗号分隔)</label>
-                <input
-                  v-model="projTags"
-                  type="text"
-                  placeholder="例如: Vue, Go, SQLite"
-                  class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">代码仓 / 访问外链 (可选)</label>
-                <input
-                  v-model="projGithubUrl"
-                  type="url"
-                  placeholder="https://github.com/..."
-                  class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                />
-              </div>
+            <!-- 代码仓链接 -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">代码仓 / 访问外链 (可选)</label>
+              <input
+                v-model="projGithubUrl"
+                type="url"
+                placeholder="https://github.com/..."
+                class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              />
             </div>
           </div>
         </template>
@@ -848,7 +893,7 @@ const handleSubmit = async () => {
             @update:attachments="attachmentIds = $event"
           />
 
-          <!-- 发生时间与地点 -->
+          <!-- 发生时间与驻足城市/地点 (支持自动下渗点亮山川行迹) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
@@ -860,25 +905,25 @@ const handleSubmit = async () => {
             </div>
 
             <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">地点 (可选)</label>
-              <input
-                v-model="location"
-                type="text"
-                placeholder="例如：城市 · 地点"
-                class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
+                所在城市 (可选 · 自动点亮山川足迹)
+              </label>
+              <CityPicker
+                v-model="selectedCityCode"
+                placeholder="检索城市 (如: 雅安 / 杭州)..."
+                @select="handleEntryCitySelect"
               />
             </div>
           </div>
 
-          <!-- 标签 (可选) -->
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              标签 (可选，逗号分隔)
+              具体地点 / 街巷注记 (可选)
             </label>
             <input
-              v-model="tags"
+              v-model="location"
               type="text"
-              placeholder="例如：胶片, 摄影, 秋天, 漫游"
+              placeholder="例如：雅安 · 青衣江畔 或 咖啡馆角落"
               class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>

@@ -198,7 +198,8 @@ export async function createLifeEntry(data: {
   content: string
   occurred_at?: string
   location?: string
-  tags?: string
+  city_code?: string
+  city_name?: string
   project_id?: number | null
   attachment_ids?: number[]
 }): Promise<LifeEntry> {
@@ -218,7 +219,8 @@ export async function updateLifeEntry(
     content?: string
     occurred_at?: string
     location?: string
-    tags?: string
+    city_code?: string
+    city_name?: string
     project_id?: number | null
     attachment_ids?: number[]
   }
@@ -455,7 +457,6 @@ export async function createProject(data: {
   description?: string
   story?: string
   category?: string
-  tags?: string
   github_url?: string
   status?: string
   featured?: boolean
@@ -475,7 +476,6 @@ export async function updateProject(
     description?: string
     story?: string
     category?: string
-    tags?: string
     github_url?: string
     status?: string
     featured?: boolean
@@ -713,6 +713,7 @@ export async function createFootprint(data: {
   city_code: string
   city_name: string
   visited_at: string
+  title?: string
   note?: string
   life_entry_id?: number
   wish_id?: number
@@ -860,8 +861,8 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
 }
 
 // 15. 系统版本检测与更新公告存档 (System Update Check & Update Notices · 管理端专用 RC-97)
-export async function checkSystemUpdate(): Promise<UpdateCheckResult> {
-  return request<UpdateCheckResult>(`${API_BASE}/system/update-check`)
+export async function checkSystemUpdate(force?: boolean): Promise<UpdateCheckResult> {
+  return request<UpdateCheckResult>(`${API_BASE}/system/update-check${force ? '?force=true' : ''}`)
 }
 
 export async function fetchUpdateNotices(): Promise<UpdateNotice[]> {

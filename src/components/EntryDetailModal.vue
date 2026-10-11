@@ -4,6 +4,8 @@ import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle } from 'lucide-vue
 import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
+import CityPicker from './CityPicker.vue'
+import { matchCityFromLocation, saveLastUsedCity } from '../utils/cities'
 import { updateLifeEntry, deleteLifeEntry } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
 import { parseOccurredDate } from '../utils/format'
@@ -29,10 +31,22 @@ const errorMsg = ref<string | null>(null)
 const editTitle = ref('')
 const editContent = ref('')
 const editLocation = ref('')
-const editTags = ref('')
+const editCityCode = ref('')
+const editCityName = ref('')
 const editOccurredAt = ref('')
 const editProjectId = ref<number | null>(null)
 const editAttachmentIds = ref<number[]>([])
+
+const handleEditCitySelect = (city: { code: string; name: string }) => {
+  editCityCode.value = city.code
+  editCityName.value = city.name
+  if (city.name && !editLocation.value.trim()) {
+    editLocation.value = city.name
+  }
+  if (city.code && city.name) {
+    saveLastUsedCity(city)
+  }
+}
 
 const startEdit = () => {
   if (!props.entry) return
@@ -40,7 +54,9 @@ const startEdit = () => {
   editTitle.value = props.entry.title || ''
   editContent.value = props.entry.content || ''
   editLocation.value = props.entry.location || ''
-  editTags.value = props.entry.tags || ''
+  const matched = matchCityFromLocation(props.entry.location)
+  editCityCode.value = props.entry.city_code || matched?.code || ''
+  editCityName.value = props.entry.city_name || matched?.name || ''
   editProjectId.value = props.entry.project_id || null
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
 
@@ -71,12 +87,22 @@ const handleSaveEdit = async () => {
 
   try {
     isSubmitting.value = true
+    const matched = !editCityCode.value ? matchCityFromLocation(editLocation.value) : null
+    const finalCityCode = editCityCode.value || matched?.code || undefined
+    const finalCityName = editCityName.value || matched?.name || undefined
+    const finalLocation = editLocation.value.trim() || finalCityName || ''
+
+    if (finalCityCode && finalCityName) {
+      saveLastUsedCity({ code: finalCityCode, name: finalCityName })
+    }
+
     const updated = await updateLifeEntry(props.entry.id, {
       type: props.entry.type,
       title: editTitle.value.trim(),
       content: editContent.value.trim(),
-      location: editLocation.value.trim(),
-      tags: editTags.value.trim(),
+      location: finalLocation,
+      city_code: finalCityCode,
+      city_name: finalCityName,
       project_id: editProjectId.value,
       occurred_at: editOccurredAt.value,
       attachment_ids: editAttachmentIds.value,
@@ -254,13 +280,24 @@ const getKindLabel = (type: string) => {
           </div>
 
           <div class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">地点</label>
-            <input
-              v-model="editLocation"
-              type="text"
-              class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
+              所在城市 (自动点亮山川足迹)
+            </label>
+            <CityPicker
+              v-model="editCityCode"
+              :placeholder="editCityName || '检索城市 (如: 雅安 / 杭州)...'"
+              @select="handleEditCitySelect"
             />
           </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">具体地点</label>
+          <input
+            v-model="editLocation"
+            type="text"
+            class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+          />
         </div>
 
         <!-- 项目关联 -->
@@ -272,17 +309,6 @@ const getKindLabel = (type: string) => {
               { value: null, label: '不关联项目' },
               ...projects.map((p) => ({ value: p.id, label: p.title })),
             ]"
-          />
-        </div>
-
-        <!-- 标签分类 -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标签 (可选，逗号分隔)</label>
-          <input
-            v-model="editTags"
-            type="text"
-            placeholder="例如：摄影, 胶片, 旅途, 记录"
-            class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
           />
         </div>
 

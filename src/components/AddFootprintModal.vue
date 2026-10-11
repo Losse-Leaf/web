@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { X, MapPin, Compass, Check } from 'lucide-vue-next'
 import { createFootprint } from '../utils/api'
 import { audio } from '../utils/audio'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
+import ImageUploader from './ImageUploader.vue'
+import {
+  getFallbackDefaultCity,
+  resolveDefaultCity,
+  saveLastUsedCity,
+} from '../utils/cities'
 import type { Footprint } from '../types'
 
-const props = defineProps<{
-  isOpen: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    isOpen: boolean
+    storageConfigured?: boolean
+  }>(),
+  {
+    storageConfigured: true,
+  }
+)
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -18,15 +30,55 @@ const emit = defineEmits<{
 
 const selectedCityCode = ref('')
 const selectedCityName = ref('')
+const userManuallyChangedCity = ref(false)
 const todayStr = new Date().toISOString().slice(0, 10)
 const visitedAt = ref(todayStr)
+const title = ref('')
 const note = ref('')
+const attachmentIds = ref<number[]>([])
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
+const applyDefaultCity = () => {
+  userManuallyChangedCity.value = false
+  const fallback = getFallbackDefaultCity()
+  if (fallback) {
+    selectedCityCode.value = fallback.code
+    selectedCityName.value = fallback.name
+  } else {
+    selectedCityCode.value = ''
+    selectedCityName.value = ''
+  }
+
+  resolveDefaultCity().then((resolved) => {
+    if (!userManuallyChangedCity.value && resolved) {
+      selectedCityCode.value = resolved.code
+      selectedCityName.value = resolved.name
+    }
+  })
+}
+
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) {
+      errorMsg.value = ''
+      title.value = ''
+      note.value = ''
+      attachmentIds.value = []
+      applyDefaultCity()
+    }
+  },
+  { immediate: true }
+)
+
 const handleCitySelect = (city: { code: string; name: string }) => {
+  userManuallyChangedCity.value = true
   selectedCityCode.value = city.code
   selectedCityName.value = city.name
+  if (city.code && city.name) {
+    saveLastUsedCity(city)
+  }
 }
 
 const handleSubmit = async () => {
@@ -42,11 +94,17 @@ const handleSubmit = async () => {
   try {
     isSubmitting.value = true
     errorMsg.value = ''
+    saveLastUsedCity({
+      code: selectedCityCode.value,
+      name: selectedCityName.value,
+    })
     const fp = await createFootprint({
       city_code: selectedCityCode.value,
       city_name: selectedCityName.value,
       visited_at: new Date(visitedAt.value).toISOString(),
+      title: title.value.trim() || undefined,
       note: note.value.trim() || undefined,
+      attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
     })
     audio.playShutter()
     emit('saved', fp)
@@ -78,7 +136,7 @@ const handleSubmit = async () => {
             </h2>
           </div>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
-            点亮山川图谱。支持补录过去到访过的历史城市与行旅随笔。
+            点亮山川图谱。附带行旅随笔或影像时，将自动伴生归入主时间流。
           </p>
         </div>
         <button
@@ -118,6 +176,17 @@ const handleSubmit = async () => {
           />
         </div>
 
+        <!-- 行旅标题 (选填) -->
+        <div>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行旅标题 (选填)</label>
+          <input
+            v-model="title"
+            type="text"
+            placeholder="例如：雨城雅安初访 · 青衣江畔"
+            class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial"
+          />
+        </div>
+
         <!-- 足迹简注 / 随笔 -->
         <div>
           <label class="block text-[11px] text-[var(--ink-muted)] mb-1">足迹简注 / 行旅随笔 (选填)</label>
@@ -128,6 +197,12 @@ const handleSubmit = async () => {
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
           ></textarea>
         </div>
+
+        <!-- 旅途影像上传 -->
+        <ImageUploader
+          :storageConfigured="storageConfigured"
+          @update:attachments="(ids) => (attachmentIds = ids)"
+        />
 
         <!-- 底部提交操作 -->
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">

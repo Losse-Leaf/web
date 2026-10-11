@@ -70,7 +70,6 @@ const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile())
 const {
   entries,
   currentCategory,
-  allTags,
   loadRemoteEntries,
   addEntry,
   updateEntry,
@@ -175,10 +174,6 @@ const closeEntryDetail = () => {
   }
 }
 
-const handleSelectTag = (_tag: string) => {
-  isSearchOpen.value = true
-}
-
 const openStatsModal = async () => {
   isStatsOpen.value = true
   try {
@@ -232,10 +227,12 @@ const handleTxDeleted = (id: number) => {
 
 const handleProjectCreated = (newProj: Project) => {
   projects.value = [newProj, ...projects.value]
+  loadRemoteEntries()
 }
 
 const handleProjectUpdated = (updated: Project) => {
   projects.value = projects.value.map((p) => (p.id === updated.id ? updated : p))
+  loadRemoteEntries()
 }
 
 const handleProjectDeleted = (id: number) => {
@@ -444,7 +441,6 @@ watch(currentView, (newV) => {
         @navigate="navigateTo"
         @changeCategory="handleCategoryChange"
         @selectEntry="openEntryDetail"
-        @selectTag="handleSelectTag"
         @openAdd="openNewEntry()"
       />
 
@@ -465,24 +461,29 @@ watch(currentView, (newV) => {
         @selectEntry="openEntryDetail"
       />
 
-      <!-- 4. PROJECTS 视图：作为人生经历的一章 (造物 / Things I Made) -->
+      <!-- 4. PROJECTS 视图：作为人生经历的一章 (造物) -->
       <ProjectsView
         v-else-if="currentView === 'projects'"
         :projects="projects"
+        :entries="entries"
         @projectCreated="handleProjectCreated"
         @projectUpdated="handleProjectUpdated"
         @projectDeleted="handleProjectDeleted"
+        @selectEntry="openEntryDetail"
       />
 
       <!-- 5. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
       <WishlistView
         v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
+        @wishResolved="refreshData"
       />
 
-      <!-- 6. ATLAS 视图：全国市级旅游足迹地图与城市回忆 (FE-12, FE-13) -->
+      <!-- 6. ATLAS 视图：山川行迹经纬星野与典藏票根 (FE-12, FE-13, RC-98) -->
       <TravelAtlasView
         v-else-if="currentView === 'atlas' || currentView === 'footprints'"
+        :storageConfigured="storageConfigured"
         @selectEntry="openEntryDetail"
+        @footprintSaved="loadRemoteEntries"
       />
 
       <!-- 7. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
@@ -504,12 +505,11 @@ watch(currentView, (newV) => {
     <!-- 全局快捷新增浮动操作按钮 (桌面端 + 移动端右下角) -->
     <FloatingActionButton @click="openNewEntry()" />
 
-    <!-- 1. 全局即时模糊搜索与标签检索弹窗 (Cmd+K) -->
+    <!-- 1. 全局即时模糊搜索弹窗 (Cmd+K) -->
     <SearchModal
       v-if="isSearchOpen"
       :isOpen="isSearchOpen"
       :entries="entries"
-      :tags="allTags"
       @close="isSearchOpen = false"
       @selectEntry="openEntryDetail"
     />

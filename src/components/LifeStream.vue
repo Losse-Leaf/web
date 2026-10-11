@@ -18,7 +18,6 @@ const emit = defineEmits<{
   (e: 'clearDateFilter'): void
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'selectEntry', entry: LifeEntry): void
-  (e: 'selectTag', tag: string): void
   (e: 'openAdd'): void
 }>()
 
@@ -455,19 +454,6 @@ const getGapDays = (index: number): number => {
                 <ArrowUpRight class="w-3.5 h-3.5" />
               </a>
             </div>
-          </div>
-
-          <!-- 标签胶囊列表 -->
-          <div v-if="entry.tags" class="flex flex-wrap items-center gap-2 pt-1">
-            <button
-              v-for="t in entry.tags.split(/[,，\s]+/).filter(Boolean)"
-              :key="t"
-              @click.stop="emit('selectTag', t.trim())"
-              class="text-[11px] font-mono-archive text-[var(--ink-muted)] hover:text-[var(--accent-warm)] transition-colors cursor-pointer hover-underline"
-              title="按标签检索"
-            >
-              #{{ t.trim() }}
-            </button>
           </div>
 
           <!-- 悬浮显露轻量操作提示 -->

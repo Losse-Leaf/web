@@ -124,105 +124,6 @@ export const getProvinceAdcodeByCityCode = (cityCode: string): string => {
   return `${prefix}0000`
 }
 
-// 常见城市三字航空/火车站国际代码词典 (未命中的城市由拼音首字母自动计算)
-const CITY_IATA_CODES: Record<string, string> = {
-  '110100': 'PEK', // 北京
-  '120100': 'TSN', // 天津
-  '310100': 'SHA', // 上海
-  '500100': 'CKG', // 重庆
-  '330100': 'HGH', // 杭州
-  '330200': 'NGB', // 宁波
-  '330300': 'WNZ', // 温州
-  '330400': 'JXZ', // 嘉兴
-  '330500': 'HUZ', // 湖州
-  '330600': 'SXG', // 绍兴
-  '330700': 'JHA', // 金华
-  '330800': 'JUZ', // 衢州
-  '330900': 'HSN', // 舟山
-  '331000': 'HYN', // 台州
-  '331100': 'LSH', // 丽水
-  '320100': 'NKG', // 南京
-  '320500': 'SZV', // 苏州
-  '320200': 'WUX', // 无锡
-  '320400': 'CZX', // 常州
-  '320600': 'NTG', // 南通
-  '321000': 'YZH', // 扬州
-  '320900': 'YNZ', // 盐城
-  '320300': 'XUZ', // 徐州
-  '440100': 'CAN', // 广州
-  '440300': 'SZX', // 深圳
-  '440400': 'ZUH', // 珠海
-  '440600': 'FUO', // 佛山
-  '441900': 'DGG', // 东莞
-  '442000': 'ZSN', // 中山
-  '441300': 'HUZ', // 惠州
-  '440500': 'SWA', // 汕头
-  '510100': 'CTU', // 成都
-  '511800': 'YAA', // 雅安
-  '510700': 'MIG', // 绵阳
-  '511100': 'LES', // 乐山
-  '513200': 'ABA', // 阿坝
-  '513300': 'GZI', // 甘孜
-  '513400': 'XIC', // 凉山
-  '420100': 'WUH', // 武汉
-  '420500': 'YIH', // 宜昌
-  '430100': 'CSX', // 长沙
-  '430800': 'DYG', // 张家界
-  '610100': 'XIY', // 西安
-  '610300': 'BAO', // 宝鸡
-  '610600': 'ENY', // 延安
-  '530100': 'KMG', // 昆明
-  '532900': 'DLI', // 大理
-  '530700': 'LJG', // 丽江
-  '532800': 'JHG', // 西双版纳
-  '533400': 'DIG', // 香格里拉/迪庆
-  '350100': 'FOC', // 福州
-  '350200': 'XMN', // 厦门
-  '350500': 'JJN', // 泉州
-  '350700': 'WUS', // 武夷山
-  '370100': 'TNA', // 济南
-  '370200': 'TAO', // 青岛
-  '370600': 'YNT', // 烟台
-  '371000': 'WEH', // 威海
-  '210100': 'SHE', // 沈阳
-  '210200': 'DLC', // 大连
-  '230100': 'HRB', // 哈尔滨
-  '220100': 'CGQ', // 长春
-  '540100': 'LXA', // 拉萨
-  '540400': 'LZY', // 林芝
-  '542400': 'NGQ', // 阿里
-  '650100': 'URC', // 乌鲁木齐
-  '653100': 'KHG', // 喀什
-  '654000': 'YIN', // 伊犁
-  '654300': 'AAT', // 阿勒泰
-  '620100': 'LHW', // 兰州
-  '620900': 'DNH', // 敦煌
-  '620700': 'ZHA', // 张掖
-  '630100': 'XNN', // 西宁
-  '640100': 'INC', // 银川
-  '150100': 'HET', // 呼和浩特
-  '150700': 'HLD', // 海拉尔/呼伦贝尔
-  '460100': 'HAK', // 海口
-  '460200': 'SYX', // 三亚
-  '450100': 'NNG', // 南宁
-  '450300': 'KWL', // 桂林
-  '520100': 'KWE', // 贵阳
-  '520400': 'AVA', // 安顺
-  '360100': 'KHN', // 南昌
-  '360400': 'JIU', // 九江
-  '360700': 'KOW', // 赣州
-  '340100': 'HFE', // 合肥
-  '341000': 'TXN', // 黄山
-  '140100': 'TYN', // 太原
-  '140200': 'DAT', // 大同
-  '130100': 'SJW', // 石家庄
-  '410100': 'CGO', // 郑州
-  '410300': 'LYA', // 洛阳
-  '710000': 'TPE', // 台北
-  '810000': 'HKG', // 香港
-  '820000': 'MFM', // 澳门
-}
-
 // 城市古雅风物别称与文化笺注 (为票根与星图提供人文底蕴)
 export const CITY_EPITHETS: Record<string, string> = {
   '511800': '雨城 · 川藏茶马古道门户',
@@ -253,20 +154,6 @@ export const getCityEpithet = (code: string, cityName?: string): string => {
   return `${cityName?.replace(/市|特别行政区/g, '') || '山川'} · 岁月留步之城`
 }
 
-// 获取城市票根 3 字母缩写代码
-export const getCityTicketCode = (code: string, pinyin?: string): string => {
-  if (CITY_IATA_CODES[code]) {
-    return CITY_IATA_CODES[code]
-  }
-  if (pinyin) {
-    const cleaned = pinyin.replace(/[^a-zA-Z]/g, '').toUpperCase()
-    if (cleaned.length >= 3) {
-      return cleaned.slice(0, 3)
-    }
-  }
-  return `C${code.slice(-2)}`
-}
-
 // 格式化到访次数为复古中文印章计数
 export const formatVisitStampCount = (count: number): string => {
   const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖', '拾']
@@ -274,49 +161,3 @@ export const formatVisitStampCount = (count: number): string => {
   if (count <= 10) return `${digits[count]}次留步`
   return `${count}次留步`
 }
-
-// 弧形星轨生成器：在两个经纬坐标节点之间计算优美的轻量弧线贝塞尔曲线
-export const calculateStarTrailCurve = (
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  curveFactor = 0.18
-): string => {
-  const mx = (x1 + x2) / 2
-  const my = (y1 + y2) / 2
-
-  const dx = x2 - x1
-  const dy = y2 - y1
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  if (dist < 1) return `M ${x1} ${y1} L ${x2} ${y2}`
-
-  const cx = mx - dy * curveFactor
-  const cy = my + dx * curveFactor
-
-  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`
-}
-
-// 历史古风行道虚线参考线 (为天球星野提供宏大的人文地理背景架构，0 地图标注争议)
-export const ANCIENT_ROUTES = [
-  {
-    name: '茶马古道 (川藏线)',
-    // 雅安 -> 康定 -> 昌都 -> 拉萨
-    path: 'M 353 365 Q 280 375 220 378 Q 160 380 135 380',
-  },
-  {
-    name: '丝绸之路 (西域道)',
-    // 西安 -> 兰州 -> 张掖 -> 敦煌 -> 乌鲁木齐
-    path: 'M 405 305 Q 350 280 300 240 Q 220 200 140 160',
-  },
-  {
-    name: '京杭古水驿 (大运河)',
-    // 北京 -> 天津 -> 济南 -> 扬州 -> 苏州 -> 杭州
-    path: 'M 462 220 Q 470 240 480 270 Q 510 320 520 360',
-  },
-  {
-    name: '蜀道故道 (秦岭金牛道)',
-    // 西安 -> 汉中 -> 广元 -> 成都
-    path: 'M 405 305 Q 380 325 365 350',
-  },
-]

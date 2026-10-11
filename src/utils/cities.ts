@@ -1,6 +1,6 @@
 // 中国合规地级行政区划、直辖市、特别行政区与台湾省全量标准字典 (共 375 个地级单位)
-// 依据 docs/wishlist-travel.md §六 及 docs/web.md §5.11 合规要求一次性固化 (RC-86 / RC-95)
-// 数据源凭据：scripts/geo/china/ 离线存档 (源自阿里云 DataV GeoAtlas / 高德开放平台，2026-10-11 归档)；中国标准 Albers 等面积圆锥投影正算 (标准纬线 25°N / 47°N，中央经线 105°E)
+// 依据 docs/wishlist-travel.md §五~§六 及 docs/web.md §5.11 合规要求一次性固化 (RC-86 / RC-95 / RC-98)
+// 坐标体系：中国标准 Albers 等面积圆锥投影正算星野坐标 (标准纬线 25°N / 47°N，中央经线 105°E)
 
 export interface CityOption {
   code: string
@@ -404,3 +404,181 @@ export function searchCities(keyword: string): CityOption[] {
     )
   }).slice(0, 40)
 }
+
+/**
+ * 按 6 位行政区划代码查找标准城市
+ */
+export function findCityByCode(code?: string): CityOption | null {
+  const clean = (code || '').trim()
+  if (!clean) return null
+  return CHINA_CITIES.find((c) => c.code === clean) || null
+}
+
+/**
+ * 从地点文本（如“雅安 · 碧峰峡”或“杭州西湖”）自动识别匹配的标准地级市
+ */
+export function matchCityFromLocation(locationText?: string): CityOption | null {
+  const text = (locationText || '').trim()
+  if (!text) return null
+  for (const c of CHINA_CITIES) {
+    if (text.includes(c.name)) return c
+    const shortName = c.name.replace(/市|地区|自治州|特别行政区|盟/g, '')
+    if (shortName.length >= 2 && text.includes(shortName)) {
+      return c
+    }
+  }
+  return null
+}
+
+/**
+ * 将经纬度 (lon, lat) 转换为中国标准 Albers 等面积圆锥投影画布坐标 (x, y)
+ * 标准纬线 25°N / 47°N，中央经线 105°E，基准纬线 36°N
+ */
+function projectAlbers(lon: number, lat: number): [number, number] {
+  const deg2rad = Math.PI / 180
+  const phi1 = 25 * deg2rad
+  const phi2 = 47 * deg2rad
+  const phi0 = 36 * deg2rad
+  const lam0 = 105 * deg2rad
+  const n = 0.5 * (Math.sin(phi1) + Math.sin(phi2))
+  const C = Math.pow(Math.cos(phi1), 2) + 2 * n * Math.sin(phi1)
+  const rho0 = Math.sqrt(C - 2 * n * Math.sin(phi0)) / n
+
+  const phi = lat * deg2rad
+  const lam = lon * deg2rad
+  const rho = Math.sqrt(Math.max(0, C - 2 * n * Math.sin(phi))) / n
+  const theta = n * (lam - lam0)
+  const x = 350 + 750 * rho * Math.sin(theta)
+  const y = 279.1 - 750 * (rho0 - rho * Math.cos(theta))
+  return [x, y]
+}
+
+/**
+ * 根据设备 GPS 经纬度匹配距离最近的地级市
+ */
+export function findNearestCityByCoords(lat: number, lng: number): CityOption | null {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  const [px, py] = projectAlbers(lng, lat)
+  let nearest: CityOption | null = null
+  let minDistSq = Infinity
+  for (const c of CHINA_CITIES) {
+    const dx = c.x - px
+    const dy = c.y - py
+    const distSq = dx * dx + dy * dy
+    if (distSq < minDistSq) {
+      minDistSq = distSq
+      nearest = c
+    }
+  }
+  return nearest
+}
+
+const LAST_CITY_STORAGE_KEY = 'looseleaf_last_city'
+const PROFILE_STORAGE_KEY = 'looseleaf_curator_profile_v1'
+
+/**
+ * 记录上次使用的城市，供三级回退机制使用
+ */
+export function saveLastUsedCity(city: { code: string; name: string }): void {
+  if (!city.code || !city.name) return
+  try {
+    localStorage.setItem(
+      LAST_CITY_STORAGE_KEY,
+      JSON.stringify({ code: city.code.trim(), name: city.name.trim() })
+    )
+  } catch {
+    // 忽略隐私模式配额限制
+  }
+}
+
+/**
+ * 读取上次使用的城市 (Tier 3)
+ */
+export function getLastUsedCity(): CityOption | null {
+  try {
+    const raw = localStorage.getItem(LAST_CITY_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { code?: string; name?: string }
+    if (parsed.code) {
+      const byCode = findCityByCode(parsed.code)
+      if (byCode) return byCode
+    }
+    if (parsed.name) {
+      return matchCityFromLocation(parsed.name)
+    }
+  } catch {
+    // 忽略解析异常
+  }
+  return null
+}
+
+/**
+ * 读取主理人常驻城市 (Tier 2: current_city / location)
+ */
+export function getCuratorResidentCity(): CityOption | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
+    if (!raw) return null
+    const profile = JSON.parse(raw) as { current_city?: string; location?: string }
+    const fromCurrent = matchCityFromLocation(profile.current_city)
+    if (fromCurrent) return fromCurrent
+    const fromLocation = matchCityFromLocation(profile.location)
+    if (fromLocation) return fromLocation
+  } catch {
+    // 忽略解析异常
+  }
+  return null
+}
+
+let cachedGeoCity: CityOption | null = null
+
+/**
+ * 同步获取默认城市回退值（供弹窗打开瞬间零延迟回填）：
+ * 优先使用已缓存的设备定位城市 ➔ 主理人常驻城市 (current_city) ➔ 上次使用城市
+ */
+export function getFallbackDefaultCity(): CityOption | null {
+  if (cachedGeoCity) return cachedGeoCity
+  return getCuratorResidentCity() || getLastUsedCity()
+}
+
+/**
+ * 默认位置自动感知与三级回退机制：
+ * 1. 设备定位自动匹配最近城市 (navigator.geolocation -> Albers 最近邻城市)
+ * 2. 主理人常驻城市 (profile.current_city / profile.location)
+ * 3. 上次使用城市 (localStorage looseleaf_last_city)
+ */
+export function resolveDefaultCity(): Promise<CityOption | null> {
+  if (cachedGeoCity) {
+    return Promise.resolve(cachedGeoCity)
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.geolocation) {
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const matched = findNearestCityByCoords(
+            pos.coords.latitude,
+            pos.coords.longitude
+          )
+          if (matched) {
+            cachedGeoCity = matched
+            resolve(matched)
+            return
+          }
+          resolve(getFallbackDefaultCity())
+        },
+        () => {
+          resolve(getFallbackDefaultCity())
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 2500,
+          maximumAge: 10 * 60 * 1000,
+        }
+      )
+    })
+  }
+
+  return Promise.resolve(getFallbackDefaultCity())
+}
+

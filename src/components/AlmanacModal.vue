@@ -309,7 +309,7 @@ const formatDate = (dateStr?: string) => {
             <!-- 春 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
               <span class="text-[10px] font-mono-archive text-[var(--accent-moss)] font-medium tracking-wider block">
-                🌱 春生 · SPRING
+                春生 · 春季篇
               </span>
               <div v-if="(summary.life_highlights || summary.highlights).spring">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
@@ -327,7 +327,7 @@ const formatDate = (dateStr?: string) => {
             <!-- 夏 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
               <span class="text-[10px] font-mono-archive text-[var(--accent-warm)] font-medium tracking-wider block">
-                ☀️ 夏长 · SUMMER
+                夏长 · 夏季篇
               </span>
               <div v-if="(summary.life_highlights || summary.highlights).summer">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
@@ -345,7 +345,7 @@ const formatDate = (dateStr?: string) => {
             <!-- 秋 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
               <span class="text-[10px] font-mono-archive text-amber-600 font-medium tracking-wider block">
-                🍂 秋收 · AUTUMN
+                秋收 · 秋季篇
               </span>
               <div v-if="(summary.life_highlights || summary.highlights).autumn">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
@@ -363,7 +363,7 @@ const formatDate = (dateStr?: string) => {
             <!-- 冬 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
               <span class="text-[10px] font-mono-archive text-sky-700 font-medium tracking-wider block">
-                ❄️ 冬藏 · WINTER
+                冬藏 · 冬季篇
               </span>
               <div v-if="(summary.life_highlights || summary.highlights).winter">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">

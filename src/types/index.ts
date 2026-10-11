@@ -88,12 +88,13 @@ export interface LifeEntry {
   content: string
   occurred_at?: string
   location?: string
+  city_code?: string
+  city_name?: string
   project_id?: number
   project?: Project
   attachments?: Attachment[]
 
   meta?: string
-  tags?: string
   link?: string
   featured?: boolean
 
@@ -162,7 +163,6 @@ export interface Project {
   description: string
   story?: string
   category: string
-  tags: string
   github_url: string
   status: string
   featured?: boolean

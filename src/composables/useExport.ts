@@ -62,7 +62,6 @@ export function useExport() {
       lines.push(`*印记时间：${dateStr} ${timeStr}*`)
       if (e.location) lines.push(`*地点：${e.location}*`)
       if (e.meta) lines.push(`*底款器材：${e.meta}*`)
-      if (e.tags) lines.push(`*标签：#${e.tags.replace(/,/g, ' #')}*`)
       lines.push('')
       lines.push(e.content)
       lines.push('')

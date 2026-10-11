@@ -43,11 +43,11 @@ const checking = ref(false)
 const checkResult = ref<UpdateCheckResult | null>(null)
 const checkRequestError = ref('')
 
-const runUpdateCheck = async () => {
+const runUpdateCheck = async (force = false) => {
   checking.value = true
   checkRequestError.value = ''
   try {
-    const res = await checkSystemUpdate()
+    const res = await checkSystemUpdate(force)
     checkResult.value = res
   } catch (err: any) {
     checkRequestError.value = err?.message || '检查更新请求失败，请检查网络连接或服务端状态'
@@ -356,7 +356,7 @@ watch(
 
         <div class="pt-2 flex items-center justify-between">
           <button
-            @click="runUpdateCheck"
+            @click="runUpdateCheck(true)"
             :disabled="checking"
             class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-serif-editorial border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors disabled:opacity-50"
           >

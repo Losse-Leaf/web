@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { MapPin } from 'lucide-vue-next'
-import { searchCities, type CityOption } from '../utils/cities'
+import { searchCities, findCityByCode, type CityOption } from '../utils/cities'
 
 const props = defineProps<{
   modelValue?: string
@@ -15,6 +15,21 @@ const emit = defineEmits<{
 
 const keyword = ref('')
 const isOpen = ref(false)
+
+watch(
+  () => props.modelValue,
+  (newCode) => {
+    if (newCode) {
+      const matched = findCityByCode(newCode)
+      if (matched && keyword.value !== matched.name) {
+        keyword.value = matched.name
+      }
+    } else if (!isOpen.value) {
+      keyword.value = ''
+    }
+  },
+  { immediate: true }
+)
 
 const filteredList = computed(() => searchCities(keyword.value))
 

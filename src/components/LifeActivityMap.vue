@@ -399,7 +399,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 底部状态栏与图例解释 (GitHub 规范：Less ⬜ 🟩 🟩 🟩 🟩 More) -->
+    <!-- 底部状态栏与图例解释 (四级色阶图例) -->
     <div class="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono-archive text-[var(--ink-muted)]">
       
       <!-- 动态悬浮或筛选提示 -->

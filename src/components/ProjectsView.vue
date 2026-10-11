@@ -1,19 +1,25 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { Project } from '../types'
-import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle } from 'lucide-vue-next'
+import type { Project, LifeEntry } from '../types'
+import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle, BookOpen, ChevronRight } from 'lucide-vue-next'
 import { createProject, updateProject, deleteProject } from '../utils/api'
 import PaperSelect from './PaperSelect.vue'
 
 const props = defineProps<{
   projects: Project[]
+  entries?: LifeEntry[]
 }>()
 
 const emit = defineEmits<{
   (e: 'projectCreated', project: Project): void
   (e: 'projectUpdated', project: Project): void
   (e: 'projectDeleted', id: number): void
+  (e: 'selectEntry', entry: LifeEntry): void
 }>()
+
+const getProjectEntries = (projectId: number): LifeEntry[] => {
+  return (props.entries || []).filter((e) => e.project_id === projectId)
+}
 
 const localProjects = ref<Project[]>([])
 watch(
@@ -51,7 +57,6 @@ const formCategory = ref('')
 const formStatus = ref('Active')
 const formDescription = ref('')
 const formStory = ref('')
-const formTags = ref('')
 const formGithubUrl = ref('')
 
 const openCreateModal = () => {
@@ -62,7 +67,6 @@ const openCreateModal = () => {
   formStatus.value = 'Active'
   formDescription.value = ''
   formStory.value = ''
-  formTags.value = ''
   formGithubUrl.value = ''
   formError.value = null
   isModalOpen.value = true
@@ -76,7 +80,6 @@ const openEditModal = (proj: Project) => {
   formStatus.value = proj.status || 'Active'
   formDescription.value = proj.description || ''
   formStory.value = proj.story || ''
-  formTags.value = proj.tags || ''
   formGithubUrl.value = proj.github_url || ''
   formError.value = null
   isModalOpen.value = true
@@ -98,7 +101,6 @@ const handleSave = async () => {
       status: formStatus.value.trim() || 'Active',
       description: formDescription.value.trim(),
       story: formStory.value.trim(),
-      tags: formTags.value.trim(),
       github_url: formGithubUrl.value.trim(),
     }
 
@@ -237,8 +239,8 @@ const isGitHubUrl = (url?: string) => {
           </div>
 
           <div class="flex items-center gap-3">
-            <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[10px] uppercase">
-              {{ proj.status || 'Active' }}
+            <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[10px]">
+              {{ proj.status === 'Archived' ? '已封存' : proj.status === 'Maintained' ? '长期维护' : '进行中' }}
             </span>
             <button
               @click="openEditModal(proj)"
@@ -277,16 +279,9 @@ const isGitHubUrl = (url?: string) => {
           </p>
         </div>
 
-        <!-- 标签与外部链接 -->
-        <div class="pt-2 flex flex-wrap items-center justify-between gap-4 text-xs font-mono-archive">
-          <div class="flex flex-wrap gap-2 text-[var(--ink-muted)]">
-            <span v-for="tag in (proj.tags || '').split(',').map((t) => t.trim()).filter(Boolean)" :key="tag">
-              #{{ tag }}
-            </span>
-          </div>
-
+        <!-- 外部链接 -->
+        <div v-if="proj.github_url" class="pt-2 flex flex-wrap items-center justify-end gap-4 text-xs font-mono-archive">
           <a
-            v-if="proj.github_url"
             :href="proj.github_url"
             target="_blank"
             rel="noopener noreferrer"
@@ -297,6 +292,41 @@ const isGitHubUrl = (url?: string) => {
             <span>{{ isGitHubUrl(proj.github_url) ? '查看 GitHub 源码' : '访问项目主页' }}</span>
             <ArrowUpRight class="w-3 h-3" />
           </a>
+        </div>
+
+        <!-- 关联物候手记长卷 (主时间流下渗至该造物项目的记录) -->
+        <div
+          v-if="getProjectEntries(proj.id).length > 0"
+          class="pt-4 border-t border-dashed border-[var(--border-subtle)]/70 space-y-2.5"
+        >
+          <div class="flex items-center gap-1.5 text-xs font-serif-editorial text-[var(--ink-muted)]">
+            <BookOpen class="w-3.5 h-3.5" />
+            <span>物候手记与打磨进程 ({{ getProjectEntries(proj.id).length }} 篇)</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div
+              v-for="entry in getProjectEntries(proj.id)"
+              :key="entry.id"
+              @click="emit('selectEntry', entry)"
+              class="p-3 bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs cursor-pointer transition-colors group space-y-1"
+            >
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-serif-editorial font-medium text-[var(--ink-primary)] truncate">
+                  {{ entry.title || '造物手记' }}
+                </span>
+                <span class="text-[10px] font-mono-archive text-[var(--ink-muted)] shrink-0 ml-2">
+                  {{ (entry.occurred_at || entry.created_at || '').slice(0, 10) }}
+                </span>
+              </div>
+              <p class="text-xs font-serif-editorial text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
+                {{ entry.content }}
+              </p>
+              <div class="pt-1 flex items-center justify-end text-[10px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)]">
+                <span>翻阅详情</span>
+                <ChevronRight class="w-3 h-3" />
+              </div>
+            </div>
+          </div>
         </div>
 
       </article>
@@ -331,7 +361,7 @@ const isGitHubUrl = (url?: string) => {
             <input
               v-model="formTitle"
               type="text"
-              placeholder="例如：Loose Leaf 或 机械键盘手作"
+              placeholder="例如：散页 或 机械键盘手作"
               class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs focus:border-[var(--ink-primary)] outline-hidden font-serif-editorial text-sm text-[var(--ink-primary)]"
             />
           </div>
@@ -364,9 +394,9 @@ const isGitHubUrl = (url?: string) => {
                 v-model="formStatus"
                 size="sm"
                 :options="[
-                  { value: 'Active', label: 'Active (进行中)' },
-                  { value: 'Maintained', label: 'Maintained (长期维护)' },
-                  { value: 'Archived', label: 'Archived (已封存)' },
+                  { value: 'Active', label: '进行中' },
+                  { value: 'Maintained', label: '长期维护' },
+                  { value: 'Archived', label: '已封存' },
                 ]"
               />
             </div>
@@ -379,16 +409,6 @@ const isGitHubUrl = (url?: string) => {
                 class="w-full px-3 py-1.5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)]"
               />
             </div>
-          </div>
-
-          <div>
-            <label class="block text-[var(--ink-secondary)] mb-1">标签 (以逗号分隔)</label>
-            <input
-              v-model="formTags"
-              type="text"
-              placeholder="Go, Vue, 胶片, 本地优先"
-              class="w-full px-3 py-1.5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)]"
-            />
           </div>
 
           <div>

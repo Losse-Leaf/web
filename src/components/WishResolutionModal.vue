@@ -235,7 +235,7 @@ const handleSubmit = async () => {
               :class="resolutionType === 'exact' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] ring-1 ring-[var(--ink-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)]'"
             >
               <div>
-                <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">✨ 原计划达成</span>
+                <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">原计划达成</span>
                 <span class="block text-[10px] text-[var(--ink-muted)] mt-1 leading-normal">
                   配置与价格跟预算一致，原物入手。
                 </span>
@@ -250,7 +250,7 @@ const handleSubmit = async () => {
               :class="resolutionType === 'altered' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] ring-1 ring-[var(--ink-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)]'"
             >
               <div>
-                <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">🔄 改选替代方案</span>
+                <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">改选替代方案</span>
                 <span class="block text-[10px] text-[var(--ink-muted)] mt-1 leading-normal">
                   升降配置、平替或换成了同类替代品。
                 </span>
@@ -265,7 +265,7 @@ const handleSubmit = async () => {
               :class="resolutionType === 'relinquished' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] ring-1 ring-[var(--ink-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)]'"
             >
               <div>
-                <span class="block font-medium font-serif-editorial text-sm text-[var(--accent-moss)]">🍃 理性拔草释怀</span>
+                <span class="block font-medium font-serif-editorial text-sm text-[var(--accent-moss)]">理性拔草释怀</span>
                 <span class="block text-[10px] text-[var(--ink-muted)] mt-1 leading-normal">
                   冷静沉淀后决定放弃，省下 100% 预算。
                 </span>

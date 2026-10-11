@@ -18,6 +18,10 @@ import type { Wish } from '../types'
 import WishFormModal from './WishFormModal.vue'
 import WishResolutionModal from './WishResolutionModal.vue'
 
+const emit = defineEmits<{
+  (e: 'wishResolved'): void
+}>()
+
 const wishes = ref<Wish[]>([])
 const isLoading = ref(false)
 const selectedKind = ref<'all' | 'item' | 'travel' | 'milestone'>('all')
@@ -73,6 +77,7 @@ const handleWishSaved = () => {
 
 const handleWishResolved = () => {
   loadWishes()
+  emit('wishResolved')
 }
 
 // 统计指标
