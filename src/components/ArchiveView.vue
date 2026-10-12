@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { BookOpen } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { parseOccurredDate } from '../utils/format'
+import { fetchEntries } from '../utils/api'
 import AlmanacModal from './AlmanacModal.vue'
 
 const props = defineProps<{
@@ -16,6 +17,39 @@ const emit = defineEmits<{
 const currentYearStr = new Date().getFullYear().toString()
 const selectedYear = ref(currentYearStr)
 const isAlmanacOpen = ref(false)
+
+// 存储自主按年分页拉取的全量条目 (避免仅吃前 100 条缓存导致旧数据缺失)
+const fetchedYearEntries = ref<LifeEntry[]>([])
+const isFetchingYear = ref(false)
+
+const loadAllEntriesForYear = async (yr: string) => {
+  if (!yr) return
+  isFetchingYear.value = true
+  try {
+    let page = 1
+    let collected: LifeEntry[] = []
+    while (true) {
+      const pageData = await fetchEntries({ year: yr, page, page_size: 100 })
+      if (!pageData || !Array.isArray(pageData) || pageData.length === 0) break
+      collected = [...collected, ...pageData]
+      if (pageData.length < 100) break
+      page++
+    }
+    if (collected.length > 0) {
+      fetchedYearEntries.value = collected
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch full entries for year ${yr}:`, err)
+  } finally {
+    isFetchingYear.value = false
+  }
+}
+
+watch(selectedYear, (yr) => {
+  if (yr) {
+    loadAllEntriesForYear(yr)
+  }
+}, { immediate: true })
 
 // 获取所有出现的年份 (RC-48)
 const years = computed(() => {
@@ -35,9 +69,20 @@ watch(years, (newYears) => {
   }
 }, { immediate: true })
 
-// 当前年份的所有条目 (RC-48)
+// 当前年份的所有条目：合并本地缓存与全量拉取数据 (RC-48)
 const yearEntries = computed(() => {
-  return props.entries.filter(e => parseOccurredDate(e.occurred_at).year === selectedYear.value)
+  const localYearList = props.entries.filter(e => parseOccurredDate(e.occurred_at).year === selectedYear.value)
+  if (fetchedYearEntries.value.length === 0) {
+    return localYearList
+  }
+  const map = new Map<number, LifeEntry>()
+  fetchedYearEntries.value.forEach(e => map.set(e.id, e))
+  localYearList.forEach(e => map.set(e.id, e))
+  return Array.from(map.values()).sort((a, b) => {
+    const timeA = parseOccurredDate(a.occurred_at).timestamp
+    const timeB = parseOccurredDate(b.occurred_at).timestamp
+    return timeB - timeA
+  })
 })
 
 const getTypeName = (type: string) => {

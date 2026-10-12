@@ -91,8 +91,8 @@ const startPairingPolling = () => {
             stopPairingPolling()
             return
           }
-        } catch {
-          // 降级使用设备列表比对
+        } catch (err) {
+          console.warn('Pairing status poll fallback:', err)
         }
       }
 
@@ -101,8 +101,8 @@ const startPairingPolling = () => {
         devices.value = latestDevices
         await onPairingDetected()
       }
-    } catch {
-      // 轮询偶发网络抖动忽略
+    } catch (err) {
+      console.warn('Polling devices jitter:', err)
     }
   }, 2000)
 }
@@ -140,7 +140,8 @@ const loadDevices = async () => {
   try {
     const res = await fetchTrustedDevices()
     devices.value = res || []
-  } catch {
+  } catch (err) {
+    console.error('Failed to load trusted devices:', err)
     devices.value = []
   } finally {
     isLoadingDevices.value = false
@@ -152,7 +153,9 @@ const handleRevoke = async (id: number) => {
   if (!confirm('确定解绑并吊销该设备的免密信任？解绑后该设备需重新扫码配对。')) return
   try {
     await revokeTrustedDevice(id)
-  } catch {}
+  } catch (err) {
+    console.error('Failed to revoke device:', err)
+  }
   devices.value = devices.value.filter((d) => d.id !== id)
 }
 
@@ -165,7 +168,9 @@ const copyPayload = async () => {
     setTimeout(() => {
       copied.value = false
     }, 2500)
-  } catch {}
+  } catch (err) {
+    console.warn('Clipboard write failed:', err)
+  }
 }
 
 const formatDateTime = (iso: string) => {

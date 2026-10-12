@@ -165,13 +165,13 @@ const formatDate = (dateStr?: string) => {
             <div>
               <span class="text-[var(--ink-muted)] block text-[11px]">记录天数</span>
               <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
-                {{ summary.prologue.active_days ?? summary.prologue.distinct_days }} <span class="text-xs text-[var(--ink-muted)]">天</span>
+                {{ summary.prologue.active_days }} <span class="text-xs text-[var(--ink-muted)]">天</span>
               </span>
             </div>
             <div>
               <span class="text-[var(--ink-muted)] block text-[11px]">点亮城市</span>
               <span class="font-serif-editorial text-2xl text-[var(--accent-moss)] font-medium">
-                {{ summary.atlas_journey?.cities_visited?.length ?? summary.atlas.total_cities }} <span class="text-xs text-[var(--ink-muted)]">座</span>
+                {{ summary.atlas.total_cities }} <span class="text-xs text-[var(--ink-muted)]">座</span>
               </span>
             </div>
           </div>
@@ -183,11 +183,11 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第二幕：山川行迹 (Atlas Journey) -->
+        <!-- 第二幕：山川行迹 (Atlas) -->
         <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)]">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT II · ATLAS JOURNEY
+              ACT II · ATLAS
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               山川行迹 · 丈量空间
@@ -197,7 +197,7 @@ const formatDate = (dateStr?: string) => {
             </p>
           </div>
 
-          <div v-if="(summary.atlas_journey?.cities_visited || summary.atlas.cities).length === 0" class="text-xs font-mono-archive text-[var(--ink-muted)] py-6">
+          <div v-if="summary.atlas.cities.length === 0" class="text-xs font-mono-archive text-[var(--ink-muted)] py-6">
             本年度暂未录入出行足迹。
           </div>
 
@@ -205,7 +205,7 @@ const formatDate = (dateStr?: string) => {
             <!-- 城市纸签流 -->
             <div class="flex flex-wrap items-center gap-2 font-mono-archive text-xs">
               <span
-                v-for="c in (summary.atlas_journey?.cities_visited || summary.atlas.cities)"
+                v-for="c in summary.atlas.cities"
                 :key="c.city_code"
                 class="px-2.5 py-1 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] flex items-center gap-1.5"
               >
@@ -217,7 +217,7 @@ const formatDate = (dateStr?: string) => {
             <!-- 足迹时间线 -->
             <div class="space-y-2 pt-2">
               <div
-                v-for="f in (summary.atlas_journey?.footprints || summary.atlas.footprints)"
+                v-for="f in summary.atlas.footprints"
                 :key="f.id"
                 class="p-3 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono-archive text-xs"
               >
@@ -237,11 +237,11 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第三幕：心愿圆满 (Wishes & Milestones) -->
+        <!-- 第三幕：心愿圆满 (Wishes) -->
         <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)]">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT III · WISHES & MILESTONES
+              ACT III · WISHES
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               心愿圆满 · 愿景沉淀
@@ -255,20 +255,20 @@ const formatDate = (dateStr?: string) => {
             <div>
               <span class="text-[var(--ink-muted)] block text-[11px]">本年度达成心愿</span>
               <span class="font-serif-editorial text-xl text-[var(--accent-moss)] font-medium">
-                {{ summary.wishes_milestones?.fulfilled_wishes?.length ?? summary.wishes.fulfilled_count }} 项
+                {{ summary.wishes.fulfilled_count }} 项
               </span>
             </div>
             <div v-if="isAdmin">
               <span class="text-[var(--ink-muted)] block text-[11px]">实际心愿投资总额</span>
               <span class="font-serif-editorial text-xl text-[var(--ink-primary)] font-medium">
-                ¥{{ formatMoney(summary.wishes_milestones?.total_wish_actual ?? summary.wishes.total_actual) }}
+                ¥{{ formatMoney(summary.wishes.total_actual) }}
               </span>
             </div>
           </div>
 
-          <div v-if="(summary.wishes_milestones?.fulfilled_wishes || summary.wishes.wishes).length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div v-if="summary.wishes.wishes.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div
-              v-for="w in (summary.wishes_milestones?.fulfilled_wishes || summary.wishes.wishes)"
+              v-for="w in summary.wishes.wishes"
               :key="w.id"
               class="p-3 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-1 font-mono-archive text-xs"
             >
@@ -287,14 +287,14 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第四幕：浮光掠影 (Life Highlights) -->
+        <!-- 第四幕：浮光掠影 (Highlights) -->
         <section
           class="space-y-6"
           :class="isAdmin ? 'pb-12 border-b border-[var(--border-subtle)]' : 'pb-4'"
         >
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT IV · LIFE HIGHLIGHTS
+              ACT IV · HIGHLIGHTS
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               浮光掠影 · 四季流转
@@ -311,12 +311,12 @@ const formatDate = (dateStr?: string) => {
               <span class="text-[10px] font-mono-archive text-[var(--accent-moss)] font-medium tracking-wider block">
                 春生 · 春季篇
               </span>
-              <div v-if="(summary.life_highlights || summary.highlights).spring">
+              <div v-if="summary.highlights.spring">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                  {{ (summary.life_highlights || summary.highlights).spring?.title }}
+                  {{ summary.highlights.spring?.title }}
                 </h4>
                 <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] mt-1 line-clamp-3 leading-relaxed">
-                  {{ (summary.life_highlights || summary.highlights).spring?.content }}
+                  {{ summary.highlights.spring?.content }}
                 </p>
               </div>
               <p v-else class="text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -329,12 +329,12 @@ const formatDate = (dateStr?: string) => {
               <span class="text-[10px] font-mono-archive text-[var(--accent-warm)] font-medium tracking-wider block">
                 夏长 · 夏季篇
               </span>
-              <div v-if="(summary.life_highlights || summary.highlights).summer">
+              <div v-if="summary.highlights.summer">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                  {{ (summary.life_highlights || summary.highlights).summer?.title }}
+                  {{ summary.highlights.summer?.title }}
                 </h4>
                 <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] mt-1 line-clamp-3 leading-relaxed">
-                  {{ (summary.life_highlights || summary.highlights).summer?.content }}
+                  {{ summary.highlights.summer?.content }}
                 </p>
               </div>
               <p v-else class="text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -347,12 +347,12 @@ const formatDate = (dateStr?: string) => {
               <span class="text-[10px] font-mono-archive text-amber-600 font-medium tracking-wider block">
                 秋收 · 秋季篇
               </span>
-              <div v-if="(summary.life_highlights || summary.highlights).autumn">
+              <div v-if="summary.highlights.autumn">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                  {{ (summary.life_highlights || summary.highlights).autumn?.title }}
+                  {{ summary.highlights.autumn?.title }}
                 </h4>
                 <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] mt-1 line-clamp-3 leading-relaxed">
-                  {{ (summary.life_highlights || summary.highlights).autumn?.content }}
+                  {{ summary.highlights.autumn?.content }}
                 </p>
               </div>
               <p v-else class="text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -365,12 +365,12 @@ const formatDate = (dateStr?: string) => {
               <span class="text-[10px] font-mono-archive text-sky-700 font-medium tracking-wider block">
                 冬藏 · 冬季篇
               </span>
-              <div v-if="(summary.life_highlights || summary.highlights).winter">
+              <div v-if="summary.highlights.winter">
                 <h4 class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                  {{ (summary.life_highlights || summary.highlights).winter?.title }}
+                  {{ summary.highlights.winter?.title }}
                 </h4>
                 <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] mt-1 line-clamp-3 leading-relaxed">
-                  {{ (summary.life_highlights || summary.highlights).winter?.content }}
+                  {{ summary.highlights.winter?.content }}
                 </p>
               </div>
               <p v-else class="text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -380,13 +380,13 @@ const formatDate = (dateStr?: string) => {
           </div>
 
           <!-- 精选菲林相片画廊 -->
-          <div v-if="(summary.life_highlights?.film_gallery || summary.highlights.photos).length > 0" class="pt-4 space-y-3">
+          <div v-if="summary.highlights.photos.length > 0" class="pt-4 space-y-3">
             <span class="text-xs font-mono-archive text-[var(--ink-muted)] block">
-              年度精选菲林胶片 ({{ (summary.life_highlights?.film_gallery || summary.highlights.photos).length }} 张)
+              年度精选菲林胶片 ({{ summary.highlights.photos.length }} 张)
             </span>
             <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
               <div
-                v-for="photo in (summary.life_highlights?.film_gallery || summary.highlights.photos).slice(0, 6)"
+                v-for="photo in summary.highlights.photos.slice(0, 6)"
                 :key="photo.id"
                 class="aspect-square bg-[var(--bg-subtle)] border border-[var(--border-subtle)] overflow-hidden rounded-xs"
               >
@@ -401,11 +401,11 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第五幕：柴米油盐 (Financial Spectrum，仅主理人可见 RC-57) -->
+        <!-- 第五幕：柴米油盐 (Finances，仅主理人可见 RC-57) -->
         <section v-if="isAdmin" class="space-y-6 pb-6">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT V · FINANCIAL SPECTRUM
+              ACT V · FINANCES
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               柴米油盐 · 财务平衡
@@ -419,22 +419,22 @@ const formatDate = (dateStr?: string) => {
             <div>
               <span class="text-[var(--ink-muted)] block text-[11px]">年度总支出</span>
               <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
-                ¥{{ formatMoney(summary.financial_spectrum?.total_expense ?? summary.finances.total_expense) }}
+                ¥{{ formatMoney(summary.finances.total_expense) }}
               </span>
             </div>
             <div>
               <span class="text-[var(--ink-muted)] block text-[11px]">年度总收入</span>
               <span class="font-serif-editorial text-2xl text-[var(--accent-moss)] font-medium">
-                ¥{{ formatMoney(summary.financial_spectrum?.total_income ?? summary.finances.total_income) }}
+                ¥{{ formatMoney(summary.finances.total_income) }}
               </span>
             </div>
             <div>
               <span class="text-[var(--ink-muted)] block text-[11px]">年度收支结余</span>
               <span
                 class="font-serif-editorial text-2xl font-medium"
-                :class="(summary.financial_spectrum?.balance ?? summary.finances.balance) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'"
+                :class="summary.finances.balance >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'"
               >
-                {{ (summary.financial_spectrum?.balance ?? summary.finances.balance) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(summary.financial_spectrum?.balance ?? summary.finances.balance)) }}
+                {{ summary.finances.balance < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(summary.finances.balance)) }}
               </span>
             </div>
           </div>
@@ -448,11 +448,11 @@ const formatDate = (dateStr?: string) => {
           </div>
 
           <!-- 分类细目 -->
-          <div v-if="(summary.financial_spectrum?.categories || summary.finances.categories).length > 0" class="space-y-2 pt-2">
+          <div v-if="summary.finances.categories.length > 0" class="space-y-2 pt-2">
             <span class="text-xs font-mono-archive text-[var(--ink-muted)] block">支出品类结构</span>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono-archive text-xs">
               <div
-                v-for="cat in (summary.financial_spectrum?.categories || summary.finances.categories)"
+                v-for="cat in summary.finances.categories"
                 :key="cat.name"
                 class="p-2.5 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs flex items-center justify-between"
               >

@@ -178,14 +178,18 @@ const openStatsModal = async () => {
   isStatsOpen.value = true
   try {
     globalStats.value = await fetchGlobalStats()
-  } catch {}
+  } catch (err) {
+    console.error('Failed to fetch global stats:', err)
+  }
 }
 
 const openStorageModal = async () => {
   isStorageOpen.value = true
   try {
     storageStatus.value = await fetchStorageStatus()
-  } catch {}
+  } catch (err) {
+    console.error('Failed to fetch storage status:', err)
+  }
 }
 
 const handleEntryCreated = (newEntry: LifeEntry) => {
@@ -252,7 +256,9 @@ const refreshData = async () => {
     if (statusData.status === 'fulfilled' && statusData.value) {
       storageStatus.value = statusData.value
     }
-  } catch {}
+  } catch (err) {
+    console.error('Failed to refresh data:', err)
+  }
 }
 
 const handleHashChange = async () => {
@@ -268,7 +274,9 @@ const handleHashChange = async () => {
         try {
           const fetched = await fetchEntryById(id)
           if (fetched) selectedEntry.value = fetched
-        } catch {}
+        } catch (err) {
+          console.error(`Failed to fetch entry #${id}:`, err)
+        }
       }
     }
     return
@@ -312,13 +320,16 @@ onMounted(async () => {
     }
     if (cfgRes.status === 'fulfilled' && cfgRes.value) {
       siteConfig.value = cfgRes.value
-      document.title = '散页 · 生活档案与时光手账'
+      document.title = cfgRes.value.site_name || '散页 · 生活档案与时光手账'
     }
     if (profRes.status === 'fulfilled' && profRes.value) {
       syncProfileCache(profRes.value)
     }
     if (sysRes.status === 'fulfilled' && sysRes.value) {
       systemStatus.value = sysRes.value
+      if (!siteConfig.value?.site_name && sysRes.value.site_name) {
+        document.title = sysRes.value.site_name
+      }
       // 若系统尚未初始化，无条件清空本地残留旧 Token 并停留在欢迎扉页首次装帧向导 (RC-59)
       if (!sysRes.value.initialized) {
         removeAdminToken()
@@ -328,7 +339,9 @@ onMounted(async () => {
         hasEnteredArchive.value = true
       }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Initial data loading failed:', err)
+  }
 
   window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent) => {
     if (e.detail) {
@@ -375,7 +388,9 @@ const handleBootstrapped = async () => {
     if (sys.status === 'fulfilled' && sys.value) {
       systemStatus.value = { ...sys.value, initialized: true }
     }
-  } catch {}
+  } catch (err) {
+    console.error('Failed to sync state after bootstrap:', err)
+  }
   hasEnteredArchive.value = true
   markEnteredArchive()
   refreshData()
@@ -384,6 +399,12 @@ const handleBootstrapped = async () => {
 watch(currentView, (newV) => {
   if (!window.location.hash.startsWith('#entry/')) {
     window.location.hash = newV
+  }
+})
+
+watch(() => siteConfig.value?.site_name, (newName) => {
+  if (newName) {
+    document.title = newName
   }
 })
 </script>

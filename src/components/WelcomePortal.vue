@@ -147,8 +147,8 @@ const startBootstrapStatusPolling = (ticket: string) => {
         pairCountdown.value = 0
         stopBootstrapPairingTimers()
       }
-    } catch {
-      // 忽略偶发轮询抖动
+    } catch (err) {
+      console.warn('Pairing status poll jitter:', err)
     }
   }, 2000)
 }
@@ -250,7 +250,9 @@ const copyBootstrapPayload = async () => {
     setTimeout(() => {
       pairCopied.value = false
     }, 2000)
-  } catch {}
+  } catch (err) {
+    console.warn('Clipboard write failed:', err)
+  }
 }
 
 // 阶段二（已初始化）：1. 访客通道直接进入
@@ -354,7 +356,9 @@ onMounted(async () => {
   try {
     const s = await fetchSystemStatus()
     applySystemStatus(s)
-  } catch {}
+  } catch (err) {
+    console.error('Failed to fetch system status in portal:', err)
+  }
 })
 
 onUnmounted(() => {

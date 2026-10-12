@@ -36,7 +36,7 @@ function throttledSaveTransactions(list: Transaction[]) {
 
 export const txToEntry = (tx: Transaction): LifeEntry => {
   return {
-    id: 100000 + tx.id,
+    id: -tx.id, // 使用负数 ID 彻底消除 100000 魔法偏移，数学上天然规避正整数 LifeEntry.id 冲突
     type: 'transaction',
     title: tx.title || tx.category || '记账',
     content: tx.note || '',
@@ -46,6 +46,7 @@ export const txToEntry = (tx: Transaction): LifeEntry => {
     category: tx.category,
     payment_method: tx.payment_method,
     is_transaction: true,
+    transaction_id: tx.id,
   }
 }
 

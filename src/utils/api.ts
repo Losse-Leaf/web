@@ -52,6 +52,8 @@ export function removeAdminToken(): void {
   } catch {}
 }
 
+export const CLIENT_VERSION = '1.0.0'
+
 // 通用请求处理
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getAdminToken()
@@ -65,7 +67,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       'X-Client-Platform': 'web',
-      'X-Client-Version': '1.1.0',
+      'X-Client-Version': CLIENT_VERSION,
       ...authHeaders,
       ...options?.headers,
     },
@@ -137,7 +139,7 @@ export async function fetchEntries(params?: {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Client-Platform': 'web',
-    'X-Client-Version': '1.1.0',
+    'X-Client-Version': CLIENT_VERSION,
   }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
@@ -249,8 +251,8 @@ export async function cleanupUploads(objectKeys: string[]): Promise<void> {
       method: 'POST',
       body: JSON.stringify({ object_keys: objectKeys }),
     })
-  } catch {
-    // 忽略静默清理失败
+  } catch (err) {
+    console.warn('Upload cleanup request failed:', err)
   }
 }
 
@@ -368,7 +370,8 @@ export async function fetchWishes(params?: { kind?: string; status?: string }): 
   try {
     const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
     return Array.isArray(res) ? res : (res?.wishes || [])
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch wishes:', err)
     return []
   }
 }
@@ -538,7 +541,8 @@ export async function pollPairingTicketStatus(ticket: string): Promise<PairStatu
 export async function fetchTrustedDevices(): Promise<TrustedDevice[]> {
   try {
     return await request<TrustedDevice[]>(`${API_BASE}/auth/devices`)
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch trusted devices:', err)
     return []
   }
 }
@@ -559,7 +563,8 @@ export async function fetchSiteConfig(): Promise<SiteConfig> {
 export async function fetchCuratorProfile(): Promise<CuratorProfile | null> {
   try {
     return await request<CuratorProfile>(`${API_BASE}/profile`)
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch curator profile:', err)
     return null
   }
 }
@@ -581,14 +586,10 @@ export async function bootstrapSystem(data: BootstrapPayload): Promise<Bootstrap
     ...data,
     hub_url: data.hub_url || (typeof window !== 'undefined' ? window.location.origin : ''),
   }
-  const result = await request<BootstrapResult>(`${API_BASE}/system/bootstrap`, {
+  return request<BootstrapResult>(`${API_BASE}/system/bootstrap`, {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  if (result.token) {
-    setAdminToken(result.token)
-  }
-  return result
 }
 
 // 11. 浏览器设备名识别与扉页管理员密钥验证 (Admin Key Sign-In RC-60)
@@ -645,7 +646,8 @@ export async function updateInitialLiquidBalance(
 export async function fetchCreditChannels(): Promise<CreditChannel[]> {
   try {
     return await request<CreditChannel[]>(`${API_BASE}/credit-channels`)
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch credit channels:', err)
     return []
   }
 }
@@ -692,7 +694,8 @@ export async function fetchFootprints(params?: {
   const qs = query.toString()
   try {
     return await request<Footprint[]>(`${API_BASE}/footprints${qs ? '?' + qs : ''}`)
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch footprints:', err)
     return []
   }
 }
@@ -750,40 +753,34 @@ export async function deleteFootprint(id: number, purge?: boolean): Promise<bool
   return true
 }
 
-// 14. 年度生活年鉴画卷 (Annual Almanac Summary FE-14, RG-17)
+// 14. 年度生活年鉴画卷 (Annual Almanac Summary FE-14)
 export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlmanacSummary> {
   const raw = await request<any>(`${API_BASE}/almanac/summary?year=${year}`)
 
   const rawPrologue = raw?.prologue || {}
-  const rawAtlas = raw?.atlas_journey || raw?.atlas || {}
-  const rawWishes = raw?.wishes_milestones || raw?.wishes || {}
-  const rawHighlights = raw?.life_highlights || raw?.highlights || {}
-  const rawFinances = raw?.financial_spectrum || raw?.finances || {}
+  const rawAtlas = raw?.atlas || {}
+  const rawWishes = raw?.wishes || {}
+  const rawHighlights = raw?.highlights || {}
+  const rawFinances = raw?.finances || {}
 
-  const citiesVisited: { city_code: string; city_name: string }[] = Array.isArray(rawAtlas.cities_visited)
-    ? rawAtlas.cities_visited
-    : Array.isArray(rawAtlas.cities)
-      ? rawAtlas.cities
-      : []
+  const cities: { city_code: string; city_name: string }[] = Array.isArray(rawAtlas.cities)
+    ? rawAtlas.cities
+    : []
 
   const footprints: Footprint[] = Array.isArray(rawAtlas.footprints) ? rawAtlas.footprints : []
 
-  const fulfilledWishes: Wish[] = Array.isArray(rawWishes.fulfilled_wishes)
-    ? rawWishes.fulfilled_wishes
-    : Array.isArray(rawWishes.wishes)
-      ? rawWishes.wishes
-      : []
+  const fulfilledWishes: Wish[] = Array.isArray(rawWishes.wishes)
+    ? rawWishes.wishes
+    : []
 
-  const filmGallery = Array.isArray(rawHighlights.film_gallery)
-    ? rawHighlights.film_gallery
-    : Array.isArray(rawHighlights.photos)
-      ? rawHighlights.photos
-      : []
+  const photos = Array.isArray(rawHighlights.photos)
+    ? rawHighlights.photos
+    : []
 
   const activeDays = Number(rawPrologue.active_days ?? rawPrologue.distinct_days ?? 0)
-  const totalBudget = Number(rawWishes.total_wish_budget ?? rawWishes.total_budget ?? 0)
-  const totalActual = Number(rawWishes.total_wish_actual ?? rawWishes.total_actual ?? 0)
-  const wantingCount = Number(rawWishes.wanting_wish_count ?? rawWishes.wanting_count ?? 0)
+  const totalBudget = Number(rawWishes.total_budget ?? 0)
+  const totalActual = Number(rawWishes.total_actual ?? 0)
+  const wantingCount = Number(rawWishes.wanting_count ?? 0)
 
   const rawRatio = Number(rawFinances.wish_expense_ratio ?? 0)
   const wishSpendingPercent =
@@ -803,23 +800,13 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
       first_date: rawPrologue.first_date || '',
       last_date: rawPrologue.last_date || '',
       wishes_fulfilled: Number(rawPrologue.wishes_fulfilled ?? fulfilledWishes.length),
-      cities_visited: Number(rawPrologue.cities_visited ?? citiesVisited.length),
+      cities_visited: Number(rawPrologue.cities_visited ?? cities.length),
       tx_count: Number(rawPrologue.tx_count ?? 0),
     },
-    atlas_journey: {
-      cities_visited: citiesVisited,
-      footprints,
-    },
     atlas: {
-      total_cities: Number(rawAtlas.total_cities ?? rawPrologue.cities_visited ?? citiesVisited.length),
-      cities: citiesVisited,
+      total_cities: Number(rawAtlas.total_cities ?? cities.length),
+      cities,
       footprints,
-    },
-    wishes_milestones: {
-      fulfilled_wishes: fulfilledWishes,
-      total_wish_budget: totalBudget,
-      total_wish_actual: totalActual,
-      wanting_wish_count: wantingCount,
     },
     wishes: {
       fulfilled_count: Number(rawWishes.fulfilled_count ?? fulfilledWishes.length),
@@ -828,32 +815,18 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
       total_actual: totalActual,
       wishes: fulfilledWishes,
     },
-    life_highlights: {
-      spring: rawHighlights.spring || undefined,
-      summer: rawHighlights.summer || undefined,
-      autumn: rawHighlights.autumn || undefined,
-      winter: rawHighlights.winter || undefined,
-      film_gallery: filmGallery,
-    },
     highlights: {
       spring: rawHighlights.spring || undefined,
       summer: rawHighlights.summer || undefined,
       autumn: rawHighlights.autumn || undefined,
       winter: rawHighlights.winter || undefined,
-      photos: filmGallery,
-    },
-    financial_spectrum: {
-      total_income: Number(rawFinances.total_income || 0),
-      total_expense: Number(rawFinances.total_expense || 0),
-      balance: Number(rawFinances.balance || 0),
-      wish_expenses: Number(rawFinances.wish_expenses || 0),
-      wish_expense_ratio: rawRatio,
-      categories,
+      photos,
     },
     finances: {
       total_expense: Number(rawFinances.total_expense || 0),
       total_income: Number(rawFinances.total_income || 0),
       balance: Number(rawFinances.balance || 0),
+      wish_expenses: Number(rawFinances.wish_expenses || 0),
       wish_spending_ratio: wishSpendingPercent,
       categories,
     },

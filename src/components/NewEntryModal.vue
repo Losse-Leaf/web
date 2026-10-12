@@ -123,7 +123,8 @@ const loadAvailableWishes = async () => {
   try {
     const list = await fetchWishes({ status: 'wanting' })
     availableWishes.value = list
-  } catch {
+  } catch (err) {
+    console.error('Failed to load available wishes:', err)
     availableWishes.value = []
   }
 }
@@ -141,8 +142,8 @@ const loadCreditChannelsList = async () => {
         installmentChannel.value = list[0].code
       }
     }
-  } catch {
-    // 保持默认兜底渠道
+  } catch (err) {
+    console.warn('Failed to load credit channels list:', err)
   }
 }
 

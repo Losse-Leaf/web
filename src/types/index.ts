@@ -104,6 +104,7 @@ export interface LifeEntry {
   category?: string
   payment_method?: string
   is_transaction?: boolean
+  transaction_id?: number
 
   created_at?: string
   updated_at?: string
@@ -449,7 +450,7 @@ export interface AnnualAlmanacSummary {
   prologue: {
     total_entries: number
     active_days: number
-    distinct_days: number
+    distinct_days?: number
     total_words: number
     first_date: string
     last_date: string
@@ -457,20 +458,10 @@ export interface AnnualAlmanacSummary {
     cities_visited?: number
     tx_count?: number
   }
-  atlas_journey: {
-    cities_visited: { city_code: string; city_name: string }[]
-    footprints: Footprint[]
-  }
   atlas: {
     total_cities: number
     cities: { city_code: string; city_name: string }[]
     footprints: Footprint[]
-  }
-  wishes_milestones: {
-    fulfilled_wishes: Wish[]
-    total_wish_budget: number
-    total_wish_actual: number
-    wanting_wish_count: number
   }
   wishes: {
     fulfilled_count: number
@@ -479,13 +470,6 @@ export interface AnnualAlmanacSummary {
     total_actual: number
     wishes: Wish[]
   }
-  life_highlights: {
-    spring?: LifeEntry
-    summer?: LifeEntry
-    autumn?: LifeEntry
-    winter?: LifeEntry
-    film_gallery: Attachment[]
-  }
   highlights: {
     spring?: LifeEntry
     summer?: LifeEntry
@@ -493,18 +477,11 @@ export interface AnnualAlmanacSummary {
     winter?: LifeEntry
     photos: Attachment[]
   }
-  financial_spectrum: {
-    total_income: number
-    total_expense: number
-    balance: number
-    wish_expenses: number
-    wish_expense_ratio: number
-    categories: { name: string; amount: number }[]
-  }
   finances: {
     total_expense: number
     total_income: number
     balance: number
+    wish_expenses?: number
     wish_spending_ratio: number
     categories: { name: string; amount: number }[]
   }

@@ -78,8 +78,8 @@ onMounted(async () => {
     if (list.length > 0 && !selectedChannelCode.value) {
       selectedChannelCode.value = list[0].code
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn('Failed to load credit channels in wish resolution:', err)
   }
 })
 
