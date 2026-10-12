@@ -139,7 +139,7 @@ onUnmounted(() => {
     <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
       <span>照片 / 附件</span>
       <span class="text-[11px]">
-        单张图片最大 20MB
+        单张图片最大 50MB
       </span>
     </div>
 
