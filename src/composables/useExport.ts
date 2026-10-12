@@ -23,7 +23,7 @@ export function useExport() {
     profile?: CuratorProfile
   }) => {
     const backup = {
-      version: '1.0.0',
+      version: '1.1.0',
       exported_at: new Date().toISOString(),
       generator: '散页 · 生活档案与时光手账',
       profile: data.profile || loadCuratorProfile(),

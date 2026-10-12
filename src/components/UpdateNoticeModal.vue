@@ -75,7 +75,7 @@ const todayStr = () => {
 }
 
 const form = ref({
-  version: 'v1.0.0',
+  version: 'v1.1.0',
   title: '',
   body: '',
   released_at: todayStr(),
@@ -97,7 +97,7 @@ const openCreateForm = () => {
   audio.playTink()
   editingId.value = null
   form.value = {
-    version: checkResult.value?.current_version || 'v1.0.0',
+    version: checkResult.value?.current_version || 'v1.1.0',
     title: '',
     body: '',
     released_at: todayStr(),
