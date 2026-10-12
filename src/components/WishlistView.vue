@@ -18,8 +18,9 @@ import type { Wish } from '../types'
 import WishFormModal from './WishFormModal.vue'
 import WishResolutionModal from './WishResolutionModal.vue'
 
-defineProps<{
+const props = defineProps<{
   storageConfigured?: boolean
+  refreshKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +63,15 @@ const loadWishes = async () => {
     isLoading.value = false
   }
 }
+
+watch(
+  () => props.refreshKey,
+  (val) => {
+    if (val !== undefined) {
+      loadWishes()
+    }
+  }
+)
 
 watch([selectedKind, selectedStatus], async () => {
   try {
@@ -461,6 +471,7 @@ onMounted(() => {
       :storageConfigured="storageConfigured"
       @close="isFormOpen = false"
       @saved="handleWishSaved"
+      @requestAuth="(cb) => emit('requestAuth', cb)"
     />
 
     <WishResolutionModal

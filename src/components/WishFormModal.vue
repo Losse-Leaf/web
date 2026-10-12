@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { X, Sparkles } from 'lucide-vue-next'
-import { createWish, updateWish } from '../utils/api'
+import { createWish, updateWish, getAdminToken } from '../utils/api'
 import type { Wish, Attachment } from '../types'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -16,6 +16,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved', wish: Wish): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
 
 const kind = ref<'item' | 'travel' | 'milestone'>('item')
@@ -27,6 +28,7 @@ const cityCode = ref('')
 const budgetYuan = ref('')
 const targetDate = ref('')
 const attachments = ref<Attachment[]>([])
+const attachmentIds = ref<number[]>([])
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
@@ -48,6 +50,7 @@ watch(
       budgetYuan.value = w.budget > 0 ? (w.budget / 100).toFixed(2) : ''
       targetDate.value = w.target_date ? w.target_date.slice(0, 10) : ''
       attachments.value = w.attachments ? [...w.attachments] : []
+      attachmentIds.value = attachments.value.map((a) => a.id)
     } else {
       kind.value = 'item'
       title.value = ''
@@ -58,6 +61,7 @@ watch(
       budgetYuan.value = ''
       targetDate.value = ''
       attachments.value = []
+      attachmentIds.value = []
     }
     errorMsg.value = ''
   },
@@ -71,6 +75,13 @@ const handleSubmit = async () => {
     return
   }
 
+  if (!getAdminToken()) {
+    emit('requestAuth', () => {
+      handleSubmit()
+    })
+    return
+  }
+
   let budgetCents = 0
   if (budgetYuan.value.trim()) {
     const val = parseFloat(budgetYuan.value.trim())
@@ -78,8 +89,6 @@ const handleSubmit = async () => {
       budgetCents = Math.round(val * 100)
     }
   }
-
-  const attachmentIds = attachments.value.map((a) => a.id)
 
   try {
     isSubmitting.value = true
@@ -95,7 +104,7 @@ const handleSubmit = async () => {
         city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
-        attachment_ids: attachmentIds,
+        attachment_ids: attachmentIds.value,
       })
       emit('saved', updated)
     } else {
@@ -108,12 +117,18 @@ const handleSubmit = async () => {
         city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
-        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
+        attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
       })
       emit('saved', created)
     }
     emit('close')
   } catch (err: any) {
+    if (!getAdminToken()) {
+      emit('requestAuth', () => {
+        handleSubmit()
+      })
+      return
+    }
     errorMsg.value = err.message || '保存心愿失败'
   } finally {
     isSubmitting.value = false
@@ -284,9 +299,9 @@ const handleSubmit = async () => {
         <div class="space-y-1.5">
           <label class="block text-[11px] text-[var(--ink-muted)]">心愿参考照片与灵感剪报 (选填)</label>
           <ImageUploader
-            v-model="attachments"
+            :initialAttachments="attachments"
             :storageConfigured="storageConfigured ?? true"
-            category="wish"
+            @update:attachments="attachmentIds = $event"
           />
         </div>
 

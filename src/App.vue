@@ -138,6 +138,7 @@ const updateModalInitialTab = ref<'check' | 'notices'>('check')
 const isPasscodeModalOpen = ref(false)
 const passcodeModalPrompt = ref('')
 const passcodeModalCallback = ref<(() => void) | null>(null)
+const wishesRefreshKey = ref(0)
 
 const handleRequestAuth = (callback?: () => void, prompt?: string) => {
   if (Boolean(getAdminToken())) {
@@ -150,13 +151,13 @@ const handleRequestAuth = (callback?: () => void, prompt?: string) => {
 }
 
 const handleAuthenticated = async () => {
+  const cb = passcodeModalCallback.value
+  passcodeModalCallback.value = null
   isPasscodeModalOpen.value = false
-  await refreshData()
-  if (passcodeModalCallback.value) {
-    const cb = passcodeModalCallback.value
-    passcodeModalCallback.value = null
+  if (cb) {
     cb()
   }
+  await refreshData()
 }
 
 const handleLogout = () => {
@@ -254,7 +255,15 @@ const openStorageModal = async () => {
 const handleEntryCreated = (newEntry: LifeEntry) => {
   addEntry(newEntry)
   loadRemoteEntries()
-  if (currentView.value !== 'home' && currentView.value !== 'life' && currentView.value !== 'projects') {
+  if (
+    currentView.value !== 'home' &&
+    currentView.value !== 'life' &&
+    currentView.value !== 'projects' &&
+    currentView.value !== 'wishes' &&
+    currentView.value !== 'wishlist' &&
+    currentView.value !== 'atlas' &&
+    currentView.value !== 'footprints'
+  ) {
     navigateTo('home')
   }
 }
@@ -320,6 +329,7 @@ const handleProjectDeleted = (id: number) => {
 }
 
 const refreshData = async () => {
+  wishesRefreshKey.value++
   try {
     const [, statsData, statusData] = await Promise.allSettled([
       Promise.all([loadRemoteEntries(), loadRemoteTransactions()]),
@@ -419,6 +429,7 @@ onMounted(async () => {
         if (!getAdminToken() && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
           try {
             await verifyMasterPasscode('123456')
+            await loadRemoteTransactions()
           } catch {}
         }
         if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
@@ -588,6 +599,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <WishlistView
         v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
         :storageConfigured="storageConfigured"
+        :refreshKey="wishesRefreshKey"
         @wishResolved="refreshData"
         @requestAuth="handleRequestAuth"
       />

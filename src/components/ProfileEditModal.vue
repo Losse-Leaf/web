@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2, User } from 'lucide-vue-next'
-import type { CuratorProfile, GearItem } from '../types'
+import type { CuratorProfile } from '../types'
 import { DEFAULT_PROFILE, saveCuratorProfile } from '../utils/profile'
 import {
   uploadUnifiedFile,
   updateCuratorProfile,
-  createTransaction,
   addGearAsset,
   sellGearAsset,
   deleteGearAsset,
@@ -25,7 +24,7 @@ const emit = defineEmits<{
   (e: 'updated', profile: CuratorProfile): void
 }>()
 
-const { gearCategories: categories, loadCategories, openCategoryManager } = useCategories()
+const { gearCategories: categories, paymentMethods, loadCategories, openCategoryManager } = useCategories()
 
 const cloneProfile = (p: CuratorProfile): CuratorProfile => ({
   ...p,
@@ -46,16 +45,18 @@ const avatarKey = ref(props.profile.avatar_key || '')
 const isSaving = ref(false)
 const saveError = ref('')
 
-// 装备新增区
+// 装备新增与操作状态 (RC-132 唯一写通道)
 const newGearCategory = ref('影像与暗房')
 const newGearName = ref('')
 const newGearSpec = ref('')
-const newGearStatus = ref('日常自用')
+const newGearPaymentMethod = ref('')
 const newGearNote = ref('')
 const newGearPrice = ref('')
 const newGearPurchaseDate = ref(new Date().toISOString().slice(0, 10))
 const syncBuyTransaction = ref(true)
 const showAddGear = ref(false)
+const isAddingGear = ref(false)
+const gearErrorMsg = ref('')
 
 // 仅在弹窗打开时同步并克隆表单状态，移除全局深监听与 JSON 频繁序列化开销 (FE-07)
 watch(
@@ -67,6 +68,7 @@ watch(
       avatarKey.value = props.profile.avatar_key || ''
       avatarUploadError.value = ''
       saveError.value = ''
+      gearErrorMsg.value = ''
     }
   },
   { immediate: true }
@@ -137,9 +139,9 @@ const handleSave = async () => {
   }
   form.value.current_city = form.value.location ? (form.value.location.split('·')[1]?.trim() || form.value.location.trim()) : ''
 
-  // 2. 尝试向后端更新持久化 (PUT /api/v1/profile, RG-09, RC-29, RC-31, RC-32)
+  // 2. 向后端更新持久化主理人基本资料，不携带 edc_gear 以杜绝双写互踩 (RC-132)
   try {
-    await updateCuratorProfile({
+    const updated = await updateCuratorProfile({
       name: form.value.name,
       title: form.value.title,
       bio: form.value.bio,
@@ -154,41 +156,53 @@ const handleSave = async () => {
         email: form.value.email || '',
         github: form.value.github || '',
       },
-      edc_gear: form.value.edc_gear,
     })
+    form.value = cloneProfile({
+      ...form.value,
+      ...updated,
+      edc_gear: updated?.edc_gear || form.value.edc_gear,
+    })
+    saveCuratorProfile(form.value)
+    emit('updated', form.value)
+    emit('close')
   } catch (err: any) {
-    console.warn('后端更新主理人档案失败，自动依赖本地缓存:', err)
+    saveError.value = err?.message || '保存主理人资料失败，请稍后重试'
+  } finally {
+    isSaving.value = false
   }
-
-  // 3. 前端持久化缓存到 localStorage，节省资源，支持离线秒开
-  saveCuratorProfile(form.value)
-  emit('updated', form.value)
-  isSaving.value = false
-  emit('close')
 }
 
 const handleResetDefault = () => {
-  if (!confirm('确定恢复为默认主理人资料与预置设备清单？')) return
-  form.value = cloneProfile(DEFAULT_PROFILE)
+  if (!confirm('确定恢复为默认主理人基本资料？')) return
+  const currentGear = form.value.edc_gear ? form.value.edc_gear.map((item) => ({ ...item })) : []
+  form.value = {
+    ...cloneProfile(DEFAULT_PROFILE),
+    edc_gear: currentGear,
+  }
 }
 
 const handleAddGear = async () => {
-  if (!newGearName.value.trim()) return
+  if (!newGearName.value.trim()) {
+    gearErrorMsg.value = '请填写设备名称'
+    return
+  }
   const priceFloat = parseFloat(newGearPrice.value)
   const priceCents = !isNaN(priceFloat) && priceFloat > 0 ? Math.round(priceFloat * 100) : undefined
   const purchaseDate = newGearPurchaseDate.value || new Date().toISOString().slice(0, 10)
+  const shouldCreateTx = Boolean(syncBuyTransaction.value && priceCents && priceCents > 0)
 
   try {
+    isAddingGear.value = true
+    gearErrorMsg.value = ''
     const res = await addGearAsset({
       category: newGearCategory.value,
       name: newGearName.value.trim(),
-      spec: newGearSpec.value.trim(),
-      status: newGearStatus.value.trim() || 'active',
-      note: newGearNote.value.trim(),
+      spec: newGearSpec.value.trim() || undefined,
+      note: newGearNote.value.trim() || undefined,
       price_cents: priceCents,
       purchase_date: purchaseDate,
-      sync_transaction: Boolean(syncBuyTransaction.value && priceCents && priceCents > 0),
-      payment_method: '微信支付',
+      create_transaction: shouldCreateTx,
+      payment_method: shouldCreateTx && newGearPaymentMethod.value ? newGearPaymentMethod.value : undefined,
     })
     const createdGear = (res as any)?.gear || res
     if (createdGear && createdGear.id) {
@@ -197,45 +211,19 @@ const handleAddGear = async () => {
       saveCuratorProfile(form.value)
       emit('updated', { ...form.value })
     }
-  } catch (err) {
-    // 降级回退：本地推入并尝试创建账单
-    const item: GearItem = {
-      id: `gear-${Date.now()}`,
-      category: newGearCategory.value,
-      name: newGearName.value.trim(),
-      spec: newGearSpec.value.trim(),
-      status: newGearStatus.value.trim() || '日常自用',
-      note: newGearNote.value.trim(),
-      price_cents: priceCents,
-      purchase_date: purchaseDate,
-    }
-    if (!form.value.edc_gear) form.value.edc_gear = []
-    form.value.edc_gear.push(item)
-
-    if (syncBuyTransaction.value && priceCents && priceCents > 0) {
-      try {
-        await createTransaction({
-          type: 'expense',
-          category: '购物',
-          amount: priceCents,
-          title: `购入设备: ${item.name}`,
-          note: item.spec || item.note,
-          payment_method: '微信支付',
-          occurred_at: `${purchaseDate}T12:00:00`,
-        })
-      } catch (txErr) {
-        console.warn('同步生成购买支出流水失败:', txErr)
-      }
-    }
+    newGearName.value = ''
+    newGearSpec.value = ''
+    newGearPaymentMethod.value = ''
+    newGearNote.value = ''
+    newGearPrice.value = ''
+    newGearPurchaseDate.value = new Date().toISOString().slice(0, 10)
+    syncBuyTransaction.value = true
+    showAddGear.value = false
+  } catch (err: any) {
+    gearErrorMsg.value = err?.message || '录入设备失败，请稍后重试'
+  } finally {
+    isAddingGear.value = false
   }
-
-  newGearName.value = ''
-  newGearSpec.value = ''
-  newGearNote.value = ''
-  newGearPrice.value = ''
-  newGearPurchaseDate.value = new Date().toISOString().slice(0, 10)
-  syncBuyTransaction.value = true
-  showAddGear.value = false
 }
 
 // 设备状态判断与中文映射 (RC-90)
@@ -247,7 +235,7 @@ const formatGearStatus = (status?: string) => {
   return status
 }
 
-// 出二手回血内联结算抽屉 (RC-54, RG-19)
+// 出二手回血内联结算抽屉 (RC-54, RG-19, RC-132)
 const sellingGearIndex = ref<number | null>(null)
 const sellingPriceInput = ref('')
 const sellingDateInput = ref('')
@@ -275,9 +263,14 @@ const confirmSellGear = async () => {
   const item = form.value.edc_gear?.[sellingGearIndex.value]
   if (!item) return
 
+  if (!item.id) {
+    sellingErrorMsg.value = '该设备缺少后端标识，无法执行转售结算'
+    return
+  }
+
   const soldFloat = parseFloat(sellingPriceInput.value)
-  if (isNaN(soldFloat) || soldFloat < 0) {
-    sellingErrorMsg.value = '请输入有效的转让回血金额'
+  if (isNaN(soldFloat) || soldFloat <= 0) {
+    sellingErrorMsg.value = '请输入大于 0 的转让回血金额'
     return
   }
 
@@ -286,54 +279,38 @@ const confirmSellGear = async () => {
 
   try {
     isSellingSubmitting.value = true
-    if (item.id) {
-      await sellGearAsset(item.id, {
-        sold_price_cents: soldCents,
-        sold_date: soldDate,
-        payment_method: '微信支付',
-      })
-      item.status = 'sold'
-      item.sold_price_cents = soldCents
-      item.sold_date = soldDate
-      saveCuratorProfile(form.value)
-      emit('updated', { ...form.value })
-    } else {
-      item.status = 'sold'
-      item.sold_price_cents = soldCents
-      item.sold_date = soldDate
-      saveCuratorProfile(form.value)
-      const updated = await updateCuratorProfile({
-        ...form.value,
-        edc_gear: form.value.edc_gear,
-      })
-      saveCuratorProfile(updated)
-      emit('updated', updated)
-    }
-  } catch (err) {
-    console.warn('同步设备出二手状态失败，采用本地更新:', err)
+    sellingErrorMsg.value = ''
+    await sellGearAsset(item.id, {
+      sold_price_cents: soldCents,
+      sold_date: soldDate,
+    })
     item.status = 'sold'
     item.sold_price_cents = soldCents
     item.sold_date = soldDate
     saveCuratorProfile(form.value)
     emit('updated', { ...form.value })
+    cancelSellDrawer()
+  } catch (err: any) {
+    sellingErrorMsg.value = err?.message || '设备转售回血结算失败，请重试'
   } finally {
     isSellingSubmitting.value = false
   }
-
-  cancelSellDrawer()
 }
 
 const removeGear = async (idx: number) => {
   const item = form.value.edc_gear?.[idx]
-  form.value.edc_gear?.splice(idx, 1)
-  if (item?.id) {
-    try {
-      await deleteGearAsset(item.id)
-      saveCuratorProfile(form.value)
-      emit('updated', { ...form.value })
-    } catch (err) {
-      console.warn('后端删除设备失败，将在点击保存时同步:', err)
-    }
+  if (!item?.id) {
+    gearErrorMsg.value = '该设备缺少后端标识，无法删除'
+    return
+  }
+  try {
+    gearErrorMsg.value = ''
+    await deleteGearAsset(item.id)
+    form.value.edc_gear?.splice(idx, 1)
+    saveCuratorProfile(form.value)
+    emit('updated', { ...form.value })
+  } catch (err: any) {
+    gearErrorMsg.value = err?.message || '删除设备失败，请稍后重试'
   }
 }
 
@@ -594,6 +571,14 @@ onMounted(() => {
           </button>
         </div>
 
+        <!-- 错误提示条 -->
+        <div
+          v-if="gearErrorMsg"
+          class="p-2.5 text-xs font-mono-archive text-red-600 bg-red-500/5 border border-red-600/20 rounded-xs"
+        >
+          {{ gearErrorMsg }}
+        </div>
+
         <!-- 展开的添加设备小抽屉 -->
         <div
           v-if="showAddGear"
@@ -629,12 +614,23 @@ onMounted(() => {
             </div>
 
             <div>
-              <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">状态标签</label>
-              <input
-                v-model="newGearStatus"
-                type="text"
-                placeholder="例如: 随身主力"
-                class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)]">支付方式</label>
+                <button
+                  type="button"
+                  @click="openCategoryManager('payment')"
+                  class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+                >
+                  管理渠道
+                </button>
+              </div>
+              <PaperSelect
+                v-model="newGearPaymentMethod"
+                size="sm"
+                :options="[
+                  { value: '', label: '默认（设备购置）' },
+                  ...paymentMethods.map((pm) => ({ value: pm, label: pm })),
+                ]"
               />
             </div>
           </div>
@@ -696,10 +692,11 @@ onMounted(() => {
           <div class="flex justify-end pt-2">
             <button
               @click="handleAddGear"
+              :disabled="isAddingGear"
               type="button"
-              class="px-4 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90"
+              class="px-4 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90 disabled:opacity-50"
             >
-              确认添入列表
+              {{ isAddingGear ? '正在录入...' : '确认添入列表' }}
             </button>
           </div>
         </div>
@@ -818,6 +815,9 @@ onMounted(() => {
       </div>
 
       <!-- 底部控制栏 -->
+      <div v-if="saveError" class="text-xs font-mono-archive text-red-600">
+        {{ saveError }}
+      </div>
       <div class="pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
         <button
           @click="handleResetDefault"
@@ -825,7 +825,7 @@ onMounted(() => {
           class="inline-flex items-center gap-1 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
         >
           <RotateCcw class="w-3.5 h-3.5" />
-          <span>恢复预置数据</span>
+          <span>恢复默认资料</span>
         </button>
 
         <div class="flex items-center gap-3">

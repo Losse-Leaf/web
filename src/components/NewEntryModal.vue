@@ -511,9 +511,9 @@ const handleSubmit = async () => {
         title: title.value.trim(),
         kind: wishKind.value,
         note: content.value.trim(),
-        spec: wishSpec.value.trim() || undefined,
-        city_code: selectedCityCode.value || undefined,
-        city_name: selectedCityName.value || undefined,
+        spec: wishKind.value === 'item' ? wishSpec.value.trim() || undefined : undefined,
+        city_code: wishKind.value === 'travel' ? selectedCityCode.value || undefined : undefined,
+        city_name: wishKind.value === 'travel' ? selectedCityName.value || undefined : undefined,
         budget: budgetCents,
         target_date: wishTargetDate.value || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
@@ -530,6 +530,12 @@ const handleSubmit = async () => {
       emit('wishCreated', createdWish)
       handleClose()
     } catch (err: any) {
+      if (!getAdminToken()) {
+        emit('requestAuth', () => {
+          handleSubmit()
+        })
+        return
+      }
       errorMsg.value = err.message || '创建心愿失败'
     } finally {
       isSubmitting.value = false
@@ -1358,7 +1364,10 @@ const handleSubmit = async () => {
           </div>
         </template>
 
-        <!-- 操作按钮 -->
+        <!-- 底部错误提示与操作按钮 -->
+        <div v-if="errorMsg" class="p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
+          {{ errorMsg }}
+        </div>
         <div class="pt-5 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
           <button
             type="button"

@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import type {
   LifeEntry,
   Transaction,
@@ -36,7 +37,7 @@ import type {
 const API_BASE = '/api/v1'
 const ADMIN_TOKEN_KEY = 'looseleaf_admin_token'
 
-export function getAdminToken(): string {
+function readStoredAdminToken(): string {
   try {
     return localStorage.getItem(ADMIN_TOKEN_KEY) || ''
   } catch {
@@ -44,16 +45,37 @@ export function getAdminToken(): string {
   }
 }
 
+const adminTokenRef = ref<string>(readStoredAdminToken())
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === ADMIN_TOKEN_KEY || e.key === null) {
+      adminTokenRef.value = readStoredAdminToken()
+    }
+  })
+}
+
+export function getAdminToken(): string {
+  const stored = readStoredAdminToken()
+  if (adminTokenRef.value !== stored) {
+    adminTokenRef.value = stored
+  }
+  return adminTokenRef.value
+}
+
 export function setAdminToken(token: string): void {
+  const clean = token.trim()
   try {
-    localStorage.setItem(ADMIN_TOKEN_KEY, token.trim())
+    localStorage.setItem(ADMIN_TOKEN_KEY, clean)
   } catch {}
+  adminTokenRef.value = clean
 }
 
 export function removeAdminToken(): void {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
   } catch {}
+  adminTokenRef.value = ''
 }
 
 // 通用请求处理
@@ -75,6 +97,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   })
 
   if (!res.ok) {
+    if (res.status === 401 && !url.includes('/auth/verify')) {
+      removeAdminToken()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
+      }
+    }
     let msg = `HTTP error ${res.status}`
     try {
       const errJson = await res.json()
@@ -646,12 +674,10 @@ export async function addGearAsset(data: {
   name: string
   category: string
   spec?: string
-  status?: string
   price_cents?: number
   purchase_date?: string
   payment_method?: string
   note?: string
-  sync_transaction?: boolean
   create_transaction?: boolean
   is_installment?: boolean
   installment_channel_code?: string
@@ -670,8 +696,6 @@ export async function sellGearAsset(
   data: {
     sold_price_cents: number
     sold_date?: string
-    payment_method?: string
-    sync_transaction?: boolean
     note?: string
   }
 ): Promise<GearItem> {

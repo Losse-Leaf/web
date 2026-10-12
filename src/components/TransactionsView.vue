@@ -629,7 +629,7 @@ const spectrumItems = computed(() => {
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-baseline gap-3">
           <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
-            资产管理
+            资产
           </h1>
           <span class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
             净资产大盘 · 固定设备库 · 信贷与收支台账
@@ -947,7 +947,7 @@ const spectrumItems = computed(() => {
           {{ gearFilter === 'sold' ? '尚无转售回血的设备记录' : '固定资产设备库暂无在役单品' }}
         </p>
         <p class="font-mono-archive text-xs text-[var(--ink-muted)]">
-          点击右上角「＋ 录入新设备」，或在记账时勾选「同步收录至设备库」即可沉淀固定资产。
+          点击右上角「＋ 录入设备」，或在达成心愿归册时勾选「沉淀至固定资产库」即可收录在役设备。
         </p>
       </div>
 

@@ -49,7 +49,6 @@ const handleSubmit = async () => {
     await verifyMasterPasscode(p)
     audio.playShutter()
     emit('authenticated')
-    emit('close')
   } catch (err: any) {
     errorMsg.value = err?.message || '管理员密钥不正确，请重新核对'
   } finally {
