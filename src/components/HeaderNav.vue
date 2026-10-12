@@ -67,32 +67,32 @@ const navItems = computed(() => {
   return items
 })
 
-// 辅助工具与设置（纯净无赘述；检查更新与更新公告仅管理端可见 RC-97）
+// 辅助工具与设置（纯净无赘述；设备配对、数据备份、存储设置、检查更新与更新公告仅管理端可见）
 const toolOptions = computed(() => {
-  const opts = [
-    {
-      key: 'pair',
-      label: '设备配对',
-      action: () => emit('openPairing'),
-    },
-    {
-      key: 'export',
-      label: '数据备份',
-      action: () => emit('openExport'),
-    },
+  const opts: { key: string; label: string; action: () => void }[] = [
     {
       key: 'stats',
       label: '生活统计',
       action: () => emit('openStats'),
     },
-    {
-      key: 'storage',
-      label: '存储设置',
-      action: () => emit('openStorage'),
-    },
   ]
   if (isAdmin.value) {
     opts.push(
+      {
+        key: 'pair',
+        label: '设备配对',
+        action: () => emit('openPairing'),
+      },
+      {
+        key: 'export',
+        label: '数据备份',
+        action: () => emit('openExport'),
+      },
+      {
+        key: 'storage',
+        label: '存储设置',
+        action: () => emit('openStorage'),
+      },
       {
         key: 'update-check',
         label: '检查更新',

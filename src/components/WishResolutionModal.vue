@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { X, Sparkles, Check, ShieldCheck } from 'lucide-vue-next'
-import { resolveWish, fetchCreditChannels } from '../utils/api'
+import { resolveWish, fetchCreditChannels, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
+import { getBeijingDateString } from '../utils/format'
 import type { Wish, CreditChannel } from '../types'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -15,13 +16,14 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'resolved', wish: Wish): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
 
 // 归册路径: exact(原配原价) | altered(改选替代) | relinquished(理性拔草)
 const resolutionType = ref<'exact' | 'altered' | 'relinquished'>('exact')
 
 // 达成日期 (默认今天，严格 <= now)
-const todayStr = new Date().toISOString().slice(0, 10)
+const todayStr = getBeijingDateString()
 const fulfilledDate = ref(todayStr)
 
 // 实际开销与品名
@@ -156,6 +158,11 @@ const handleSubmit = async () => {
     ? (actualTitle.value.trim() || props.wish.title)
     : props.wish.title
 
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleSubmit())
+    return
+  }
+
   try {
     isSubmitting.value = true
     errorMsg.value = ''
@@ -180,6 +187,10 @@ const handleSubmit = async () => {
     emit('resolved', resolved)
     emit('close')
   } catch (err: any) {
+    if (!getAdminToken()) {
+      emit('requestAuth', () => handleSubmit())
+      return
+    }
     errorMsg.value = err.message || '心愿归册仪式提交失败'
   } finally {
     isSubmitting.value = false

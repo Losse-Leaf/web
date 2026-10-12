@@ -11,6 +11,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-vue-next'
+import { getBeijingDateString } from '../utils/format'
 import PaperDatePicker from './PaperDatePicker.vue'
 import {
   checkSystemUpdate,
@@ -66,13 +67,7 @@ const editingId = ref<number | null>(null)
 const submitting = ref(false)
 const deletingId = ref<number | null>(null)
 
-const todayStr = () => {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
+const todayStr = () => getBeijingDateString()
 
 const form = ref({
   version: 'v1.1.0',

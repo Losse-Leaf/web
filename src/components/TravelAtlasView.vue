@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import {
   Plus,
   Compass,
@@ -24,12 +24,14 @@ import {
   formatVisitStampCount,
 } from '../utils/atlasHelpers'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     storageConfigured?: boolean
+    refreshKey?: number
   }>(),
   {
     storageConfigured: true,
+    refreshKey: 0,
   }
 )
 
@@ -37,6 +39,7 @@ const emit = defineEmits<{
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'footprintSaved'): void
   (e: 'openAddWithCity', city: { code: string; name: string }): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
 
 const atlasData = ref<{
@@ -58,12 +61,20 @@ const addModalInitialCityCode = ref('')
 const addModalInitialCityName = ref('')
 
 const handleAddFootprintInCity = (city: { code: string; name: string }) => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => handleAddFootprintInCity(city))
+    return
+  }
   addModalInitialCityCode.value = city.code
   addModalInitialCityName.value = city.name
   isAddModalOpen.value = true
 }
 
 const handleAddEntryInCity = (city: { code: string; name: string }) => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => handleAddEntryInCity(city))
+    return
+  }
   isDrawerOpen.value = false
   emit('openAddWithCity', city)
 }
@@ -85,7 +96,11 @@ const selectedCityName = ref('')
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
 
+// 请求序号：仅接受最新一次请求的结果，避免慢响应覆盖新数据 (FE-22)
+let atlasLoadSeq = 0
+
 const loadAtlas = async () => {
+  const seq = ++atlasLoadSeq
   try {
     isLoading.value = true
     loadError.value = ''
@@ -93,6 +108,7 @@ const loadAtlas = async () => {
       fetchFootprintsAtlas(),
       fetchFootprints(),
     ])
+    if (seq !== atlasLoadSeq) return
     atlasData.value = atlasRes
     rawFootprints.value = footprintsRes || []
 
@@ -107,6 +123,13 @@ const loadAtlas = async () => {
     isLoading.value = false
   }
 }
+
+watch(
+  () => props.refreshKey,
+  () => {
+    loadAtlas()
+  }
+)
 
 // 原始足迹字典 (city_code -> Footprint[])
 const cityFootprintsMap = computed<Map<string, Footprint[]>>(() => {
@@ -1316,6 +1339,7 @@ onMounted(() => {
       :initialCityName="addModalInitialCityName"
       @close="isAddModalOpen = false; addModalInitialCityCode = ''; addModalInitialCityName = ''"
       @saved="handleFootprintSaved"
+      @requestAuth="(cb) => emit('requestAuth', cb)"
     />
 
     <!-- 两级回忆抽屉组件 (支持省份与城市无缝穿梭与四章节聚合) -->

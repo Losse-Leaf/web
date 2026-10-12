@@ -1,6 +1,6 @@
 import type { LifeEntry, Transaction, Project, CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
-import { parseOccurredDate } from '../utils/format'
+import { parseOccurredDate, getBeijingDateString } from '../utils/format'
 
 export function useExport() {
   const triggerDownload = (filename: string, content: string, mime: string) => {
@@ -39,7 +39,7 @@ export function useExport() {
       },
     }
     const jsonStr = JSON.stringify(backup, null, 2)
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = getBeijingDateString().replace(/-/g, '')
     triggerDownload(`loose-leaf-backup-${today}.json`, jsonStr, 'application/json;charset=utf-8')
   }
 
@@ -77,7 +77,7 @@ export function useExport() {
     })
 
     const mdStr = lines.join('\n')
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = getBeijingDateString().replace(/-/g, '')
     triggerDownload(`loose-leaf-entries-${today}.md`, mdStr, 'text/markdown;charset=utf-8')
   }
 
@@ -89,9 +89,8 @@ export function useExport() {
     transactions.forEach((tx) => {
       const typeLabel = tx.type === 'income' ? '收入' : '支出'
       const amountYuan = (tx.amount / 100).toFixed(2)
-      const dateStr = tx.occurred_at
-        ? new Date(tx.occurred_at).toLocaleString('zh-CN')
-        : ''
+      const parsed = parseOccurredDate(tx.occurred_at)
+      const dateStr = tx.occurred_at ? `${parsed.dotDate} ${parsed.time}` : ''
       rows.push([
         String(tx.id),
         `"${dateStr}"`,
@@ -105,7 +104,7 @@ export function useExport() {
     })
 
     const csvContent = '\uFEFF' + rows.map((r) => r.join(',')).join('\n')
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = getBeijingDateString().replace(/-/g, '')
     triggerDownload(`loose-leaf-transactions-${today}.csv`, csvContent, 'text/csv;charset=utf-8')
   }
 

@@ -851,11 +851,8 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
   const totalActual = Number(rawWishes.total_actual ?? 0)
   const wantingCount = Number(rawWishes.wanting_count ?? 0)
 
-  const rawRatio = Number(rawFinances.wish_expense_ratio ?? 0)
-  const wishSpendingPercent =
-    typeof rawFinances.wish_spending_ratio === 'number'
-      ? rawFinances.wish_spending_ratio
-      : rawRatio * 100
+  // 后端唯一权威键为百分比口径 wish_spending_ratio (BE-38 去除同义双键)
+  const wishSpendingPercent = Number(rawFinances.wish_spending_ratio ?? 0)
 
   const categories = Array.isArray(rawFinances.categories) ? rawFinances.categories : []
 
@@ -864,7 +861,6 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
     prologue: {
       total_entries: Number(rawPrologue.total_entries || 0),
       active_days: activeDays,
-      distinct_days: activeDays,
       total_words: Number(rawPrologue.total_words || 0),
       first_date: rawPrologue.first_date || '',
       last_date: rawPrologue.last_date || '',

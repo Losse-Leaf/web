@@ -23,6 +23,7 @@ import {
   getAdminToken,
 } from '../utils/api'
 import { useCategories } from '../composables/useCategories'
+import { getBeijingDateTimeString } from '../utils/format'
 import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
 
@@ -68,7 +69,7 @@ const location = ref('')
 const selectedCityCode = ref('')
 const selectedCityName = ref('')
 const userManuallyChangedCity = ref(false)
-const occurredAt = ref(getTodayDateTimeString())
+const occurredAt = ref(getBeijingDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const selectedFootprintId = ref<number | null>(null)
 const attachmentIds = ref<number[]>([])
@@ -93,7 +94,7 @@ const wishTargetDate = ref('')
 const txAmount = ref<string>('')
 const txType = ref<'expense' | 'income'>('expense')
 const txCategory = ref<string>('餐饮')
-const txPaymentMethod = ref<string>('微信支付')
+const txPaymentMethod = ref<string>('')
 const txNote = ref<string>('')
 const syncToGear = ref(false)
 const gearCategory = ref('数码器材')
@@ -140,9 +141,9 @@ const kindOptions: { key: EntryKind; label: string; desc: string }[] = [
 
 function normalizeKind(raw?: string): EntryKind {
   if (!raw) return 'life'
-  if (raw === 'travel' || raw === 'place') return 'travel'
+  if (raw === 'travel') return 'travel'
   if (raw === 'project') return 'project'
-  if (raw === 'wish' || raw === 'collection') return 'wish'
+  if (raw === 'wish') return 'wish'
   if (raw === 'transaction') return 'transaction'
   return 'life'
 }
@@ -303,12 +304,6 @@ const effectiveRepaymentDay = computed(() => {
   return customRepaymentDay.value || 15
 })
 
-function getTodayDateTimeString(): string {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
-}
-
 const selectKind = (k: EntryKind) => {
   selectedKind.value = k
   errorMsg.value = null
@@ -341,7 +336,7 @@ const resetForm = () => {
     selectedCityCode.value = ''
     selectedCityName.value = ''
   }
-  occurredAt.value = getTodayDateTimeString()
+  occurredAt.value = getBeijingDateTimeString()
   selectedProjectId.value = props.initialProjectId || (props.projects?.[0]?.id ?? null)
   selectedFootprintId.value = null
   projectMode.value = props.initialProjectId || (props.projects && props.projects.length > 0) ? 'entry' : 'new'
@@ -349,7 +344,7 @@ const resetForm = () => {
   txAmount.value = ''
   txType.value = 'expense'
   txCategory.value = expenseCategories.value[0] || '餐饮'
-  txPaymentMethod.value = paymentMethods.value[0] || '微信支付'
+  txPaymentMethod.value = paymentMethods.value[0] || ''
   txNote.value = ''
   syncToGear.value = false
   gearCategory.value = gearCategories.value[0] || '数码器材'
@@ -423,13 +418,8 @@ const handleSubmit = async () => {
     const matchedChannel = displayCreditChannels.value.find(
       (c) => c.code === installmentChannel.value
     )
-    const channelLabel = matchedChannel
-      ? matchedChannel.name
-      : installmentChannel.value === 'huabei'
-        ? '花呗'
-        : installmentChannel.value === 'baitiao'
-          ? '京东白条'
-          : '信贷分期'
+    // 渠道名取自后端渠道字典，前端不再硬编码渠道显示名 (FE-20)
+    const channelLabel = matchedChannel?.name || installmentChannel.value
 
     let noteText = txNote.value.trim()
     if (isInstallment.value && !noteText.includes('期')) {
@@ -447,13 +437,9 @@ const handleSubmit = async () => {
         title: title.value.trim() || txCategory.value,
         note: noteText,
         payment_method: isInstallment.value
-          ? (installmentChannel.value === 'huabei'
-              ? '支付宝 (花呗分期)'
-              : installmentChannel.value === 'baitiao'
-                ? '京东支付 (白条分期)'
-                : matchedChannel
-                  ? `${matchedChannel.name} (分期)`
-                  : txPaymentMethod.value)
+          ? channelLabel
+            ? `${channelLabel} (分期)`
+            : txPaymentMethod.value
           : txPaymentMethod.value,
         occurred_at: occurredAt.value,
         wish_id: selectedWishId.value || undefined,
@@ -485,6 +471,11 @@ const handleSubmit = async () => {
       emit('transactionCreated', createdTx)
       handleClose()
     } catch (err: any) {
+      // 凭证在提交瞬间过期：统一交回印鉴登录并在成功后继续本次提交 (FE-22)
+      if (!getAdminToken()) {
+        emit('requestAuth', () => handleSubmit())
+        return
+      }
       errorMsg.value = err.message || '记账失败'
     } finally {
       isSubmitting.value = false
@@ -580,6 +571,10 @@ const handleSubmit = async () => {
         emit('entryCreated', createdEntry)
         handleClose()
       } catch (err: any) {
+        if (!getAdminToken()) {
+          emit('requestAuth', () => handleSubmit())
+          return
+        }
         errorMsg.value = err.message || '创建造物项目失败'
       } finally {
         isSubmitting.value = false

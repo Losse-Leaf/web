@@ -8,6 +8,7 @@ import {
   deleteCreditChannel,
 } from '../utils/api'
 import type { CreditChannel } from '../types'
+import { askConfirm } from '../composables/useConfirm'
 import PaperSelect from './PaperSelect.vue'
 
 const props = defineProps<{
@@ -118,7 +119,13 @@ const handleSaveChannel = async (ch: CreditChannel) => {
 
 const handleDeleteChannel = async (ch: CreditChannel) => {
   if (!ch.id) return
-  if (!confirm(`确定删除信贷渠道「${ch.name}」？关联的分期账单仍将保留`)) return
+  const ok = await askConfirm({
+    title: '删除信贷渠道',
+    message: `确定删除信贷渠道「${ch.name}」？关联的分期账单仍将保留。`,
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!ok) return
 
   try {
     errorMsg.value = ''

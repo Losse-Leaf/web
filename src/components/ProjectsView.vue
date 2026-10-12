@@ -2,8 +2,9 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import type { Project, LifeEntry } from '../types'
 import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle, BookOpen, ChevronRight, SlidersHorizontal } from 'lucide-vue-next'
-import { createProject, updateProject, deleteProject } from '../utils/api'
+import { createProject, updateProject, deleteProject, getAdminToken } from '../utils/api'
 import { useCategories } from '../composables/useCategories'
+import { askConfirm, showAlert } from '../composables/useConfirm'
 import PaperSelect from './PaperSelect.vue'
 
 const props = defineProps<{
@@ -17,7 +18,10 @@ const emit = defineEmits<{
   (e: 'projectDeleted', id: number): void
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'openAddProjectEntry', projectId: number): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
+
+const isAdmin = computed(() => Boolean(getAdminToken()))
 
 const { projectCategories, loadCategories, openCategoryManager } = useCategories()
 
@@ -68,6 +72,10 @@ const formStory = ref('')
 const formGithubUrl = ref('')
 
 const openCreateModal = () => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => openCreateModal())
+    return
+  }
   editingId.value = null
   formTitle.value = ''
   formSubtitle.value = ''
@@ -81,6 +89,10 @@ const openCreateModal = () => {
 }
 
 const openEditModal = (proj: Project) => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => openEditModal(proj))
+    return
+  }
   editingId.value = proj.id
   formTitle.value = proj.title || ''
   formSubtitle.value = proj.subtitle || ''
@@ -96,6 +108,11 @@ const openEditModal = (proj: Project) => {
 const handleSave = async () => {
   if (!formTitle.value.trim()) {
     formError.value = '造物项目名称不能为空'
+    return
+  }
+
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleSave())
     return
   }
 
@@ -124,6 +141,10 @@ const handleSave = async () => {
     }
     isModalOpen.value = false
   } catch (err: any) {
+    if (!getAdminToken()) {
+      emit('requestAuth', () => handleSave())
+      return
+    }
     formError.value = err.message || '保存失败'
   } finally {
     isSubmitting.value = false
@@ -131,13 +152,27 @@ const handleSave = async () => {
 }
 
 const handleDelete = async (id: number) => {
-  if (!confirm('确定要删除此造物项目吗？')) return
+  if (!isAdmin.value) {
+    emit('requestAuth', () => handleDelete(id))
+    return
+  }
+  const ok = await askConfirm({
+    title: '删除造物项目',
+    message: '确定删除此造物项目？相关手记将被解除关联。',
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await deleteProject(id)
     localProjects.value = localProjects.value.filter((p) => p.id !== id)
     emit('projectDeleted', id)
   } catch (err: any) {
-    alert(err.message || '删除失败')
+    if (!getAdminToken()) {
+      emit('requestAuth', () => handleDelete(id))
+      return
+    }
+    await showAlert({ title: '删除失败', message: err.message || '删除失败', danger: true })
   }
 }
 
@@ -166,7 +201,7 @@ const isGitHubUrl = (url?: string) => {
           </p>
         </div>
 
-        <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
+        <div v-if="isAdmin" class="flex items-center gap-2 self-start sm:self-auto shrink-0">
           <button
             @click="openCategoryManager('project')"
             class="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs font-mono-archive text-xs text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
@@ -228,7 +263,7 @@ const isGitHubUrl = (url?: string) => {
       <p class="font-mono-archive text-xs tracking-wider max-w-sm mx-auto text-[var(--ink-secondary)]">
         生活是一场长线造物。点击下方按钮登记你的第一个实践项目或手艺作品。
       </p>
-      <div class="pt-2">
+      <div v-if="isAdmin" class="pt-2">
         <button
           @click="openCreateModal"
           class="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs font-mono-archive text-xs cursor-pointer hover:opacity-90 transition-opacity"
@@ -260,28 +295,30 @@ const isGitHubUrl = (url?: string) => {
             <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[10px]">
               {{ proj.status === 'Archived' ? '已封存' : proj.status === 'Maintained' ? '长期维护' : '进行中' }}
             </span>
-            <button
-              @click="emit('openAddProjectEntry', proj.id)"
-              class="inline-flex items-center gap-1 px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[10px]"
-              title="为此项目撰写新的造物手记或阶段进展"
-            >
-              <Plus class="w-3 h-3" />
-              <span>写造物手记</span>
-            </button>
-            <button
-              @click="openEditModal(proj)"
-              class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 rounded-xs transition-colors cursor-pointer"
-              title="编辑项目"
-            >
-              <Edit2 class="w-3.5 h-3.5" />
-            </button>
-            <button
-              @click="handleDelete(proj.id)"
-              class="text-[var(--ink-muted)] hover:text-red-600 p-1 rounded-xs transition-colors cursor-pointer"
-              title="删除项目"
-            >
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
+            <template v-if="isAdmin">
+              <button
+                @click="emit('openAddProjectEntry', proj.id)"
+                class="inline-flex items-center gap-1 px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[10px]"
+                title="为此项目撰写新的造物手记或阶段进展"
+              >
+                <Plus class="w-3 h-3" />
+                <span>写造物手记</span>
+              </button>
+              <button
+                @click="openEditModal(proj)"
+                class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 rounded-xs transition-colors cursor-pointer"
+                title="编辑项目"
+              >
+                <Edit2 class="w-3.5 h-3.5" />
+              </button>
+              <button
+                @click="handleDelete(proj.id)"
+                class="text-[var(--ink-muted)] hover:text-red-600 p-1 rounded-xs transition-colors cursor-pointer"
+                title="删除项目"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </template>
           </div>
         </div>
 
@@ -331,6 +368,7 @@ const isGitHubUrl = (url?: string) => {
               <span>物候手记与打磨进程 ({{ getProjectEntries(proj.id).length }} 篇)</span>
             </div>
             <button
+              v-if="isAdmin"
               @click="emit('openAddProjectEntry', proj.id)"
               class="inline-flex items-center gap-1 text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
             >

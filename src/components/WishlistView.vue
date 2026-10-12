@@ -16,6 +16,7 @@ import { formatMoney } from '../utils/format'
 import { getAdminToken } from '../utils/api'
 import type { Wish } from '../types'
 import WishFormModal from './WishFormModal.vue'
+import { askConfirm, showAlert } from '../composables/useConfirm'
 import WishResolutionModal from './WishResolutionModal.vue'
 
 const props = defineProps<{
@@ -108,13 +109,19 @@ const openResolveWish = (w: Wish) => {
 }
 
 const handleDeleteWish = async (w: Wish) => {
-  if (!confirm(`确定删除心愿《${w.title}》？`)) return
+  const ok = await askConfirm({
+    title: '删除心愿',
+    message: `确定删除心愿《${w.title}》？此操作不可恢复。`,
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await deleteWish(w.id)
     await loadWishes()
     emit('wishResolved')
   } catch (err: any) {
-    alert(err.message || '删除心愿失败')
+    await showAlert({ title: '删除失败', message: err.message || '删除心愿失败', danger: true })
   }
 }
 
@@ -480,6 +487,7 @@ onMounted(() => {
       :wish="resolvingWish"
       @close="isResolutionOpen = false"
       @resolved="handleWishResolved"
+      @requestAuth="(cb) => emit('requestAuth', cb)"
     />
 
   </div>

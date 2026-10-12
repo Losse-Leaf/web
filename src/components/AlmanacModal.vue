@@ -9,7 +9,7 @@ import {
   ChevronRight,
 } from 'lucide-vue-next'
 import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
-import { formatMoney } from '../utils/format'
+import { formatMoney, getBeijingYear } from '../utils/format'
 import type { AnnualAlmanacSummary } from '../types'
 
 const props = defineProps<{
@@ -22,7 +22,7 @@ const emit = defineEmits<{
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
-const currentYear = ref(props.initialYear || new Date().getFullYear())
+const currentYear = ref(props.initialYear || getBeijingYear())
 const summary = ref<AnnualAlmanacSummary | null>(null)
 const isLoading = ref(false)
 const errorMsg = ref('')

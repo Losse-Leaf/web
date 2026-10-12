@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Compass, ChevronRight, MapPin } from 'lucide-vue-next'
 import { fetchFootprintsAtlas } from '../utils/api'
 import { CHINA_CITIES } from '../utils/cities'
 import type { AtlasCitySummary } from '../types'
+
+const props = defineProps<{
+  refreshTrigger?: number
+}>()
 
 const emit = defineEmits<{
   (e: 'navigateAtlas'): void
@@ -57,6 +61,13 @@ const litPoints = computed(() => {
 const recentCities = computed(() => {
   return litPoints.value.slice(0, 6)
 })
+
+watch(
+  () => props.refreshTrigger,
+  () => {
+    loadMiniAtlas()
+  }
+)
 
 onMounted(() => {
   loadMiniAtlas()

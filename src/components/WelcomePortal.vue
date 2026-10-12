@@ -22,6 +22,7 @@ import {
 } from 'lucide-vue-next'
 import CityPicker from './CityPicker.vue'
 import { audio } from '../utils/audio'
+import { getBeijingYear } from '../utils/format'
 import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
 import {
   fetchSystemStatus,
@@ -40,6 +41,9 @@ const props = defineProps<{
   theme: 'paper' | 'darkroom'
   systemStatus?: SystemStatus | null
 }>()
+
+// 版权年份按北京时间基准 (RC-134)
+const currentYear = getBeijingYear()
 
 const emit = defineEmits<{
   (e: 'enter'): void
@@ -139,7 +143,7 @@ const startBootstrapStatusPolling = (ticket: string) => {
         stopBootstrapPairingTimers()
         audio.playShutter()
         status.value.initialized = true
-        isCurator.value = Boolean(getAdminToken()) || true
+        isCurator.value = true // 配对成功即主理人，无需重复判定 (FE-22)
         markEnteredArchive()
         emit('bootstrapped')
         emit('enter')
@@ -917,7 +921,7 @@ onUnmounted(() => {
       </div>
 
       <div class="flex items-center gap-4">
-        <span>© 2024–{{ new Date().getFullYear() }} 《散页》</span>
+        <span>© 2024–{{ currentYear }} 《散页》</span>
       </div>
     </footer>
   </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   ArrowUpRight,
   Edit3,
@@ -11,6 +11,8 @@ import {
 } from 'lucide-vue-next'
 import type { CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
+import { getAdminToken } from '../utils/api'
+import { getBeijingYear } from '../utils/format'
 import ProfileEditModal from './ProfileEditModal.vue'
 import EditorialLightbox from './EditorialLightbox.vue'
 
@@ -20,13 +22,29 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'profileUpdated', profile: CuratorProfile): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
+
+const isAdmin = computed(() => Boolean(getAdminToken()))
+
+// 版权年份按北京时间基准 (RC-134)
+const currentYear = getBeijingYear()
 
 // 内部编辑用的主理人档案 (RC-29)
 const localProfile = ref<CuratorProfile>(loadCuratorProfile())
 const isEditOpen = ref(false)
 const isLightboxOpen = ref(false)
 const selectedCategory = ref<string>('all')
+
+const handleOpenEdit = () => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => {
+      isEditOpen.value = true
+    })
+    return
+  }
+  isEditOpen.value = true
+}
 
 // 当父组件传入的 profile prop 变化时，合并到 localProfile
 watch(
@@ -89,10 +107,18 @@ const cityDisplay = computed(() => {
   )
 })
 
+// 全局档案更新事件：具名 handler ＋ 卸载时清理，避免反复进出本页面积累监听器 (FE-17)
+const handleProfileUpdatedEvent = (e: Event) => {
+  const detail = (e as CustomEvent<CuratorProfile>).detail
+  if (detail) localProfile.value = detail
+}
+
 onMounted(() => {
-  window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent<CuratorProfile>) => {
-    if (e.detail) localProfile.value = e.detail
-  }) as EventListener)
+  window.addEventListener('looseleaf-profile-updated', handleProfileUpdatedEvent)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('looseleaf-profile-updated', handleProfileUpdatedEvent)
 })
 </script>
 
@@ -111,9 +137,10 @@ onMounted(() => {
         
         <div class="flex items-center gap-4">
           <span v-if="cityDisplay">坐标：{{ cityDisplay }}</span>
-          <span v-if="cityDisplay">·</span>
+          <span v-if="cityDisplay && isAdmin">·</span>
           <button
-            @click="isEditOpen = true"
+            v-if="isAdmin"
+            @click="handleOpenEdit"
             class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
             title="自定义头像、简介与设备清单"
           >
@@ -424,7 +451,7 @@ onMounted(() => {
       <!-- 版权与馆藏签名底款 (Colophon) -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono-archive text-[var(--ink-muted)] pt-4">
         <span>《散页》· 时光手账与生活档案<template v-if="localProfile.location"> · {{ localProfile.location }}</template></span>
-        <span>出版底款 · 严谨编目 · 2024–{{ new Date().getFullYear() }}</span>
+        <span>出版底款 · 严谨编目 · 2024–{{ currentYear }}</span>
       </div>
 
     </footer>

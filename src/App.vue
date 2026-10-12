@@ -18,6 +18,7 @@ import ExportModal from './components/ExportModal.vue'
 import DevicePairingModal from './components/DevicePairingModal.vue'
 import UpdateNoticeModal from './components/UpdateNoticeModal.vue'
 import CategoryManagerModal from './components/CategoryManagerModal.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import PasscodeModal from './components/PasscodeModal.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 import FloatingActionButton from './components/FloatingActionButton.vue'
@@ -139,6 +140,8 @@ const isPasscodeModalOpen = ref(false)
 const passcodeModalPrompt = ref('')
 const passcodeModalCallback = ref<(() => void) | null>(null)
 const wishesRefreshKey = ref(0)
+const atlasRefreshKey = ref(0)
+const txRefreshKey = ref(0)
 
 const handleRequestAuth = (callback?: () => void, prompt?: string) => {
   if (Boolean(getAdminToken())) {
@@ -255,6 +258,8 @@ const openStorageModal = async () => {
 const handleEntryCreated = (newEntry: LifeEntry) => {
   addEntry(newEntry)
   loadRemoteEntries()
+  wishesRefreshKey.value++
+  atlasRefreshKey.value++
   if (
     currentView.value !== 'home' &&
     currentView.value !== 'life' &&
@@ -272,6 +277,8 @@ const handleEntryUpdated = (updated: LifeEntry) => {
   updateEntry(updated)
   selectedEntry.value = updated
   loadRemoteEntries()
+  wishesRefreshKey.value++
+  atlasRefreshKey.value++
 }
 
 const handleEntryDeleted = (id: number) => {
@@ -283,10 +290,13 @@ const handleEntryDeleted = (id: number) => {
     window.location.hash = currentView.value
   }
   loadRemoteEntries()
+  wishesRefreshKey.value++
+  atlasRefreshKey.value++
 }
 
 const handleTxCreated = async (tx: Transaction) => {
   addTransaction(tx)
+  txRefreshKey.value++
   try {
     const prof = await fetchCuratorProfile()
     if (prof) syncProfileCache(prof)
@@ -297,10 +307,12 @@ const handleTxCreated = async (tx: Transaction) => {
 
 const handleTxUpdated = (tx: Transaction) => {
   updateTransactionItem(tx)
+  txRefreshKey.value++
 }
 
 const handleTxDeleted = (id: number) => {
   removeTransaction(id)
+  txRefreshKey.value++
 }
 
 const handleGearChanged = async () => {
@@ -330,17 +342,22 @@ const handleProjectDeleted = (id: number) => {
 
 const refreshData = async () => {
   wishesRefreshKey.value++
+  atlasRefreshKey.value++
   try {
-    const [, statsData, statusData] = await Promise.allSettled([
+    const [, statsData, statusData, profData] = await Promise.allSettled([
       Promise.all([loadRemoteEntries(), loadRemoteTransactions()]),
       fetchGlobalStats(),
       fetchStorageStatus(),
+      fetchCuratorProfile(),
     ])
     if (statsData.status === 'fulfilled' && statsData.value) {
       globalStats.value = statsData.value
     }
     if (statusData.status === 'fulfilled' && statusData.value) {
       storageStatus.value = statusData.value
+    }
+    if (profData.status === 'fulfilled' && profData.value) {
+      syncProfileCache(profData.value)
     }
   } catch (err) {
     console.error('Failed to refresh data:', err)
@@ -569,6 +586,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <TransactionsView
         v-else-if="currentView === 'transactions'"
         :transactions="transactionsList"
+        :refreshKey="txRefreshKey"
         :profile="curatorProfile"
         @openAdd="openNewEntry('transaction')"
         @transactionDeleted="handleTxDeleted"
@@ -593,6 +611,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @projectDeleted="handleProjectDeleted"
         @selectEntry="openEntryDetail"
         @openAddProjectEntry="(projId) => openNewEntry('project', projId)"
+        @requestAuth="handleRequestAuth"
       />
 
       <!-- 5. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
@@ -608,9 +627,11 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <TravelAtlasView
         v-else-if="currentView === 'atlas' || currentView === 'footprints'"
         :storageConfigured="storageConfigured"
+        :refreshKey="atlasRefreshKey"
         @selectEntry="openEntryDetail"
         @footprintSaved="loadRemoteEntries"
         @openAddWithCity="handleOpenAddWithCity"
+        @requestAuth="handleRequestAuth"
       />
 
       <!-- 7. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
@@ -618,6 +639,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         v-else-if="currentView === 'about'"
         :profile="curatorProfile"
         @profileUpdated="curatorProfile = $event"
+        @requestAuth="handleRequestAuth"
       />
 
     </main>
@@ -678,6 +700,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @close="closeEntryDetail"
       @updated="handleEntryUpdated"
       @deleted="handleEntryDeleted"
+      @requestAuth="handleRequestAuth"
     />
 
     <!-- 5. 对象存储状态 弹窗 -->
@@ -714,7 +737,10 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     <!-- 9. 全局自定义分类与字典管理 弹窗 -->
     <CategoryManagerModal />
 
-    <!-- 10. 主理人印鉴登录弹窗 -->
+    <!-- 10. 全站统一确认 / 提示弹窗 (原生 confirm/alert 收口 FE-21) -->
+    <ConfirmDialog />
+
+    <!-- 11. 主理人印鉴登录弹窗 -->
     <PasscodeModal
       :isOpen="isPasscodeModalOpen"
       :prompt="passcodeModalPrompt"

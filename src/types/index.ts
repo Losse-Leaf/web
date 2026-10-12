@@ -18,24 +18,14 @@ export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
   if (t === 'transaction' || entry.is_transaction) {
     return 'transaction'
   }
-  if (t === 'project' || t === 'code' || t === 'craft' || Boolean(entry.project_id)) {
+  // RC-128 四母体收敛后不再识别旧类型值（thought/collection/code/craft 等一律归位为 life）
+  if (t === 'project' || Boolean(entry.project_id)) {
     return 'project'
   }
-  if (
-    t === 'wish' ||
-    t === 'collection' ||
-    t === 'music' ||
-    t === 'book' ||
-    t === 'game' ||
-    t === 'purchase' ||
-    t === 'gear' ||
-    t === 'movie' ||
-    t === 'device' ||
-    Boolean(entry.wish_id)
-  ) {
+  if (t === 'wish' || Boolean(entry.wish_id)) {
     return 'wish'
   }
-  if (t === 'travel' || t === 'place' || Boolean(entry.city_code)) {
+  if (t === 'travel' || Boolean(entry.city_code)) {
     return 'travel'
   }
   return 'daily'
@@ -477,7 +467,6 @@ export interface AnnualAlmanacSummary {
   prologue: {
     total_entries: number
     active_days: number
-    distinct_days?: number
     total_words: number
     first_date: string
     last_date: string

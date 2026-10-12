@@ -4,6 +4,7 @@ import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../
 import LifeActivityMap from './LifeActivityMap.vue'
 import MiniAtlasWidget from './MiniAtlasWidget.vue'
 import LifeStream from './LifeStream.vue'
+import { getBeijingDotDate } from '../utils/format'
 import { ArrowRight } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -23,11 +24,7 @@ const emit = defineEmits<{
 
 const selectedDate = ref<string>('')
 
-const todayDisplay = computed(() => {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`
-})
+const todayDisplay = computed(() => getBeijingDotDate())
 
 // 刊物品牌名（由后端配置单一驱动 RC-40）
 const displaySiteName = computed(() => {
@@ -166,6 +163,7 @@ const graphTab = ref<'time' | 'space'>('time')
         />
         <MiniAtlasWidget
           v-else
+          :refreshTrigger="heatmapEntries.length"
           @navigateAtlas="emit('navigate', 'atlas')"
         />
       </div>

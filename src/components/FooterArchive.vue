@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ArrowUpRight } from 'lucide-vue-next'
+import { getBeijingYear } from '../utils/format'
 import type { SiteConfig, CuratorProfile } from '../types'
 
 defineProps<{
@@ -10,6 +12,9 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'openWelcome'): void
 }>()
+
+// 版权年份按北京时间基准 (RC-134)
+const currentYear = computed(() => getBeijingYear())
 </script>
 
 <template>
@@ -45,7 +50,7 @@ const emit = defineEmits<{
       <!-- 版权与开源署名解耦 (RC-52) -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-[11px]">
         <div>
-          © 2024–{{ new Date().getFullYear() }} 《散页》<span v-if="profile?.name"> · {{ profile.name }}</span>
+          © 2024–{{ currentYear }} 《散页》<span v-if="profile?.name"> · {{ profile.name }}</span>
         </div>
         <div class="flex items-center gap-4">
           <a

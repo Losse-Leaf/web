@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { X, MapPin, Compass, Check } from 'lucide-vue-next'
-import { createFootprint } from '../utils/api'
+import { createFootprint, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
+import { getBeijingDateString } from '../utils/format'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import ImageUploader from './ImageUploader.vue'
@@ -28,12 +29,13 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved', footprint: Footprint): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
 
 const selectedCityCode = ref('')
 const selectedCityName = ref('')
 const userManuallyChangedCity = ref(false)
-const todayStr = new Date().toISOString().slice(0, 10)
+const todayStr = getBeijingDateString()
 const visitedAt = ref(todayStr)
 const departedAt = ref('')
 const title = ref('')
@@ -101,6 +103,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleSubmit())
+    return
+  }
+
   try {
     isSubmitting.value = true
     errorMsg.value = ''
@@ -121,6 +128,10 @@ const handleSubmit = async () => {
     emit('saved', fp)
     emit('close')
   } catch (err: any) {
+    if (!getAdminToken()) {
+      emit('requestAuth', () => handleSubmit())
+      return
+    }
     errorMsg.value = err.message || '录入足迹失败'
   } finally {
     isSubmitting.value = false

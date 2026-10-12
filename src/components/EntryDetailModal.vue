@@ -6,9 +6,10 @@ import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import CityPicker from './CityPicker.vue'
 import { matchCityFromLocation, saveLastUsedCity } from '../utils/cities'
-import { updateLifeEntry, deleteLifeEntry } from '../utils/api'
+import { updateLifeEntry, deleteLifeEntry, getAdminToken } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
 import { parseOccurredDate } from '../utils/format'
+import { showAlert } from '../composables/useConfirm'
 
 const props = defineProps<{
   entry: LifeEntry | null
@@ -20,7 +21,10 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'updated', entry: LifeEntry): void
   (e: 'deleted', id: number): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
+
+const isAdmin = computed(() => Boolean(getAdminToken()))
 
 const isEditing = ref(false)
 const showDeleteConfirm = ref(false)
@@ -51,11 +55,15 @@ const handleEditCitySelect = (city: { code: string; name: string }) => {
 
 const startEdit = () => {
   if (!props.entry) return
+  if (!isAdmin.value) {
+    emit('requestAuth', () => startEdit())
+    return
+  }
   isEditing.value = true
   const rawType = (props.entry.type || 'life').toLowerCase()
-  if (rawType === 'travel' || rawType === 'place') editType.value = 'travel'
+  if (rawType === 'travel') editType.value = 'travel'
   else if (rawType === 'project') editType.value = 'project'
-  else if (rawType === 'wish' || rawType === 'collection') editType.value = 'wish'
+  else if (rawType === 'wish') editType.value = 'wish'
   else editType.value = 'life'
 
   editTitle.value = props.entry.title || ''
@@ -67,17 +75,10 @@ const startEdit = () => {
   editProjectId.value = props.entry.project_id || null
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
 
-  if (props.entry.occurred_at) {
-    const d = new Date(props.entry.occurred_at)
-    if (!isNaN(d.getTime())) {
-      const pad = (n: number) => String(n).padStart(2, '0')
-      editOccurredAt.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-    } else {
-      editOccurredAt.value = ''
-    }
-  } else {
-    editOccurredAt.value = ''
-  }
+  // 统一经 parseOccurredDate 还原北京时间后再回填 (RC-134)
+  editOccurredAt.value = props.entry.occurred_at
+    ? `${parseOccurredDate(props.entry.occurred_at).dateKey}T${parseOccurredDate(props.entry.occurred_at).time}`
+    : ''
 }
 
 const cancelEdit = () => {
@@ -89,6 +90,11 @@ const handleSaveEdit = async () => {
   if (!props.entry) return
   if (!editContent.value.trim()) {
     errorMsg.value = '记录内容不能为空'
+    return
+  }
+
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleSaveEdit())
     return
   }
 
@@ -119,6 +125,10 @@ const handleSaveEdit = async () => {
     isEditing.value = false
     errorMsg.value = null
   } catch (err: any) {
+    if (!getAdminToken()) {
+      emit('requestAuth', () => handleSaveEdit())
+      return
+    }
     errorMsg.value = err.message || '更新失败'
   } finally {
     isSubmitting.value = false
@@ -127,13 +137,21 @@ const handleSaveEdit = async () => {
 
 const handleDelete = async () => {
   if (!props.entry) return
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleDelete())
+    return
+  }
   try {
     isSubmitting.value = true
     await deleteLifeEntry(props.entry.id)
     emit('deleted', props.entry.id)
     emit('close')
   } catch (err: any) {
-    alert(err.message || '删除失败')
+    if (!getAdminToken()) {
+      emit('requestAuth', () => handleDelete())
+      return
+    }
+    await showAlert({ title: '删除失败', message: err.message || '删除失败', danger: true })
   } finally {
     isSubmitting.value = false
     showDeleteConfirm.value = false
@@ -149,16 +167,12 @@ const displayImages = computed(() => {
 })
 
 const getKindLabel = (type: string) => {
+  // RC-128 四母体收敛后仅认 4 类纯粹形态 (FE-20 / BE-36)
   const map: Record<string, string> = {
     life: '日常',
-    daily: '日常',
     travel: '游历',
-    place: '游历',
     project: '造物',
     wish: '心愿',
-    collection: '心愿',
-    photo: '日常',
-    thought: '日常',
   }
   return map[type] || '日常'
 }
@@ -185,7 +199,7 @@ const getKindLabel = (type: string) => {
         </div>
 
         <div class="flex items-center gap-3">
-          <template v-if="!isEditing">
+          <template v-if="isAdmin && !isEditing">
             <button
               @click="startEdit"
               class="text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer flex items-center gap-1 py-1 px-2 border border-transparent hover:border-[var(--border-subtle)] rounded-xs"

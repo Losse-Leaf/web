@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { BookOpen } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
-import { parseOccurredDate } from '../utils/format'
+import { parseOccurredDate, getBeijingYear } from '../utils/format'
 import { fetchEntries } from '../utils/api'
 import AlmanacModal from './AlmanacModal.vue'
 
@@ -14,7 +14,7 @@ const emit = defineEmits<{
   (e: 'selectEntry', item: LifeEntry): void
 }>()
 
-const currentYearStr = new Date().getFullYear().toString()
+const currentYearStr = String(getBeijingYear())
 const selectedYear = ref(currentYearStr)
 const isAlmanacOpen = ref(false)
 
@@ -86,18 +86,12 @@ const yearEntries = computed(() => {
 })
 
 const getTypeName = (type: string) => {
+  // RC-128 四母体收敛后仅认 4 类纯粹形态 (BE-36)
   const map: Record<string, string> = {
     life: '日常',
     travel: '游历',
     project: '造物',
     wish: '心愿',
-    collection: '心愿',
-    thought: '日常',
-    photo: '日常',
-    moment: '日常',
-    place: '游历',
-    purchase: '心愿',
-    gear: '心愿',
   }
   return map[type] || '日常'
 }

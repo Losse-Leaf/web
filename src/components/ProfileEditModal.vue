@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2, User } from 'lucide-vue-next'
 import type { CuratorProfile } from '../types'
 import { DEFAULT_PROFILE, saveCuratorProfile } from '../utils/profile'
@@ -11,6 +11,8 @@ import {
   deleteGearAsset,
 } from '../utils/api'
 import { useCategories } from '../composables/useCategories'
+import { askConfirm } from '../composables/useConfirm'
+import { getBeijingDateString } from '../utils/format'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 
@@ -52,7 +54,7 @@ const newGearSpec = ref('')
 const newGearPaymentMethod = ref('')
 const newGearNote = ref('')
 const newGearPrice = ref('')
-const newGearPurchaseDate = ref(new Date().toISOString().slice(0, 10))
+const newGearPurchaseDate = ref(getBeijingDateString())
 const syncBuyTransaction = ref(true)
 const showAddGear = ref(false)
 const isAddingGear = ref(false)
@@ -94,8 +96,8 @@ const handleAvatarDrop = async (e: DragEvent) => {
 }
 
 const processAvatarUpload = async (file: File) => {
-  if (file.size > 20 * 1024 * 1024) {
-    avatarUploadError.value = '图片大小不能超过 20MB'
+  if (file.size > 50 * 1024 * 1024) {
+    avatarUploadError.value = '图片大小不能超过 50MB'
     return
   }
 
@@ -172,8 +174,13 @@ const handleSave = async () => {
   }
 }
 
-const handleResetDefault = () => {
-  if (!confirm('确定恢复为默认主理人基本资料？')) return
+const handleResetDefault = async () => {
+  const ok = await askConfirm({
+    title: '恢复默认资料',
+    message: '确定恢复为默认主理人基本资料？设备清单不会被清空。',
+    confirmText: '恢复',
+  })
+  if (!ok) return
   const currentGear = form.value.edc_gear ? form.value.edc_gear.map((item) => ({ ...item })) : []
   form.value = {
     ...cloneProfile(DEFAULT_PROFILE),
@@ -188,7 +195,7 @@ const handleAddGear = async () => {
   }
   const priceFloat = parseFloat(newGearPrice.value)
   const priceCents = !isNaN(priceFloat) && priceFloat > 0 ? Math.round(priceFloat * 100) : undefined
-  const purchaseDate = newGearPurchaseDate.value || new Date().toISOString().slice(0, 10)
+  const purchaseDate = newGearPurchaseDate.value || getBeijingDateString()
   const shouldCreateTx = Boolean(syncBuyTransaction.value && priceCents && priceCents > 0)
 
   try {
@@ -216,7 +223,7 @@ const handleAddGear = async () => {
     newGearPaymentMethod.value = ''
     newGearNote.value = ''
     newGearPrice.value = ''
-    newGearPurchaseDate.value = new Date().toISOString().slice(0, 10)
+    newGearPurchaseDate.value = getBeijingDateString()
     syncBuyTransaction.value = true
     showAddGear.value = false
   } catch (err: any) {
@@ -247,7 +254,7 @@ const openSellDrawer = (idx: number) => {
   if (!item) return
   sellingGearIndex.value = idx
   sellingPriceInput.value = item.price_cents ? (item.price_cents / 100).toFixed(2) : ''
-  sellingDateInput.value = new Date().toISOString().slice(0, 10)
+  sellingDateInput.value = getBeijingDateString()
   sellingErrorMsg.value = ''
 }
 
@@ -275,7 +282,7 @@ const confirmSellGear = async () => {
   }
 
   const soldCents = Math.round(soldFloat * 100)
-  const soldDate = sellingDateInput.value || new Date().toISOString().slice(0, 10)
+  const soldDate = sellingDateInput.value || getBeijingDateString()
 
   try {
     isSellingSubmitting.value = true
@@ -320,8 +327,23 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 
+// 仅在弹窗开启期间监听 Esc，关闭即移除；卸载兜底清理 (FE-18)
 onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
+  watch(
+    () => props.isOpen,
+    (open) => {
+      if (open) {
+        window.addEventListener('keydown', handleKeydown)
+      } else {
+        window.removeEventListener('keydown', handleKeydown)
+      }
+    },
+    { immediate: true }
+  )
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 

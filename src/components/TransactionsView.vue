@@ -36,7 +36,8 @@ import type {
 } from '../types'
 import { useExport } from '../composables/useExport'
 import { useCategories } from '../composables/useCategories'
-import { formatMoney } from '../utils/format'
+import { askConfirm, showAlert } from '../composables/useConfirm'
+import { formatMoney, getBeijingDateString, parseOccurredDate } from '../utils/format'
 import { loadCuratorProfile } from '../utils/profile'
 import CreditChannelsModal from './CreditChannelsModal.vue'
 import PaperSelect from './PaperSelect.vue'
@@ -46,6 +47,7 @@ import CityPicker from './CityPicker.vue'
 const props = defineProps<{
   transactions?: Transaction[]
   profile?: CuratorProfile | null
+  refreshKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -124,8 +126,8 @@ const newGearName = ref('')
 const newGearCategory = ref('数码器材')
 const newGearSpec = ref('')
 const newGearPriceYuan = ref('')
-const newGearPurchaseDate = ref(new Date().toISOString().slice(0, 10))
-const newGearPaymentMethod = ref('微信支付')
+const newGearPurchaseDate = ref(getBeijingDateString())
+const newGearPaymentMethod = ref('')
 const newGearNote = ref('')
 const newGearCreateTx = ref(true)
 const newGearIsInstallment = ref(false)
@@ -136,7 +138,7 @@ const newGearRepaymentDay = ref(10)
 // 出二手回血模态框状态
 const sellingGear = ref<GearItem | null>(null)
 const sellPriceYuan = ref('')
-const sellDate = ref(new Date().toISOString().slice(0, 10))
+const sellDate = ref(getBeijingDateString())
 const sellNote = ref('')
 const isSubmittingSell = ref(false)
 const sellErrorMsg = ref<string | null>(null)
@@ -177,13 +179,22 @@ const calcGearHoldingStats = (item: GearItem) => {
   }
 }
 
+// 服役时长 / 日均成本预计算，避免模板内重复调用 (FE-21)
+const gearHoldingStatsMap = computed<Map<string, { days: number; dailyCents: number; netCostCents: number } | null>>(() => {
+  const map = new Map<string, { days: number; dailyCents: number; netCostCents: number } | null>()
+  for (const item of allGearItems.value) {
+    if (item.id) map.set(item.id, calcGearHoldingStats(item))
+  }
+  return map
+})
+
 const openAddGearModal = () => {
   newGearName.value = ''
   newGearCategory.value = gearCategories.value[0] || '数码器材'
   newGearSpec.value = ''
   newGearPriceYuan.value = ''
-  newGearPurchaseDate.value = new Date().toISOString().slice(0, 10)
-  newGearPaymentMethod.value = paymentMethodsList.value[0] || '微信支付'
+  newGearPurchaseDate.value = getBeijingDateString()
+  newGearPaymentMethod.value = paymentMethodsList.value[0] || ''
   newGearNote.value = ''
   newGearCreateTx.value = true
   newGearIsInstallment.value = false
@@ -245,7 +256,7 @@ const handleCreateGear = async () => {
 const openSellGearModal = (item: GearItem) => {
   sellingGear.value = item
   sellPriceYuan.value = ''
-  sellDate.value = new Date().toISOString().slice(0, 10)
+  sellDate.value = getBeijingDateString()
   sellNote.value = ''
   sellErrorMsg.value = null
 }
@@ -277,13 +288,19 @@ const handleSellGear = async () => {
 
 const handleRemoveGear = async (item: GearItem) => {
   if (!item.id) return
-  if (!confirm(`确定从固定资产库中移除「${item.name}」？`)) return
+  const ok = await askConfirm({
+    title: '移除设备',
+    message: `确定从固定资产库中移除「${item.name}」？`,
+    confirmText: '移除',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await deleteGearAsset(item.id)
     emit('gearChanged')
     await loadAssetsOverview()
   } catch (err: any) {
-    alert(err.message || '删除设备失败')
+    await showAlert({ title: '删除失败', message: err.message || '删除设备失败', danger: true })
   }
 }
 
@@ -296,8 +313,9 @@ const editAmount = ref('')
 const editCategory = ref('餐饮')
 const editType = ref<'expense' | 'income'>('expense')
 const editNote = ref('')
-const editPaymentMethod = ref('微信支付')
+const editPaymentMethod = ref('')
 const editOccurredAt = ref('')
+const editErrorMsg = ref('')
 const editCityCode = ref('')
 const editIsInstallment = ref(false)
 const editInstallmentChannel = ref('huabei')
@@ -361,12 +379,10 @@ const activeInstallmentsList = computed(() => {
     .filter((t) => t.is_installment && (t.installment_remain_months ?? 1) > 0)
     .map((tx) => ({
       tx,
+      // 渠道名取自后端渠道字典，避免前端硬编码与字典重复定义 (FE-20)
       channelName:
-        tx.installment_channel_code === 'huabei'
-          ? '花呗'
-          : tx.installment_channel_code === 'baitiao'
-          ? '京东白条'
-          : '信贷分期',
+        displayCreditChannels.value.find((c) => c.code === tx.installment_channel_code)?.name ||
+        tx.installment_channel_code || '信贷分期',
       channelColor: undefined,
     }))
 })
@@ -430,12 +446,12 @@ watch([year, month], () => {
   loadData()
 })
 
+// 刷新驱动改由 App 级 refreshKey 显式递增，避免 props 深监听引发的整页冗余重取 (FE-19)
 watch(
-  () => props.transactions,
+  () => props.refreshKey,
   () => {
     loadData()
-  },
-  { deep: true }
+  }
 )
 
 onMounted(() => {
@@ -466,13 +482,12 @@ const dayGroups = computed(() => {
     : transactionsList.value
 
   listToGroup.forEach((tx) => {
-    const d = new Date(tx.occurred_at)
-    const key = !isNaN(d.getTime())
-      ? `${d.getMonth() + 1}月${d.getDate()}日`
-      : '近期'
-    const list = map.get(key) || []
+    // 时区口径统一：按北京时间归日，避免 UTC 串导致跨日错位 (RC-134)
+    const { month, day, year } = parseOccurredDate(tx.occurred_at)
+    const key = tx.occurred_at ? `${Number(month)}月${Number(day)}日` : '近期'
+    const list = map.get(`${year}-${key}`) || []
     list.push(tx)
-    map.set(key, list)
+    map.set(`${year}-${key}`, list)
   })
 
   const groups: DayGroup[] = []
@@ -482,8 +497,8 @@ const dayGroups = computed(() => {
       if (it.type === 'expense') dayTotal += it.amount
     })
     groups.push({
-      dateStr: displayDay,
-      displayDay,
+      dateStr: displayDay.split('-').slice(1).join('-'),
+      displayDay: displayDay.split('-').slice(1).join('-'),
       items,
       dayTotalExpense: dayTotal,
     })
@@ -493,13 +508,14 @@ const dayGroups = computed(() => {
 })
 
 const startEdit = (tx: Transaction) => {
+  editErrorMsg.value = ''
   editingTx.value = tx
   editTitle.value = tx.title
   editAmount.value = (tx.amount / 100).toFixed(2)
   editCategory.value = tx.category
   editType.value = tx.type
   editNote.value = tx.note || ''
-  editPaymentMethod.value = tx.payment_method || '微信支付'
+  editPaymentMethod.value = tx.payment_method || ''
   editOccurredAt.value = tx.occurred_at ? tx.occurred_at.slice(0, 16) : ''
   editCityCode.value = tx.city_code || ''
   editIsInstallment.value = Boolean(tx.is_installment)
@@ -511,8 +527,12 @@ const startEdit = (tx: Transaction) => {
 
 const saveEdit = async () => {
   if (!editingTx.value) return
+  editErrorMsg.value = ''
   const amtFloat = parseFloat(editAmount.value)
-  if (isNaN(amtFloat) || amtFloat <= 0) return
+  if (isNaN(amtFloat) || amtFloat <= 0) {
+    editErrorMsg.value = '请输入大于 0 的有效金额'
+    return
+  }
   const amountCents = Math.round(amtFloat * 100)
   const monthlyPay =
     editIsInstallment.value && editInstallmentMonths.value > 0
@@ -566,7 +586,13 @@ const saveEdit = async () => {
 }
 
 const removeTx = async (id: number) => {
-  if (!confirm('确定删除这笔账目记录？')) return
+  const ok = await askConfirm({
+    title: '删除账目',
+    message: '确定删除这笔账目记录？此操作不可恢复。',
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!ok) return
   await deleteTransaction(id)
   transactionsList.value = transactionsList.value.filter((t) => t.id !== id)
   emit('transactionDeleted', id)
@@ -1031,8 +1057,8 @@ const spectrumItems = computed(() => {
                 {{ gear.purchase_date ? `购于 ${gear.purchase_date}` : '服役时长' }}
               </span>
               <span class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
-                <template v-if="calcGearHoldingStats(gear)">
-                  {{ calcGearHoldingStats(gear)?.days }} 天
+                <template v-if="gearHoldingStatsMap.get(gear.id || '')">
+                  {{ gearHoldingStatsMap.get(gear.id || '')?.days }} 天
                 </template>
                 <template v-else>—</template>
               </span>
@@ -1048,8 +1074,8 @@ const spectrumItems = computed(() => {
               <template v-else>
                 <span class="block text-[10px] text-[var(--ink-muted)]">日均持有成本</span>
                 <span class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
-                  <template v-if="calcGearHoldingStats(gear)">
-                    ¥{{ formatMoney(calcGearHoldingStats(gear)?.dailyCents || 0) }}<span class="text-[11px] font-normal text-[var(--ink-muted)]">/天</span>
+                  <template v-if="gearHoldingStatsMap.get(gear.id || '')">
+                    ¥{{ formatMoney(gearHoldingStatsMap.get(gear.id || '')?.dailyCents || 0) }}<span class="text-[11px] font-normal text-[var(--ink-muted)]">/天</span>
                   </template>
                   <template v-else>—</template>
                 </span>
@@ -1543,6 +1569,9 @@ const spectrumItems = computed(() => {
                 placeholder="0.00"
                 class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
               />
+              <p v-if="editErrorMsg" class="mt-1 text-[11px] text-[var(--accent-vermilion)]">
+                {{ editErrorMsg }}
+              </p>
             </div>
             <div>
               <label class="block text-[var(--ink-muted)] mb-1">事项名称 *</label>

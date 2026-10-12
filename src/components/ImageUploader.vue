@@ -3,6 +3,7 @@ import { ref, onUnmounted } from 'vue'
 import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { audio } from '../utils/audio'
+import { showAlert } from '../composables/useConfirm'
 import type { Attachment } from '../types'
 
 const props = defineProps<{
@@ -55,9 +56,9 @@ const notifyChange = () => {
 }
 
 const handleFileProcess = async (file: File) => {
-  // 单文件 20MB 限制
-  if (file.size > 20 * 1024 * 1024) {
-    alert(`文件 ${file.name} 超过 20MB 限制`)
+  // 单文件 50MB 上限，与后端统一中转接口及 docs 契约一致 (FE-16)
+  if (file.size > 50 * 1024 * 1024) {
+    showAlert({ title: '文件过大', message: `文件 ${file.name} 超过 50MB 上限`, danger: true })
     return
   }
 

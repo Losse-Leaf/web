@@ -21,6 +21,8 @@ import {
   revokeTrustedDevice,
 } from '../utils/api'
 import { audio } from '../utils/audio'
+import { askConfirm } from '../composables/useConfirm'
+import { parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   isOpen: boolean
@@ -150,7 +152,13 @@ const loadDevices = async () => {
 
 const handleRevoke = async (id: number) => {
   audio.playTink()
-  if (!confirm('确定解绑并吊销该设备的免密信任？解绑后该设备需重新扫码配对。')) return
+  const ok = await askConfirm({
+    title: '解绑设备',
+    message: '确定解绑并吊销该设备的免密信任？解绑后该设备需重新扫码配对。',
+    confirmText: '解绑',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await revokeTrustedDevice(id)
   } catch (err) {
@@ -173,15 +181,11 @@ const copyPayload = async () => {
   }
 }
 
+// 设备配对时间按北京时间展示 (RC-134)
 const formatDateTime = (iso: string) => {
-  try {
-    const d = new Date(iso)
-    if (isNaN(d.getTime())) return iso
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  } catch {
-    return iso
-  }
+  if (!iso) return ''
+  const parsed = parseOccurredDate(iso)
+  return `${parsed.dotDate} ${parsed.time}`
 }
 
 watch(
