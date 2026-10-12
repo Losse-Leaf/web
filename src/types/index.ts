@@ -1,23 +1,16 @@
 export type EntryType =
   | 'life'
-  | 'thought'
-  | 'photo'
-  | 'moment'
-  | 'place'
-  | 'music'
-  | 'book'
-  | 'game'
+  | 'travel'
   | 'project'
-  | 'purchase'
-  | 'coffee'
+  | 'wish'
+  | 'transaction'
 
 export type ArchiveCategory =
   | 'all'
   | 'daily'
-  | 'thought'
+  | 'travel'
   | 'project'
-  | 'collection'
-  | 'photo'
+  | 'wish'
   | 'transaction'
 
 export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
@@ -25,17 +18,25 @@ export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
   if (t === 'transaction' || entry.is_transaction) {
     return 'transaction'
   }
-  if (t === 'thought' || t === 'idea' || t === 'note' || t === 'essay') {
-    return 'thought'
-  }
-  if (t === 'project' || t === 'code' || t === 'craft') {
+  if (t === 'project' || t === 'code' || t === 'craft' || Boolean(entry.project_id)) {
     return 'project'
   }
-  if (t === 'music' || t === 'book' || t === 'game' || t === 'purchase' || t === 'gear' || t === 'movie' || t === 'device') {
-    return 'collection'
+  if (
+    t === 'wish' ||
+    t === 'collection' ||
+    t === 'music' ||
+    t === 'book' ||
+    t === 'game' ||
+    t === 'purchase' ||
+    t === 'gear' ||
+    t === 'movie' ||
+    t === 'device' ||
+    Boolean(entry.wish_id)
+  ) {
+    return 'wish'
   }
-  if (t === 'photo') {
-    return 'photo'
+  if (t === 'travel' || t === 'place' || Boolean(entry.city_code)) {
+    return 'travel'
   }
   return 'daily'
 }
@@ -46,11 +47,14 @@ export const entryMatchesCategory = (entry: LifeEntry, category: ArchiveCategory
   if (category === 'transaction') {
     return cat === 'transaction' || entry.type === 'transaction' || Boolean(entry.is_transaction)
   }
-  if (category === 'photo') {
-    return cat === 'photo' || Boolean(entry.attachments && entry.attachments.length > 0)
+  if (category === 'travel') {
+    return cat === 'travel' || Boolean(entry.city_code)
   }
-  if (category === 'daily') {
-    return cat === 'daily' || cat === 'photo'
+  if (category === 'project') {
+    return cat === 'project' || Boolean(entry.project_id)
+  }
+  if (category === 'wish') {
+    return cat === 'wish' || Boolean(entry.wish_id)
   }
   return cat === category
 }
@@ -59,11 +63,10 @@ export const getCategoryDisplayName = (cat: ArchiveCategory): string => {
   const map: Record<ArchiveCategory, string> = {
     all: '全部记录',
     daily: '日常',
-    thought: '想法',
-    project: '项目',
-    collection: '收藏',
-    photo: '照片',
-    transaction: '记账',
+    travel: '游历',
+    project: '造物',
+    wish: '心愿',
+    transaction: '账目',
   }
   return map[cat] || '全部记录'
 }
@@ -92,13 +95,14 @@ export interface LifeEntry {
   city_name?: string
   project_id?: number
   project?: Project
+  wish_id?: number
+  wish?: Wish
+  footprint_id?: number
   attachments?: Attachment[]
 
-  meta?: string
-  link?: string
   featured?: boolean
 
-  // 记账支持
+  // 记账投影支持
   amount?: number
   tx_type?: 'income' | 'expense'
   category?: string
@@ -120,6 +124,8 @@ export interface Transaction {
   payment_method?: string
   occurred_at: string
   wish_id?: number
+  footprint_id?: number
+  city_code?: string
   is_installment?: boolean
   installment_channel_code?: string
   installment_total_amount?: number
@@ -143,9 +149,9 @@ export interface TransactionSummary {
 export interface StorageStatus {
   provider: string
   configured: boolean
-  bucket: string
-  public_domain: string
-  endpoint: string
+  bucket?: string
+  public_domain?: string
+  endpoint?: string
 }
 
 export interface GlobalStats {
@@ -185,7 +191,6 @@ export interface GearItem {
   category: string
   status?: string
   note?: string
-  link?: string
   price_cents?: number
   purchase_date?: string
   sold_price_cents?: number
@@ -268,7 +273,6 @@ export interface BootstrapResult {
   qr_code_data_url?: string
   expires_at: string
   expires_in_seconds: number
-  token?: string
 }
 
 export interface PairConfirmPayload {
@@ -324,6 +328,7 @@ export interface Wish {
   life_entry_id?: number
   footprint_id?: number
   gear_id?: string
+  attachments?: Attachment[]
   created_at?: string
   updated_at?: string
 }
@@ -373,13 +378,35 @@ export interface Footprint {
   id: number
   city_code: string
   city_name: string
+  title?: string
   visited_at: string
+  departed_at?: string | null
   note?: string
   life_entry_id?: number
   wish_id?: number
   attachments?: Attachment[]
+  entries_count?: number
+  total_spent?: number
+  transaction_count?: number
   created_at?: string
   updated_at?: string
+}
+
+export type CategoryScope = 'expense' | 'income' | 'gear' | 'payment' | 'project'
+
+export interface CategoryOption {
+  id: number
+  scope: CategoryScope
+  name: string
+  sort_order: number
+  is_builtin: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CategoriesResponse {
+  items: CategoryOption[]
+  by_scope: Record<CategoryScope, string[]>
 }
 
 export interface AtlasCitySummary {

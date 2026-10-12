@@ -4,6 +4,8 @@ import {
   X,
   MapPin,
   ArrowLeft,
+  Plus,
+  PenLine,
 } from 'lucide-vue-next'
 import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken } from '../utils/api'
 import { formatMoney } from '../utils/format'
@@ -20,6 +22,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'selectEntry', entry: any): void
+  (e: 'addEntryInCity', city: { code: string; name: string }): void
+  (e: 'addFootprintInCity', city: { code: string; name: string }): void
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
@@ -170,9 +174,9 @@ const totalCitiesCount = computed(() => {
     class="fixed inset-0 z-50 flex justify-end bg-[var(--ink-primary)]/40 backdrop-blur-2xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >
-    <!-- 侧滑纸本抽屉 (桌面端从右侧滑出，移动端占满屏 RC-93 / §5.12) -->
+    <!-- 侧滑纸本抽屉 (桌面端从右侧滑出，移动端占满屏，集成安全区域缓冲 RC-93 / §5.12) -->
     <div
-      class="w-full sm:max-w-lg bg-[var(--bg-archive)] border-l border-[var(--border-subtle)] h-full overflow-y-auto p-6 sm:p-8 space-y-8 text-left shadow-2xl animate-in slide-in-from-right duration-250"
+      class="w-full sm:max-w-lg bg-[var(--bg-archive)] border-l border-[var(--border-subtle)] h-full overflow-y-auto p-6 sm:p-8 space-y-8 text-left shadow-2xl animate-in slide-in-from-right duration-250 pb-[max(2.5rem,env(safe-area-inset-bottom,2.5rem))]"
     >
       <!-- 标头与关闭 -->
       <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)]">
@@ -199,6 +203,26 @@ const totalCitiesCount = computed(() => {
           <span class="text-xs font-mono-archive text-[var(--ink-muted)] block">
             {{ isProvinceMode ? '省级行政区划代码' : '市级行政区划代码' }}: {{ displayCode }}
           </span>
+
+          <!-- 快捷行动入口：在此城写随笔 / 补录足迹 (闭环链路) -->
+          <div v-if="isAdmin && !isProvinceMode" class="flex flex-wrap items-center gap-2 pt-2">
+            <button
+              @click="emit('addEntryInCity', { code: displayCode, name: displayName })"
+              class="px-2.5 py-1 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[11px] font-serif-editorial text-[var(--ink-primary)] flex items-center gap-1 cursor-pointer transition-colors"
+              title="为此城市撰写新的散页随笔"
+            >
+              <PenLine class="w-3 h-3 text-[var(--accent-warm)]" />
+              <span>在此城写随笔</span>
+            </button>
+            <button
+              @click="emit('addFootprintInCity', { code: displayCode, name: displayName })"
+              class="px-2.5 py-1 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[11px] font-serif-editorial text-[var(--ink-primary)] flex items-center gap-1 cursor-pointer transition-colors"
+              title="为此城市补录一段漫游足迹"
+            >
+              <Plus class="w-3 h-3 text-[var(--accent-moss)]" />
+              <span>补录此城足迹</span>
+            </button>
+          </div>
         </div>
 
         <button
@@ -270,23 +294,42 @@ const totalCitiesCount = computed(() => {
             </div>
           </div>
 
-          <!-- 足迹履历列表 -->
-          <div v-if="drawerData.footprints.length > 0" class="pt-2 space-y-1.5 border-t border-[var(--border-subtle)]/40">
+          <!-- 足迹履历列表 (支持多日行程跨度与多记录聚合统计) -->
+          <div v-if="drawerData.footprints.length > 0" class="pt-2 space-y-2 border-t border-[var(--border-subtle)]/40">
             <div
               v-for="fp in drawerData.footprints"
               :key="fp.id"
-              class="text-[11px] text-[var(--ink-secondary)] flex items-start gap-1.5"
+              class="text-[11px] text-[var(--ink-secondary)] p-2 rounded-xs bg-[var(--bg-archive)]/60 border border-[var(--border-subtle)]/60 space-y-1"
             >
-              <span class="text-[var(--ink-muted)] shrink-0">{{ formatDate(fp.visited_at) }}:</span>
-              <button
-                v-if="isProvinceMode && fp.city_name && fp.city_code"
-                type="button"
-                @click="handleSelectCityInProvince(fp.city_code, fp.city_name)"
-                class="text-[var(--accent-warm)] hover:underline shrink-0 font-medium cursor-pointer"
-              >
-                [{{ fp.city_name }}]
-              </button>
-              <span class="font-serif-editorial italic">{{ fp.note || '到访打卡' }}</span>
+              <div class="flex flex-wrap items-center justify-between gap-1.5">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[var(--ink-muted)] font-mono-archive">
+                    {{ formatDate(fp.visited_at) }}<template v-if="fp.departed_at && formatDate(fp.departed_at) !== formatDate(fp.visited_at)"> ~ {{ formatDate(fp.departed_at) }}</template>
+                  </span>
+                  <button
+                    v-if="isProvinceMode && fp.city_name && fp.city_code"
+                    type="button"
+                    @click="handleSelectCityInProvince(fp.city_code, fp.city_name)"
+                    class="text-[var(--accent-warm)] hover:underline shrink-0 font-medium cursor-pointer"
+                  >
+                    [{{ fp.city_name }}]
+                  </button>
+                  <span v-if="fp.title" class="font-serif-editorial font-medium text-[var(--ink-primary)]">
+                    {{ fp.title }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-1.5 text-[10px] font-mono-archive">
+                  <span v-if="(fp.entries_count || 0) > 0" class="px-1.5 py-0.2 rounded-xs bg-[var(--bg-subtle)] text-[var(--ink-secondary)] border border-[var(--border-subtle)]">
+                    {{ fp.entries_count }} 篇游记
+                  </span>
+                  <span v-if="isAdmin && (fp.total_spent || 0) > 0" class="px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] border border-[var(--accent-warm)]/30">
+                    ¥{{ formatMoney(fp.total_spent || 0) }}
+                  </span>
+                </div>
+              </div>
+              <p v-if="fp.note" class="font-serif-editorial italic text-[var(--ink-secondary)]">
+                {{ fp.note }}
+              </p>
             </div>
           </div>
           <p v-else class="text-[11px] font-serif-editorial text-[var(--ink-muted)] italic pt-1">

@@ -194,7 +194,7 @@ const handleSubmit = async () => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-xl rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto text-left"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-xl rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto text-left pb-[max(2rem,env(safe-area-inset-bottom,2rem))]"
     >
       <!-- 弹窗标头 -->
       <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)]">

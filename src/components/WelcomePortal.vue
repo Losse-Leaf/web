@@ -868,7 +868,7 @@ onUnmounted(() => {
                   <input
                     v-model="passcode"
                     type="password"
-                    placeholder="输入管理员密钥..."
+                    placeholder="输入管理员密钥 (默认: 123456)..."
                     @keydown.enter="handlePasscodeLogin"
                     class="flex-1 px-3.5 py-2.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                   />
@@ -879,6 +879,16 @@ onUnmounted(() => {
                   >
                     <span>{{ isLoggingIn ? '钤印核验中...' : '钤印进入' }}</span>
                     <ArrowRight class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div class="flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]">
+                  <span>本地测试默认管理员密钥为 123456</span>
+                  <button
+                    type="button"
+                    @click="passcode = '123456'; handlePasscodeLogin()"
+                    class="text-[var(--accent-warm)] hover:underline cursor-pointer"
+                  >
+                    一键填入 123456 登录 →
                   </button>
                 </div>
 

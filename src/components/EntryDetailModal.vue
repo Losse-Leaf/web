@@ -29,6 +29,7 @@ const errorMsg = ref<string | null>(null)
 
 // 编辑表单字段
 const editTitle = ref('')
+const editType = ref('life')
 const editContent = ref('')
 const editLocation = ref('')
 const editCityCode = ref('')
@@ -51,6 +52,12 @@ const handleEditCitySelect = (city: { code: string; name: string }) => {
 const startEdit = () => {
   if (!props.entry) return
   isEditing.value = true
+  const rawType = (props.entry.type || 'life').toLowerCase()
+  if (rawType === 'travel' || rawType === 'place') editType.value = 'travel'
+  else if (rawType === 'project') editType.value = 'project'
+  else if (rawType === 'wish' || rawType === 'collection') editType.value = 'wish'
+  else editType.value = 'life'
+
   editTitle.value = props.entry.title || ''
   editContent.value = props.entry.content || ''
   editLocation.value = props.entry.location || ''
@@ -97,7 +104,7 @@ const handleSaveEdit = async () => {
     }
 
     const updated = await updateLifeEntry(props.entry.id, {
-      type: props.entry.type,
+      type: editType.value,
       title: editTitle.value.trim(),
       content: editContent.value.trim(),
       location: finalLocation,
@@ -143,20 +150,17 @@ const displayImages = computed(() => {
 
 const getKindLabel = (type: string) => {
   const map: Record<string, string> = {
-    life: '生活',
+    life: '日常',
     daily: '日常',
-    photo: '照片',
-    thought: '想法',
-    project: '项目',
-    collection: '收藏',
-    coffee: '咖啡',
-    music: '听音',
-    book: '书摘',
-    place: '行迹',
-    game: '游戏',
-    purchase: '好物',
+    travel: '游历',
+    place: '游历',
+    project: '造物',
+    wish: '心愿',
+    collection: '心愿',
+    photo: '日常',
+    thought: '日常',
   }
-  return map[type] || '记录'
+  return map[type] || '日常'
 }
 </script>
 
@@ -244,13 +248,27 @@ const getKindLabel = (type: string) => {
           {{ errorMsg }}
         </div>
 
-        <div class="space-y-1.5">
-          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标题</label>
-          <input
-            v-model="editTitle"
-            type="text"
-            class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-          />
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">记录形态</label>
+            <PaperSelect
+              v-model="editType"
+              :options="[
+                { value: 'life', label: '日常 (Life)' },
+                { value: 'travel', label: '游历 (Travel)' },
+                { value: 'project', label: '造物 (Project)' },
+                { value: 'wish', label: '心愿 (Wish)' },
+              ]"
+            />
+          </div>
+          <div class="sm:col-span-2 space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标题 (选填)</label>
+            <input
+              v-model="editTitle"
+              type="text"
+              class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+            />
+          </div>
         </div>
 
         <div class="space-y-1.5">
@@ -359,33 +377,31 @@ const getKindLabel = (type: string) => {
           {{ entry.content }}
         </div>
 
-        <!-- 注脚信息：地点、关联项目与元信息 -->
+        <!-- 注脚信息：地点、关联造物与关联心愿 -->
         <div class="pt-6 border-t border-[var(--border-subtle)] space-y-2 text-xs font-mono-archive text-[var(--ink-muted)]">
-          <div v-if="entry.location" class="flex items-center gap-2">
+          <div v-if="entry.city_name || entry.location" class="flex items-center gap-2">
             <span>坐标：</span>
-            <span class="text-[var(--ink-primary)] font-serif-editorial">{{ entry.location }}</span>
+            <span class="text-[var(--ink-primary)] font-serif-editorial">{{ entry.city_name || entry.location }}</span>
           </div>
 
           <div v-if="entry.project" class="flex items-center gap-2">
             <span>关联造物：</span>
             <span class="text-[var(--ink-primary)]">{{ entry.project.title }}</span>
-          </div>
-
-          <div v-if="entry.meta" class="flex items-center gap-2">
-            <span>注脚：</span>
-            <span>{{ entry.meta }}</span>
-          </div>
-
-          <div v-if="entry.link" class="pt-2">
             <a
-              :href="entry.link"
+              v-if="entry.project.github_url"
+              :href="entry.project.github_url"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-1 text-[var(--ink-primary)] hover-underline"
+              class="inline-flex items-center gap-1 text-[var(--ink-primary)] hover-underline ml-2"
             >
-              <span>查看关联外部链接</span>
+              <span>仓库</span>
               <ArrowUpRight class="w-3 h-3" />
             </a>
+          </div>
+
+          <div v-if="entry.wish" class="flex items-center gap-2">
+            <span>关联心愿：</span>
+            <span class="text-[var(--ink-primary)]">{{ entry.wish.title }}</span>
           </div>
         </div>
       </article>

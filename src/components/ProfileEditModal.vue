@@ -3,7 +3,15 @@ import { ref, watch, onMounted } from 'vue'
 import { X, Check, Trash2, Plus, RotateCcw, Camera, Loader2, User } from 'lucide-vue-next'
 import type { CuratorProfile, GearItem } from '../types'
 import { DEFAULT_PROFILE, saveCuratorProfile } from '../utils/profile'
-import { uploadUnifiedFile, updateCuratorProfile, createTransaction } from '../utils/api'
+import {
+  uploadUnifiedFile,
+  updateCuratorProfile,
+  createTransaction,
+  addGearAsset,
+  sellGearAsset,
+  deleteGearAsset,
+} from '../utils/api'
+import { useCategories } from '../composables/useCategories'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 
@@ -16,6 +24,8 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'updated', profile: CuratorProfile): void
 }>()
+
+const { gearCategories: categories, loadCategories, openCategoryManager } = useCategories()
 
 const cloneProfile = (p: CuratorProfile): CuratorProfile => ({
   ...p,
@@ -47,19 +57,12 @@ const newGearPurchaseDate = ref(new Date().toISOString().slice(0, 10))
 const syncBuyTransaction = ref(true)
 const showAddGear = ref(false)
 
-const categories = [
-  '影像与暗房',
-  '工作台与算力',
-  '手冲咖啡工坊',
-  '夜骑巡航',
-  '纸笔与日常',
-]
-
 // 仅在弹窗打开时同步并克隆表单状态，移除全局深监听与 JSON 频繁序列化开销 (FE-07)
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
+      loadCategories()
       form.value = cloneProfile(props.profile)
       avatarKey.value = props.profile.avatar_key || ''
       avatarUploadError.value = ''
@@ -173,34 +176,56 @@ const handleAddGear = async () => {
   if (!newGearName.value.trim()) return
   const priceFloat = parseFloat(newGearPrice.value)
   const priceCents = !isNaN(priceFloat) && priceFloat > 0 ? Math.round(priceFloat * 100) : undefined
+  const purchaseDate = newGearPurchaseDate.value || new Date().toISOString().slice(0, 10)
 
-  const item: GearItem = {
-    id: `gear-${Date.now()}`,
-    category: newGearCategory.value,
-    name: newGearName.value.trim(),
-    spec: newGearSpec.value.trim(),
-    status: newGearStatus.value.trim() || '日常自用',
-    note: newGearNote.value.trim(),
-    price_cents: priceCents,
-    purchase_date: newGearPurchaseDate.value || new Date().toISOString().slice(0, 10),
-  }
-  if (!form.value.edc_gear) form.value.edc_gear = []
-  form.value.edc_gear.push(item)
+  try {
+    const res = await addGearAsset({
+      category: newGearCategory.value,
+      name: newGearName.value.trim(),
+      spec: newGearSpec.value.trim(),
+      status: newGearStatus.value.trim() || 'active',
+      note: newGearNote.value.trim(),
+      price_cents: priceCents,
+      purchase_date: purchaseDate,
+      sync_transaction: Boolean(syncBuyTransaction.value && priceCents && priceCents > 0),
+      payment_method: '微信支付',
+    })
+    const createdGear = (res as any)?.gear || res
+    if (createdGear && createdGear.id) {
+      if (!form.value.edc_gear) form.value.edc_gear = []
+      form.value.edc_gear.push(createdGear)
+      saveCuratorProfile(form.value)
+      emit('updated', { ...form.value })
+    }
+  } catch (err) {
+    // 降级回退：本地推入并尝试创建账单
+    const item: GearItem = {
+      id: `gear-${Date.now()}`,
+      category: newGearCategory.value,
+      name: newGearName.value.trim(),
+      spec: newGearSpec.value.trim(),
+      status: newGearStatus.value.trim() || '日常自用',
+      note: newGearNote.value.trim(),
+      price_cents: priceCents,
+      purchase_date: purchaseDate,
+    }
+    if (!form.value.edc_gear) form.value.edc_gear = []
+    form.value.edc_gear.push(item)
 
-  // 路径 A：买入双向生成支出账单 (RC-53)
-  if (syncBuyTransaction.value && priceCents && priceCents > 0) {
-    try {
-      await createTransaction({
-        type: 'expense',
-        category: '购物',
-        amount: priceCents,
-        title: `购入设备: ${item.name}`,
-        note: item.spec || item.note,
-        payment_method: '微信支付',
-        occurred_at: newGearPurchaseDate.value ? `${newGearPurchaseDate.value}T12:00:00` : new Date().toISOString(),
-      })
-    } catch (err) {
-      console.warn('同步生成购买支出流水失败:', err)
+    if (syncBuyTransaction.value && priceCents && priceCents > 0) {
+      try {
+        await createTransaction({
+          type: 'expense',
+          category: '购物',
+          amount: priceCents,
+          title: `购入设备: ${item.name}`,
+          note: item.spec || item.note,
+          payment_method: '微信支付',
+          occurred_at: `${purchaseDate}T12:00:00`,
+        })
+      } catch (txErr) {
+        console.warn('同步生成购买支出流水失败:', txErr)
+      }
     }
   }
 
@@ -257,40 +282,40 @@ const confirmSellGear = async () => {
   }
 
   const soldCents = Math.round(soldFloat * 100)
-  item.status = 'sold'
-  item.sold_price_cents = soldCents
-  item.sold_date = sellingDateInput.value || new Date().toISOString().slice(0, 10)
+  const soldDate = sellingDateInput.value || new Date().toISOString().slice(0, 10)
 
   try {
     isSellingSubmitting.value = true
-    // 1. 立即同步持久化设备状态至本地与后端，无需二次点击底部保存 (RG-19)
-    saveCuratorProfile(form.value)
-    try {
+    if (item.id) {
+      await sellGearAsset(item.id, {
+        sold_price_cents: soldCents,
+        sold_date: soldDate,
+        payment_method: '微信支付',
+      })
+      item.status = 'sold'
+      item.sold_price_cents = soldCents
+      item.sold_date = soldDate
+      saveCuratorProfile(form.value)
+      emit('updated', { ...form.value })
+    } else {
+      item.status = 'sold'
+      item.sold_price_cents = soldCents
+      item.sold_date = soldDate
+      saveCuratorProfile(form.value)
       const updated = await updateCuratorProfile({
         ...form.value,
         edc_gear: form.value.edc_gear,
       })
       saveCuratorProfile(updated)
       emit('updated', updated)
-    } catch (syncErr) {
-      console.warn('同步设备出二手状态至后端失败:', syncErr)
-      emit('updated', { ...form.value })
-    }
-
-    // 2. 路径 B：闲置转售 · 卖出自动生成回血收入账单 (RC-53)
-    if (soldCents > 0) {
-      await createTransaction({
-        type: 'income',
-        category: '二手回血',
-        amount: soldCents,
-        title: `设备转售回血: ${item.name}`,
-        note: `转让回收资金，设备原购置于 ${item.purchase_date || '此前'}`,
-        payment_method: '微信支付',
-        occurred_at: item.sold_date,
-      })
     }
   } catch (err) {
-    console.warn('同步生成二手回血收入流水失败:', err)
+    console.warn('同步设备出二手状态失败，采用本地更新:', err)
+    item.status = 'sold'
+    item.sold_price_cents = soldCents
+    item.sold_date = soldDate
+    saveCuratorProfile(form.value)
+    emit('updated', { ...form.value })
   } finally {
     isSellingSubmitting.value = false
   }
@@ -298,8 +323,18 @@ const confirmSellGear = async () => {
   cancelSellDrawer()
 }
 
-const removeGear = (idx: number) => {
+const removeGear = async (idx: number) => {
+  const item = form.value.edc_gear?.[idx]
   form.value.edc_gear?.splice(idx, 1)
+  if (item?.id) {
+    try {
+      await deleteGearAsset(item.id)
+      saveCuratorProfile(form.value)
+      emit('updated', { ...form.value })
+    } catch (err) {
+      console.warn('后端删除设备失败，将在点击保存时同步:', err)
+    }
+  }
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -566,7 +601,16 @@ onMounted(() => {
         >
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">类目</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)]">类目</label>
+                <button
+                  type="button"
+                  @click="openCategoryManager('gear')"
+                  class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+                >
+                  管理分类
+                </button>
+              </div>
               <PaperSelect
                 v-model="newGearCategory"
                 size="sm"

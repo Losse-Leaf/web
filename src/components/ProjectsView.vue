@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import type { Project, LifeEntry } from '../types'
-import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle, BookOpen, ChevronRight } from 'lucide-vue-next'
+import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle, BookOpen, ChevronRight, SlidersHorizontal } from 'lucide-vue-next'
 import { createProject, updateProject, deleteProject } from '../utils/api'
+import { useCategories } from '../composables/useCategories'
 import PaperSelect from './PaperSelect.vue'
 
 const props = defineProps<{
@@ -15,7 +16,14 @@ const emit = defineEmits<{
   (e: 'projectUpdated', project: Project): void
   (e: 'projectDeleted', id: number): void
   (e: 'selectEntry', entry: LifeEntry): void
+  (e: 'openAddProjectEntry', projectId: number): void
 }>()
+
+const { projectCategories, loadCategories, openCategoryManager } = useCategories()
+
+onMounted(() => {
+  loadCategories()
+})
 
 const getProjectEntries = (projectId: number): LifeEntry[] => {
   return (props.entries || []).filter((e) => e.project_id === projectId)
@@ -63,7 +71,7 @@ const openCreateModal = () => {
   editingId.value = null
   formTitle.value = ''
   formSubtitle.value = ''
-  formCategory.value = activeCategory.value === 'all' ? '开源项目' : activeCategory.value
+  formCategory.value = activeCategory.value === 'all' ? (projectCategories.value[0] || '开源项目') : activeCategory.value
   formStatus.value = 'Active'
   formDescription.value = ''
   formStory.value = ''
@@ -76,7 +84,7 @@ const openEditModal = (proj: Project) => {
   editingId.value = proj.id
   formTitle.value = proj.title || ''
   formSubtitle.value = proj.subtitle || ''
-  formCategory.value = proj.category || '开源项目'
+  formCategory.value = proj.category || projectCategories.value[0] || '开源项目'
   formStatus.value = proj.status || 'Active'
   formDescription.value = proj.description || ''
   formStory.value = proj.story || ''
@@ -158,13 +166,23 @@ const isGitHubUrl = (url?: string) => {
           </p>
         </div>
 
-        <button
-          @click="openCreateModal"
-          class="self-start sm:self-auto inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs font-mono-archive text-xs transition-opacity cursor-pointer shrink-0"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          <span>新建造物</span>
-        </button>
+        <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <button
+            @click="openCategoryManager('project')"
+            class="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs font-mono-archive text-xs text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
+          >
+            <SlidersHorizontal class="w-3.5 h-3.5" />
+            <span>分类管理</span>
+          </button>
+
+          <button
+            @click="openCreateModal"
+            class="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs font-mono-archive text-xs transition-opacity cursor-pointer"
+          >
+            <Plus class="w-3.5 h-3.5" />
+            <span>新建造物</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -243,6 +261,14 @@ const isGitHubUrl = (url?: string) => {
               {{ proj.status === 'Archived' ? '已封存' : proj.status === 'Maintained' ? '长期维护' : '进行中' }}
             </span>
             <button
+              @click="emit('openAddProjectEntry', proj.id)"
+              class="inline-flex items-center gap-1 px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[10px]"
+              title="为此项目撰写新的造物手记或阶段进展"
+            >
+              <Plus class="w-3 h-3" />
+              <span>写造物手记</span>
+            </button>
+            <button
               @click="openEditModal(proj)"
               class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 rounded-xs transition-colors cursor-pointer"
               title="编辑项目"
@@ -299,9 +325,18 @@ const isGitHubUrl = (url?: string) => {
           v-if="getProjectEntries(proj.id).length > 0"
           class="pt-4 border-t border-dashed border-[var(--border-subtle)]/70 space-y-2.5"
         >
-          <div class="flex items-center gap-1.5 text-xs font-serif-editorial text-[var(--ink-muted)]">
-            <BookOpen class="w-3.5 h-3.5" />
-            <span>物候手记与打磨进程 ({{ getProjectEntries(proj.id).length }} 篇)</span>
+          <div class="flex items-center justify-between text-xs font-serif-editorial text-[var(--ink-muted)]">
+            <div class="flex items-center gap-1.5">
+              <BookOpen class="w-3.5 h-3.5" />
+              <span>物候手记与打磨进程 ({{ getProjectEntries(proj.id).length }} 篇)</span>
+            </div>
+            <button
+              @click="emit('openAddProjectEntry', proj.id)"
+              class="inline-flex items-center gap-1 text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
+            >
+              <Plus class="w-3 h-3" />
+              <span>追加进展手记</span>
+            </button>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div
@@ -377,12 +412,20 @@ const isGitHubUrl = (url?: string) => {
               />
             </div>
             <div>
-              <label class="block text-[var(--ink-secondary)] mb-1">分类</label>
-              <input
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-[var(--ink-secondary)]">分类</label>
+                <button
+                  type="button"
+                  @click="openCategoryManager('project')"
+                  class="text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+                >
+                  管理分类
+                </button>
+              </div>
+              <PaperSelect
                 v-model="formCategory"
-                type="text"
-                placeholder="例如：开源项目、手艺器物"
-                class="w-full px-3 py-1.5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)]"
+                size="sm"
+                :options="projectCategories.map((c) => ({ value: c, label: c }))"
               />
             </div>
           </div>

@@ -2,13 +2,15 @@
 import { ref, watch } from 'vue'
 import { X, Sparkles } from 'lucide-vue-next'
 import { createWish, updateWish } from '../utils/api'
-import type { Wish } from '../types'
+import type { Wish, Attachment } from '../types'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
+import ImageUploader from './ImageUploader.vue'
 
 const props = defineProps<{
   isOpen: boolean
   editingWish?: Wish | null
+  storageConfigured?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,7 @@ const cityName = ref('')
 const cityCode = ref('')
 const budgetYuan = ref('')
 const targetDate = ref('')
+const attachments = ref<Attachment[]>([])
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
@@ -44,6 +47,7 @@ watch(
       cityCode.value = w.city_code || ''
       budgetYuan.value = w.budget > 0 ? (w.budget / 100).toFixed(2) : ''
       targetDate.value = w.target_date ? w.target_date.slice(0, 10) : ''
+      attachments.value = w.attachments ? [...w.attachments] : []
     } else {
       kind.value = 'item'
       title.value = ''
@@ -53,6 +57,7 @@ watch(
       cityCode.value = ''
       budgetYuan.value = ''
       targetDate.value = ''
+      attachments.value = []
     }
     errorMsg.value = ''
   },
@@ -74,6 +79,8 @@ const handleSubmit = async () => {
     }
   }
 
+  const attachmentIds = attachments.value.map((a) => a.id)
+
   try {
     isSubmitting.value = true
     errorMsg.value = ''
@@ -88,6 +95,7 @@ const handleSubmit = async () => {
         city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
+        attachment_ids: attachmentIds,
       })
       emit('saved', updated)
     } else {
@@ -100,6 +108,7 @@ const handleSubmit = async () => {
         city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
+        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       })
       emit('saved', created)
     }
@@ -269,6 +278,16 @@ const handleSubmit = async () => {
             placeholder="为什么想要它？它将如何丰富具体的生活体验？"
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
           ></textarea>
+        </div>
+
+        <!-- 心愿参考配图上传 -->
+        <div class="space-y-1.5">
+          <label class="block text-[11px] text-[var(--ink-muted)]">心愿参考照片与灵感剪报 (选填)</label>
+          <ImageUploader
+            v-model="attachments"
+            :storageConfigured="storageConfigured ?? true"
+            category="wish"
+          />
         </div>
 
         <!-- 底部提交操作 -->

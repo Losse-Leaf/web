@@ -17,6 +17,8 @@ const props = withDefaults(
   defineProps<{
     isOpen: boolean
     storageConfigured?: boolean
+    initialCityCode?: string
+    initialCityName?: string
   }>(),
   {
     storageConfigured: true,
@@ -33,6 +35,7 @@ const selectedCityName = ref('')
 const userManuallyChangedCity = ref(false)
 const todayStr = new Date().toISOString().slice(0, 10)
 const visitedAt = ref(todayStr)
+const departedAt = ref('')
 const title = ref('')
 const note = ref('')
 const attachmentIds = ref<number[]>([])
@@ -63,10 +66,17 @@ watch(
   (open) => {
     if (open) {
       errorMsg.value = ''
+      departedAt.value = ''
       title.value = ''
       note.value = ''
       attachmentIds.value = []
-      applyDefaultCity()
+      if (props.initialCityCode && props.initialCityName) {
+        userManuallyChangedCity.value = true
+        selectedCityCode.value = props.initialCityCode
+        selectedCityName.value = props.initialCityName
+      } else {
+        applyDefaultCity()
+      }
     }
   },
   { immediate: true }
@@ -102,6 +112,7 @@ const handleSubmit = async () => {
       city_code: selectedCityCode.value,
       city_name: selectedCityName.value,
       visited_at: new Date(visitedAt.value).toISOString(),
+      departed_at: departedAt.value ? new Date(departedAt.value).toISOString() : undefined,
       title: title.value.trim() || undefined,
       note: note.value.trim() || undefined,
       attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
@@ -136,7 +147,7 @@ const handleSubmit = async () => {
             </h2>
           </div>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
-            点亮山川图谱。附带行旅随笔或影像时，将自动伴生归入主时间流。
+            点亮山川图谱。支持多日行程跨度，后续多篇游记与账单可挂载或自动聚合成同一次旅程。
           </p>
         </div>
         <button
@@ -167,22 +178,31 @@ const handleSubmit = async () => {
           </div>
         </div>
 
-        <!-- 到访日期 -->
-        <div>
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">到访日期 (支持补录历史日期) *</label>
-          <PaperDatePicker
-            v-model="visitedAt"
-            placeholder="选择到访日期..."
-          />
+        <!-- 启程与返程日期 (支持单日与多日行程) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">启程 / 到访日期 *</label>
+            <PaperDatePicker
+              v-model="visitedAt"
+              placeholder="选择到访日期..."
+            />
+          </div>
+          <div>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">返程日期 (选填 · 多日行程)</label>
+            <PaperDatePicker
+              v-model="departedAt"
+              placeholder="单日游可留空..."
+            />
+          </div>
         </div>
 
         <!-- 行旅标题 (选填) -->
         <div>
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行旅标题 (选填)</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">旅程主题 / 行旅标题 (选填)</label>
           <input
             v-model="title"
             type="text"
-            placeholder="例如：雨城雅安初访 · 青衣江畔"
+            placeholder="例如：川西秋日环线 · 雅安站"
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial"
           />
         </div>

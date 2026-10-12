@@ -17,12 +17,15 @@ import SearchModal from './components/SearchModal.vue'
 import ExportModal from './components/ExportModal.vue'
 import DevicePairingModal from './components/DevicePairingModal.vue'
 import UpdateNoticeModal from './components/UpdateNoticeModal.vue'
+import CategoryManagerModal from './components/CategoryManagerModal.vue'
+import PasscodeModal from './components/PasscodeModal.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 import FloatingActionButton from './components/FloatingActionButton.vue'
 import { getAdminToken, removeAdminToken } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
 import { useTransactions } from './composables/useTransactions'
+import { useCategories } from './composables/useCategories'
 import type {
   LifeEntry,
   Project,
@@ -44,6 +47,7 @@ import {
   fetchSiteConfig,
   fetchCuratorProfile,
   fetchSystemStatus,
+  verifyMasterPasscode,
 } from './utils/api'
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
 import { markEnteredArchive, clearEnteredArchive, hasEnteredArchiveSession } from './utils/auth'
@@ -92,11 +96,35 @@ const projects = ref<Project[]>([])
 // 模态框显隐控制
 const selectedEntry = ref<LifeEntry | null>(null)
 const isNewEntryOpen = ref(false)
-const newEntryInitialKind = ref<'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction' | undefined>(undefined)
+const newEntryInitialKind = ref<'life' | 'travel' | 'project' | 'wish' | 'transaction' | undefined>(undefined)
+const newEntryInitialProjectId = ref<number | undefined>(undefined)
+const newEntryInitialCityCode = ref('')
+const newEntryInitialCityName = ref('')
 
-const openNewEntry = (kind?: 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction') => {
-  newEntryInitialKind.value = kind || (currentView.value === 'transactions' ? 'transaction' : undefined)
+const openNewEntry = (
+  kind?: 'life' | 'travel' | 'project' | 'wish' | 'transaction',
+  projectId?: number,
+  city?: { code: string; name: string }
+) => {
+  newEntryInitialKind.value =
+    kind ||
+    (currentView.value === 'transactions'
+      ? 'transaction'
+      : currentView.value === 'projects'
+        ? 'project'
+        : currentView.value === 'wishes' || currentView.value === 'wishlist'
+          ? 'wish'
+          : currentView.value === 'atlas' || currentView.value === 'footprints'
+            ? 'travel'
+            : undefined)
+  newEntryInitialProjectId.value = projectId
+  newEntryInitialCityCode.value = city?.code || ''
+  newEntryInitialCityName.value = city?.name || ''
   isNewEntryOpen.value = true
+}
+
+const handleOpenAddWithCity = (city: { code: string; name: string }) => {
+  openNewEntry('travel', undefined, city)
 }
 
 const isStorageOpen = ref(false)
@@ -106,6 +134,37 @@ const isExportOpen = ref(false)
 const isPairingOpen = ref(false)
 const isUpdateModalOpen = ref(false)
 const updateModalInitialTab = ref<'check' | 'notices'>('check')
+
+const isPasscodeModalOpen = ref(false)
+const passcodeModalPrompt = ref('')
+const passcodeModalCallback = ref<(() => void) | null>(null)
+
+const handleRequestAuth = (callback?: () => void, prompt?: string) => {
+  if (Boolean(getAdminToken())) {
+    callback?.()
+    return
+  }
+  passcodeModalPrompt.value = prompt || '请输入管理员密钥以授权发布与管理'
+  passcodeModalCallback.value = callback || null
+  isPasscodeModalOpen.value = true
+}
+
+const handleAuthenticated = async () => {
+  isPasscodeModalOpen.value = false
+  await refreshData()
+  if (passcodeModalCallback.value) {
+    const cb = passcodeModalCallback.value
+    passcodeModalCallback.value = null
+    cb()
+  }
+}
+
+const handleLogout = () => {
+  removeAdminToken()
+  clearEnteredArchive()
+  refreshData()
+  window.location.reload()
+}
 
 const openUpdateModal = (tab: 'check' | 'notices') => {
   if (!getAdminToken()) return
@@ -195,7 +254,7 @@ const openStorageModal = async () => {
 const handleEntryCreated = (newEntry: LifeEntry) => {
   addEntry(newEntry)
   loadRemoteEntries()
-  if (currentView.value !== 'home' && currentView.value !== 'life') {
+  if (currentView.value !== 'home' && currentView.value !== 'life' && currentView.value !== 'projects') {
     navigateTo('home')
   }
 }
@@ -217,8 +276,14 @@ const handleEntryDeleted = (id: number) => {
   loadRemoteEntries()
 }
 
-const handleTxCreated = (tx: Transaction) => {
+const handleTxCreated = async (tx: Transaction) => {
   addTransaction(tx)
+  try {
+    const prof = await fetchCuratorProfile()
+    if (prof) syncProfileCache(prof)
+  } catch {
+    // ignore
+  }
 }
 
 const handleTxUpdated = (tx: Transaction) => {
@@ -227,6 +292,17 @@ const handleTxUpdated = (tx: Transaction) => {
 
 const handleTxDeleted = (id: number) => {
   removeTransaction(id)
+}
+
+const handleGearChanged = async () => {
+  try {
+    const [profRes] = await Promise.allSettled([fetchCuratorProfile(), loadRemoteTransactions()])
+    if (profRes.status === 'fulfilled' && profRes.value) {
+      syncProfileCache(profRes.value)
+    }
+  } catch (err) {
+    console.warn('Failed to refresh gear assets:', err)
+  }
 }
 
 const handleProjectCreated = (newProj: Project) => {
@@ -301,7 +377,10 @@ const handleHashChange = async () => {
   }
 }
 
+const { loadCategories } = useCategories()
+
 onMounted(async () => {
+  loadCategories()
   await handleHashChange()
   window.addEventListener('hashchange', handleHashChange)
 
@@ -335,8 +414,16 @@ onMounted(async () => {
         removeAdminToken()
         clearEnteredArchive()
         hasEnteredArchive.value = false
-      } else if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
-        hasEnteredArchive.value = true
+      } else {
+        // 本地调试环境自动零摩擦授权 (若尚未持有 Token，自动以默认口令 123456 获取主理人权限)
+        if (!getAdminToken() && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+          try {
+            await verifyMasterPasscode('123456')
+          } catch {}
+        }
+        if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
+          hasEnteredArchive.value = true
+        }
       }
     }
   } catch (err) {
@@ -446,6 +533,8 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @toggleTheme="toggleTheme"
       @openStats="openStatsModal"
       @openStorage="openStorageModal"
+      @openLogin="() => handleRequestAuth(undefined, '以主人身份登录自留地')"
+      @logout="handleLogout"
     />
 
     <!-- 主视图区 -->
@@ -465,7 +554,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @openAdd="openNewEntry()"
       />
 
-      <!-- 2. TRANSACTIONS 视图：独立记账与资产管理模块 (RG-11, RC-53) -->
+      <!-- 2. TRANSACTIONS 视图：独立资产管理模块 (RG-11, RC-53) -->
       <TransactionsView
         v-else-if="currentView === 'transactions'"
         :transactions="transactionsList"
@@ -473,6 +562,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @openAdd="openNewEntry('transaction')"
         @transactionDeleted="handleTxDeleted"
         @transactionUpdated="handleTxUpdated"
+        @gearChanged="handleGearChanged"
       />
 
       <!-- 3. ARCHIVE 视图：按年/按月索引 (RG-12) -->
@@ -491,12 +581,15 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @projectUpdated="handleProjectUpdated"
         @projectDeleted="handleProjectDeleted"
         @selectEntry="openEntryDetail"
+        @openAddProjectEntry="(projId) => openNewEntry('project', projId)"
       />
 
       <!-- 5. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
       <WishlistView
         v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
+        :storageConfigured="storageConfigured"
         @wishResolved="refreshData"
+        @requestAuth="handleRequestAuth"
       />
 
       <!-- 6. ATLAS 视图：山川行迹经纬星野与典藏票根 (FE-12, FE-13, RC-98) -->
@@ -505,6 +598,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         :storageConfigured="storageConfigured"
         @selectEntry="openEntryDetail"
         @footprintSaved="loadRemoteEntries"
+        @openAddWithCity="handleOpenAddWithCity"
       />
 
       <!-- 7. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
@@ -552,10 +646,15 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       :storageConfigured="storageConfigured"
       :projects="projects"
       :initialKind="newEntryInitialKind"
-      @close="isNewEntryOpen = false"
+      :initialProjectId="newEntryInitialProjectId"
+      :initialCityCode="newEntryInitialCityCode"
+      :initialCityName="newEntryInitialCityName"
+      @close="isNewEntryOpen = false; newEntryInitialCityCode = ''; newEntryInitialCityName = ''"
       @entryCreated="handleEntryCreated"
       @transactionCreated="handleTxCreated"
       @projectCreated="handleProjectCreated"
+      @wishCreated="refreshData"
+      @requestAuth="handleRequestAuth"
     />
 
     <!-- 4. 生活记录详情 / 编辑 / 删除 弹窗 -->
@@ -598,6 +697,17 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       :isOpen="isUpdateModalOpen"
       :initialTab="updateModalInitialTab"
       @close="isUpdateModalOpen = false"
+    />
+
+    <!-- 9. 全局自定义分类与字典管理 弹窗 -->
+    <CategoryManagerModal />
+
+    <!-- 10. 主理人印鉴登录弹窗 -->
+    <PasscodeModal
+      :isOpen="isPasscodeModalOpen"
+      :prompt="passcodeModalPrompt"
+      @close="isPasscodeModalOpen = false; passcodeModalCallback = null"
+      @authenticated="handleAuthenticated"
     />
 
   </div>

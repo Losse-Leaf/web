@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, ArrowLeft, Check } from 'lucide-vue-next'
+import { X, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -15,23 +15,27 @@ import {
   createLifeEntry,
   createTransaction,
   createProject,
-  updateCuratorProfile,
+  createWish,
+  fetchEntryById,
   fetchWishes,
-  updateWish,
+  fetchFootprints,
   fetchCreditChannels,
   getAdminToken,
 } from '../utils/api'
-import { loadCuratorProfile, saveCuratorProfile } from '../utils/profile'
+import { useCategories } from '../composables/useCategories'
 import { audio } from '../utils/audio'
-import type { LifeEntry, Transaction, Project, GearItem, Wish, CreditChannel } from '../types'
+import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
 
-export type EntryKind = 'life' | 'thought' | 'photo' | 'project' | 'collection' | 'transaction'
+export type EntryKind = 'life' | 'travel' | 'project' | 'wish' | 'transaction'
 
 const props = defineProps<{
   isOpen: boolean
   storageConfigured: boolean
   projects?: Project[]
-  initialKind?: EntryKind
+  initialKind?: EntryKind | string
+  initialProjectId?: number | null
+  initialCityCode?: string
+  initialCityName?: string
 }>()
 
 const emit = defineEmits<{
@@ -39,9 +43,20 @@ const emit = defineEmits<{
   (e: 'entryCreated', entry: LifeEntry): void
   (e: 'transactionCreated', tx: Transaction): void
   (e: 'projectCreated', proj: Project): void
+  (e: 'wishCreated', wish: Wish): void
+  (e: 'requestAuth', callback: () => void): void
 }>()
 
-const step = ref<'select' | 'form'>('select')
+const {
+  expenseCategories,
+  incomeCategories,
+  gearCategories,
+  paymentMethods,
+  projectCategories,
+  loadCategories,
+  openCategoryManager,
+} = useCategories()
+
 const selectedKind = ref<EntryKind>('life')
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
@@ -55,9 +70,11 @@ const selectedCityName = ref('')
 const userManuallyChangedCity = ref(false)
 const occurredAt = ref(getTodayDateTimeString())
 const selectedProjectId = ref<number | null>(null)
+const selectedFootprintId = ref<number | null>(null)
 const attachmentIds = ref<number[]>([])
 
-// 造物项目专有状态 (RC-55 统一录入模型)
+// 造物项目模式：'new' (立项新造物) | 'entry' (为已有项目写造物手记)
+const projectMode = ref<'new' | 'entry'>('new')
 const projTitle = ref('')
 const projSubtitle = ref('')
 const projCategory = ref('开源项目')
@@ -66,17 +83,25 @@ const projDescription = ref('')
 const projStory = ref('')
 const projGithubUrl = ref('')
 
-// 记账专用状态
+// 心愿模式专用状态
+const wishKind = ref<'item' | 'travel' | 'milestone'>('item')
+const wishBudgetYuan = ref('')
+const wishSpec = ref('')
+const wishTargetDate = ref('')
+
+// 账目专用状态
 const txAmount = ref<string>('')
 const txType = ref<'expense' | 'income'>('expense')
 const txCategory = ref<string>('餐饮')
 const txPaymentMethod = ref<string>('微信支付')
 const txNote = ref<string>('')
 const syncToGear = ref(false)
-const gearCategory = ref('影像与暗房')
+const gearCategory = ref('数码器材')
+const gearSpec = ref('')
 
-// 心愿单与分期付款支持 (RG-11, RC-53, RG-21)
+// 心愿单、旅程足迹与分期付款支持
 const availableWishes = ref<Wish[]>([])
+const availableFootprints = ref<Footprint[]>([])
 const creditChannels = ref<CreditChannel[]>([])
 const selectedWishId = ref<number | null>(null)
 const isInstallment = ref(false)
@@ -93,7 +118,45 @@ const displayCreditChannels = computed<CreditChannel[]>(() => {
   return creditChannels.value.length > 0 ? creditChannels.value : defaultCreditChannels
 })
 
+const currentTxCategories = computed(() => {
+  return txType.value === 'income' ? incomeCategories.value : expenseCategories.value
+})
+
+watch(txType, (newType) => {
+  if (newType === 'income' && !incomeCategories.value.includes(txCategory.value)) {
+    txCategory.value = incomeCategories.value[0] || '工资收入'
+  } else if (newType === 'expense' && !expenseCategories.value.includes(txCategory.value)) {
+    txCategory.value = expenseCategories.value[0] || '餐饮'
+  }
+})
+
+const kindOptions: { key: EntryKind; label: string; desc: string }[] = [
+  { key: 'life', label: '日常', desc: '身边小事、随笔思考与定格光影' },
+  { key: 'travel', label: '游历', desc: '山川行迹与漫游记忆，自动点亮或归并足迹图谱' },
+  { key: 'project', label: '造物', desc: '立项新造物或为进行中的项目撰写进展手记' },
+  { key: 'wish', label: '心愿', desc: '许下好物、远方旅程或阶段里程碑心愿' },
+  { key: 'transaction', label: '账目', desc: '记录日常收支、旅行花销、信贷分期或固定资产' },
+]
+
+function normalizeKind(raw?: string): EntryKind {
+  if (!raw) return 'life'
+  if (raw === 'travel' || raw === 'place') return 'travel'
+  if (raw === 'project') return 'project'
+  if (raw === 'wish' || raw === 'collection') return 'wish'
+  if (raw === 'transaction') return 'transaction'
+  return 'life'
+}
+
 const applyDefaultCity = () => {
+  if (props.initialCityCode && props.initialCityName) {
+    userManuallyChangedCity.value = true
+    selectedCityCode.value = props.initialCityCode
+    selectedCityName.value = props.initialCityName
+    if (!location.value.trim()) {
+      location.value = props.initialCityName
+    }
+    return
+  }
   userManuallyChangedCity.value = false
   const fallback = getFallbackDefaultCity()
   if (fallback) {
@@ -129,6 +192,37 @@ const loadAvailableWishes = async () => {
   }
 }
 
+const loadAvailableFootprints = async () => {
+  try {
+    const list = await fetchFootprints()
+    availableFootprints.value = Array.isArray(list) ? list.slice(0, 30) : []
+  } catch (err) {
+    console.warn('Failed to load available footprints:', err)
+    availableFootprints.value = []
+  }
+}
+
+const formatFootprintOptionLabel = (fp: Footprint) => {
+  const startStr = (fp.visited_at || '').slice(0, 10)
+  const endStr = fp.departed_at ? fp.departed_at.slice(0, 10) : ''
+  const datePart = endStr && endStr !== startStr ? `${startStr} ~ ${endStr}` : startStr
+  const tripTitle = fp.title || (fp.note ? fp.note.slice(0, 16) : '旅程打卡')
+  return `${fp.city_name} · ${tripTitle} (${datePart})`
+}
+
+const onFootprintSelected = () => {
+  if (!selectedFootprintId.value) return
+  const fp = availableFootprints.value.find((f) => f.id === selectedFootprintId.value)
+  if (fp) {
+    userManuallyChangedCity.value = true
+    selectedCityCode.value = fp.city_code
+    selectedCityName.value = fp.city_name
+    if (!location.value.trim()) {
+      location.value = fp.city_name
+    }
+  }
+}
+
 const loadCreditChannelsList = async () => {
   if (!getAdminToken()) return
   try {
@@ -148,18 +242,25 @@ const loadCreditChannelsList = async () => {
 }
 
 watch(
-  [() => props.isOpen, () => props.initialKind],
-  ([open, initKind]) => {
+  [() => props.isOpen, () => props.initialKind, () => props.initialProjectId],
+  ([open, initKind, initProjId]) => {
     if (open) {
+      loadCategories()
       loadAvailableWishes()
+      loadAvailableFootprints()
       loadCreditChannelsList()
       applyDefaultCity()
-      if (initKind) {
-        selectedKind.value = initKind
-        step.value = 'form'
+      selectedKind.value = normalizeKind(initKind)
+      if (initProjId) {
+        selectedKind.value = 'project'
+        projectMode.value = 'entry'
+        selectedProjectId.value = initProjId
+      } else if (props.projects && props.projects.length > 0) {
+        projectMode.value = 'entry'
+        selectedProjectId.value = props.projects[0].id
       } else {
-        step.value = 'select'
-        selectedKind.value = 'life'
+        projectMode.value = 'new'
+        selectedProjectId.value = null
       }
       errorMsg.value = null
     }
@@ -202,18 +303,6 @@ const effectiveRepaymentDay = computed(() => {
   return customRepaymentDay.value || 15
 })
 
-const txCategories = ['餐饮', '交通', '购物', '娱乐', '学习', '住房', '医疗', '其他']
-const paymentMethods = ['微信支付', '支付宝', '银行卡', '现金', '其他']
-
-const kindOptions: { key: EntryKind; label: string; desc: string }[] = [
-  { key: 'life', label: '生活记录', desc: '出门、吃饭、旅行、行迹或今天发生的小事' },
-  { key: 'thought', label: '想法', desc: '随笔、突发灵感、人生感悟与文字碎片' },
-  { key: 'photo', label: '照片', desc: '胶卷底片、光影瞬间与视觉记忆' },
-  { key: 'project', label: '项目', desc: '亲手创造的工具、设计实验与长线造物' },
-  { key: 'collection', label: '收藏', desc: '喜欢的音乐唱片、书籍、游戏与长伴物件' },
-  { key: 'transaction', label: '记账', desc: '记录一笔收支，把握日常真实开销' },
-]
-
 function getTodayDateTimeString(): string {
   const now = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -222,7 +311,6 @@ function getTodayDateTimeString(): string {
 
 const selectKind = (k: EntryKind) => {
   selectedKind.value = k
-  step.value = 'form'
   errorMsg.value = null
 }
 
@@ -240,28 +328,32 @@ const handleEntryCitySelect = (city: { code: string; name: string }) => {
 }
 
 const resetForm = () => {
-  if (props.initialKind) {
-    selectedKind.value = props.initialKind
-    step.value = 'form'
-  } else {
-    step.value = 'select'
-    selectedKind.value = 'life'
-  }
+  selectedKind.value = normalizeKind(props.initialKind)
   title.value = ''
   content.value = ''
-  location.value = ''
-  selectedCityCode.value = ''
-  selectedCityName.value = ''
+  if (props.initialCityCode && props.initialCityName) {
+    userManuallyChangedCity.value = true
+    selectedCityCode.value = props.initialCityCode
+    selectedCityName.value = props.initialCityName
+    location.value = props.initialCityName
+  } else {
+    location.value = ''
+    selectedCityCode.value = ''
+    selectedCityName.value = ''
+  }
   occurredAt.value = getTodayDateTimeString()
-  selectedProjectId.value = null
+  selectedProjectId.value = props.initialProjectId || (props.projects?.[0]?.id ?? null)
+  selectedFootprintId.value = null
+  projectMode.value = props.initialProjectId || (props.projects && props.projects.length > 0) ? 'entry' : 'new'
   attachmentIds.value = []
   txAmount.value = ''
   txType.value = 'expense'
-  txCategory.value = '餐饮'
-  txPaymentMethod.value = '微信支付'
+  txCategory.value = expenseCategories.value[0] || '餐饮'
+  txPaymentMethod.value = paymentMethods.value[0] || '微信支付'
   txNote.value = ''
   syncToGear.value = false
-  gearCategory.value = '影像与暗房'
+  gearCategory.value = gearCategories.value[0] || '数码器材'
+  gearSpec.value = ''
   selectedWishId.value = null
   isInstallment.value = false
   installmentChannel.value = displayCreditChannels.value[0]?.code || 'huabei'
@@ -269,11 +361,15 @@ const resetForm = () => {
   customRepaymentDay.value = 15
   projTitle.value = ''
   projSubtitle.value = ''
-  projCategory.value = '开源项目'
+  projCategory.value = projectCategories.value[0] || '开源项目'
   projStatus.value = 'Active'
   projDescription.value = ''
   projStory.value = ''
   projGithubUrl.value = ''
+  wishKind.value = 'item'
+  wishBudgetYuan.value = ''
+  wishSpec.value = ''
+  wishTargetDate.value = ''
   errorMsg.value = null
   isSubmitting.value = false
 }
@@ -283,36 +379,42 @@ const handleClose = () => {
   emit('close')
 }
 
-const kindTitle = computed(() => {
-  const match = kindOptions.find((o) => o.key === selectedKind.value)
-  return match ? match.label : '记录'
+const currentKindMeta = computed(() => {
+  return kindOptions.find((o) => o.key === selectedKind.value) || kindOptions[0]
 })
 
 const contentPlaceholder = computed(() => {
   switch (selectedKind.value) {
-    case 'thought':
-      return '写下此刻脑海里的念头、感触或片段……'
-    case 'photo':
-      return '为这些照片写几句注脚或拍摄时的心境……'
-    case 'collection':
-      return '记录这张唱片、这本书、这款游戏或这件好物吸引你的地方……'
+    case 'travel':
+      return '记录在这座城市的见闻、走过的街巷、风物与旅途感触……'
+    case 'project':
+      return '记录本次造物推进的细节、攻克的问题或阶段性成果……'
+    case 'wish':
+      return '写下为什么想要它、向往的理由或期待达成的场景……'
     default:
-      return '记录今天真实发生的一件事、迎面的微风、味道或琐碎日常……'
+      return '记录今天真实发生的一件事、脑海里的念头或定格的日常……'
   }
 })
 
 const handleSubmit = async () => {
   errorMsg.value = null
 
+  // 若当前尚未登录主理人，呼出印鉴校验弹窗，校验成功后自动继续发布
+  if (!Boolean(getAdminToken())) {
+    emit('requestAuth', () => {
+      handleSubmit()
+    })
+    return
+  }
+
+  // 1. 提交账目 (Transaction)
   if (selectedKind.value === 'transaction') {
-    // 提交记账
     const amtFloat = parseFloat(txAmount.value)
     if (isNaN(amtFloat) || amtFloat <= 0) {
       errorMsg.value = '请输入有效的金额'
       return
     }
     const amountInCents = Math.round(amtFloat * 100)
-
     const repaymentDay = effectiveRepaymentDay.value
     const installmentPay = isInstallment.value
       ? Math.round(amountInCents / (installmentMonths.value || 1))
@@ -355,49 +457,31 @@ const handleSubmit = async () => {
           : txPaymentMethod.value,
         occurred_at: occurredAt.value,
         wish_id: selectedWishId.value || undefined,
-        is_installment: isInstallment.value,
-        installment_channel_code: isInstallment.value ? installmentChannel.value : undefined,
-        installment_total_amount: isInstallment.value ? amountInCents : undefined,
-        installment_months: isInstallment.value ? installmentMonths.value : undefined,
-        installment_monthly_pay: isInstallment.value ? installmentPay : undefined,
-        installment_remain_months: isInstallment.value ? installmentMonths.value : undefined,
-        repayment_day: isInstallment.value ? repaymentDay : undefined,
+        footprint_id: selectedFootprintId.value || undefined,
+        city_code: selectedCityCode.value || undefined,
+        is_installment: txType.value === 'expense' && isInstallment.value,
+        installment_channel_code:
+          txType.value === 'expense' && isInstallment.value ? installmentChannel.value : undefined,
+        installment_total_amount:
+          txType.value === 'expense' && isInstallment.value ? amountInCents : undefined,
+        installment_months:
+          txType.value === 'expense' && isInstallment.value ? installmentMonths.value : undefined,
+        installment_monthly_pay:
+          txType.value === 'expense' && isInstallment.value ? installmentPay : undefined,
+        installment_remain_months:
+          txType.value === 'expense' && isInstallment.value ? installmentMonths.value : undefined,
+        repayment_day:
+          txType.value === 'expense' && isInstallment.value ? repaymentDay : undefined,
+        link_gear_asset: txType.value === 'expense' && syncToGear.value,
+        gear_category:
+          txType.value === 'expense' && syncToGear.value ? gearCategory.value : undefined,
+        gear_spec:
+          txType.value === 'expense' && syncToGear.value
+            ? gearSpec.value.trim() || txNote.value.trim() || undefined
+            : undefined,
       })
 
-      // 路径 B：记账大件同步收录至随身设备库 (RC-53)
-      if (txType.value === 'expense' && syncToGear.value && title.value.trim()) {
-        try {
-          const profile = loadCuratorProfile()
-          const newGear: GearItem = {
-            id: `gear-${Date.now()}`,
-            name: title.value.trim(),
-            category: gearCategory.value,
-            spec: txNote.value.trim() || undefined,
-            status: '日常自用',
-            note: `记账同步收录，购于 ${occurredAt.value.slice(0, 10)}`,
-            price_cents: amountInCents,
-            purchase_date: occurredAt.value.slice(0, 10),
-          }
-          const updatedGear = [newGear, ...(profile.edc_gear || [])]
-          saveCuratorProfile({ ...profile, edc_gear: updatedGear })
-          updateCuratorProfile({ edc_gear: updatedGear }).catch(() => {})
-        } catch (err) {
-          console.warn('同步收录设备库失败:', err)
-        }
-      }
-
-      // 路径 C：关联心愿单时同步调用归册接口闭环 (RG-14)
-      if (selectedWishId.value) {
-        try {
-          await updateWish(selectedWishId.value, {
-            status: 'fulfilled',
-            actual_cost: amountInCents,
-          })
-        } catch (err) {
-          console.warn('同步更新心愿归册状态失败:', err)
-        }
-      }
-
+      audio.playShutter()
       emit('transactionCreated', createdTx)
       handleClose()
     } catch (err: any) {
@@ -408,78 +492,161 @@ const handleSubmit = async () => {
     return
   }
 
-  // 提交造物项目 (RC-55 统一造物录入表单)
-  if (selectedKind.value === 'project') {
-    if (!projTitle.value.trim()) {
-      errorMsg.value = '造物项目名称不能为空'
+  // 2. 提交心愿 (Wish · 自动伴生创建 wish 类型 LifeEntry)
+  if (selectedKind.value === 'wish') {
+    if (!title.value.trim()) {
+      errorMsg.value = '请填写心愿名称'
       return
     }
+    if (wishKind.value === 'travel' && !selectedCityCode.value) {
+      errorMsg.value = '旅程心愿请选择目的地城市'
+      return
+    }
+    const budgetFloat = parseFloat(wishBudgetYuan.value)
+    const budgetCents = !isNaN(budgetFloat) && budgetFloat > 0 ? Math.round(budgetFloat * 100) : 0
 
     try {
       isSubmitting.value = true
-      const createdProj = await createProject({
-        title: projTitle.value.trim(),
-        subtitle: projSubtitle.value.trim(),
-        category: projCategory.value.trim() || '开源项目',
-        status: projStatus.value || 'Active',
-        description: projDescription.value.trim(),
-        story: projStory.value.trim(),
-        github_url: projGithubUrl.value.trim(),
+      const createdWish = await createWish({
+        title: title.value.trim(),
+        kind: wishKind.value,
+        note: content.value.trim(),
+        spec: wishSpec.value.trim() || undefined,
+        city_code: selectedCityCode.value || undefined,
+        city_name: selectedCityName.value || undefined,
+        budget: budgetCents,
+        target_date: wishTargetDate.value || undefined,
+        attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
       })
 
-      // 同时在时间流生成关联项目散页
-      const createdEntry = await createLifeEntry({
-        type: 'project',
-        title: projTitle.value.trim(),
-        content: projDescription.value.trim() || projStory.value.trim() || '亲手创造的作品。',
-        occurred_at: occurredAt.value,
-        project_id: createdProj.id,
-      })
+      if (createdWish.life_entry_id) {
+        try {
+          const companionEntry = await fetchEntryById(createdWish.life_entry_id)
+          emit('entryCreated', companionEntry)
+        } catch {}
+      }
 
       audio.playShutter()
-      emit('projectCreated', createdProj)
-      emit('entryCreated', createdEntry)
+      emit('wishCreated', createdWish)
       handleClose()
     } catch (err: any) {
-      errorMsg.value = err.message || '创建造物项目失败'
+      errorMsg.value = err.message || '创建心愿失败'
     } finally {
       isSubmitting.value = false
     }
     return
   }
 
-  // 提交 Life Entry
-  if (!content.value.trim() && selectedKind.value !== 'photo') {
-    errorMsg.value = '请填写记录内容'
+  // 3. 提交造物 (Project：立项新造物 或 撰写已有项目进展手记)
+  if (selectedKind.value === 'project') {
+    if (projectMode.value === 'new') {
+      if (!projTitle.value.trim()) {
+        errorMsg.value = '造物项目名称不能为空'
+        return
+      }
+      try {
+        isSubmitting.value = true
+        const createdProj = await createProject({
+          title: projTitle.value.trim(),
+          subtitle: projSubtitle.value.trim(),
+          category: projCategory.value.trim() || '开源项目',
+          status: projStatus.value || 'Active',
+          description: projDescription.value.trim(),
+          story: projStory.value.trim(),
+          github_url: projGithubUrl.value.trim(),
+        })
+
+        // 复用后端刚伴生创建的同项目记录并绑定附件与时间
+        const createdEntry = await createLifeEntry({
+          type: 'project',
+          title: projTitle.value.trim(),
+          content:
+            projDescription.value.trim() ||
+            projStory.value.trim() ||
+            `立项开启造物项目「${projTitle.value.trim()}」。`,
+          occurred_at: occurredAt.value,
+          project_id: createdProj.id,
+          attachment_ids: attachmentIds.value,
+        })
+
+        audio.playShutter()
+        emit('projectCreated', createdProj)
+        emit('entryCreated', createdEntry)
+        handleClose()
+      } catch (err: any) {
+        errorMsg.value = err.message || '创建造物项目失败'
+      } finally {
+        isSubmitting.value = false
+      }
+      return
+    } else {
+      // 为已有项目写进展手记
+      if (!selectedProjectId.value) {
+        errorMsg.value = '请选择关联的造物项目'
+        return
+      }
+      if (!content.value.trim() && attachmentIds.value.length === 0) {
+        errorMsg.value = '请填写造物手记内容或上传照片'
+        return
+      }
+      const targetProj = props.projects?.find((p) => p.id === selectedProjectId.value)
+      const defaultTitle = targetProj ? `${targetProj.title} · 造物手记` : '造物手记'
+      try {
+        isSubmitting.value = true
+        const createdEntry = await createLifeEntry({
+          type: 'project',
+          title: title.value.trim() || defaultTitle,
+          content: content.value.trim() || '记录造物阶段性进展。',
+          occurred_at: occurredAt.value,
+          project_id: selectedProjectId.value,
+          attachment_ids: attachmentIds.value,
+        })
+        audio.playShutter()
+        emit('entryCreated', createdEntry)
+        handleClose()
+      } catch (err: any) {
+        errorMsg.value = err.message || '保存造物手记失败'
+      } finally {
+        isSubmitting.value = false
+      }
+      return
+    }
+  }
+
+  // 4. 提交日常 (life) 或 游历 (travel)
+  if (!content.value.trim() && attachmentIds.value.length === 0) {
+    errorMsg.value = '请填写记录内容或上传至少一张照片'
     return
   }
-  if (selectedKind.value === 'photo' && attachmentIds.value.length === 0 && !content.value.trim()) {
-    errorMsg.value = '请上传至少一张照片或填写文字记录'
+
+  const matchedCity = !selectedCityCode.value ? matchCityFromLocation(location.value) : null
+  const finalCityCode = selectedCityCode.value || matchedCity?.code || undefined
+  const finalCityName = selectedCityName.value || matchedCity?.name || undefined
+  const finalLocation = location.value.trim() || finalCityName || ''
+
+  if (selectedKind.value === 'travel' && !finalCityCode) {
+    errorMsg.value = '游历记录请选择到访城市，以便点亮山川足迹图谱'
     return
   }
 
   try {
     isSubmitting.value = true
-    let projId = selectedProjectId.value
-
-    const matchedCity = !selectedCityCode.value ? matchCityFromLocation(location.value) : null
-    const finalCityCode = selectedCityCode.value || matchedCity?.code || undefined
-    const finalCityName = selectedCityName.value || matchedCity?.name || undefined
-    const finalLocation = location.value.trim() || finalCityName || ''
-
     if (finalCityCode && finalCityName) {
       saveLastUsedCity({ code: finalCityCode, name: finalCityName })
     }
 
+    const defaultTravelTitle = finalCityName ? `行迹 · ${finalCityName}` : ''
     const created = await createLifeEntry({
       type: selectedKind.value,
-      title: title.value.trim(),
-      content: content.value.trim() || (selectedKind.value === 'photo' ? '定格的照片。' : ''),
+      title: title.value.trim() || (selectedKind.value === 'travel' ? defaultTravelTitle : ''),
+      content: content.value.trim() || '定格的瞬间。',
       occurred_at: occurredAt.value,
       location: finalLocation,
       city_code: finalCityCode,
       city_name: finalCityName,
-      project_id: projId,
+      project_id: selectedProjectId.value,
+      wish_id: selectedWishId.value,
+      footprint_id: selectedFootprintId.value || undefined,
       attachment_ids: attachmentIds.value,
     })
 
@@ -501,27 +668,17 @@ const handleSubmit = async () => {
     @click.self="handleClose"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 顶部轻量标头 -->
-      <div class="flex items-center justify-between pb-6 border-b border-[var(--border-subtle)] mb-6">
-        <div class="flex items-center gap-3">
-          <button
-            v-if="step === 'form'"
-            @click="step = 'select'"
-            class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer p-1 -ml-1 transition-colors"
-            title="返回类型选择"
-          >
-            <ArrowLeft class="w-4 h-4" />
-          </button>
-          <div>
-            <h2 class="font-serif-editorial text-xl sm:text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
-              {{ step === 'select' ? '记录一点什么' : `新建 · ${kindTitle}` }}
-            </h2>
-            <p class="font-mono-archive text-[11px] text-[var(--ink-muted)] mt-0.5">
-              {{ step === 'select' ? '选择你想记录的生活形态' : '沉淀真实的生活记忆' }}
-            </p>
-          </div>
+      <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)] mb-5">
+        <div>
+          <h2 class="font-serif-editorial text-xl sm:text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
+            记录 · {{ currentKindMeta.label }}
+          </h2>
+          <p class="font-mono-archive text-[11px] text-[var(--ink-muted)] mt-0.5">
+            {{ currentKindMeta.desc }}
+          </p>
         </div>
 
         <button
@@ -533,39 +690,33 @@ const handleSubmit = async () => {
         </button>
       </div>
 
-      <!-- 第一步：轻量选择菜单 -->
-      <div v-if="step === 'select'" class="space-y-3 py-2">
+      <!-- 顶部一步式形态切换栏 (日常 / 游历 / 造物 / 心愿 / 账目) -->
+      <div class="grid grid-cols-5 gap-1.5 p-1 bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] rounded-xs mb-6">
         <button
           v-for="opt in kindOptions"
           :key="opt.key"
+          type="button"
           @click="selectKind(opt.key)"
-          class="w-full text-left p-4 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-secondary)] hover:bg-[var(--bg-subtle)]/40 transition-all cursor-pointer group flex items-start justify-between"
+          class="py-1.5 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer text-center"
+          :class="
+            selectedKind === opt.key
+              ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-2xs'
+              : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+          "
         >
-          <div class="space-y-1">
-            <span class="font-serif-editorial text-base text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors block font-medium">
-              {{ opt.label }}
-            </span>
-            <p class="text-xs text-[var(--ink-muted)] font-serif-editorial">
-              {{ opt.desc }}
-            </p>
-          </div>
-          <span class="text-xs font-mono-archive text-[var(--ink-muted)] opacity-40 group-hover:opacity-100 transition-opacity">
-            →
-          </span>
+          {{ opt.label }}
         </button>
       </div>
 
-      <!-- 第二步：克制清晰的表单 -->
-      <form v-else @submit.prevent="handleSubmit" class="space-y-6">
-        
+      <!-- 统一发布表单 -->
+      <form @submit.prevent="handleSubmit" class="space-y-5">
         <!-- 错误提示 -->
         <div v-if="errorMsg" class="p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
           {{ errorMsg }}
         </div>
 
-        <!-- 记账表单分支 -->
+        <!-- ==================== 分支 A：账目 (transaction) ==================== -->
         <template v-if="selectedKind === 'transaction'">
-          <!-- 金额与类型 -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">金额 (¥) *</label>
@@ -591,7 +742,7 @@ const handleSubmit = async () => {
                   type="button"
                   @click="txType = 'expense'"
                   class="flex-1 py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-                  :class="txType === 'expense' ? 'border-[var(--ink-primary)] font-bold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+                  :class="txType === 'expense' ? 'border-[var(--ink-primary)] font-bold text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
                 >
                   支出
                 </button>
@@ -599,7 +750,7 @@ const handleSubmit = async () => {
                   type="button"
                   @click="txType = 'income'"
                   class="flex-1 py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-                  :class="txType === 'income' ? 'border-[var(--ink-primary)] font-bold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+                  :class="txType === 'income' ? 'border-[var(--ink-primary)] font-bold text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
                 >
                   收入
                 </button>
@@ -609,10 +760,21 @@ const handleSubmit = async () => {
 
           <!-- 分类标签选择 -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">消费分类</label>
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
+                {{ txType === 'income' ? '收入分类' : '支出分类' }}
+              </label>
+              <button
+                type="button"
+                @click="openCategoryManager(txType === 'income' ? 'income' : 'expense')"
+                class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+              >
+                管理分类
+              </button>
+            </div>
             <div class="flex flex-wrap gap-2">
               <button
-                v-for="cat in txCategories"
+                v-for="cat in currentTxCategories"
                 :key="cat"
                 type="button"
                 @click="txCategory = cat"
@@ -631,13 +793,22 @@ const handleSubmit = async () => {
               <input
                 v-model="title"
                 type="text"
-                placeholder="例如：午饭、咖啡豆、键盘"
+                placeholder="例如：午饭、咖啡豆、镜头"
                 class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
               />
             </div>
 
             <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">支付渠道</label>
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">支付/收款渠道</label>
+                <button
+                  type="button"
+                  @click="openCategoryManager('payment')"
+                  class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+                >
+                  管理渠道
+                </button>
+              </div>
               <PaperSelect
                 v-model="txPaymentMethod"
                 :options="paymentMethods.map((m) => ({ value: m, label: m }))"
@@ -645,20 +816,47 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          <!-- 备注 -->
-          <div class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">备注说明 (可选)</label>
-            <input
-              v-model="txNote"
-              type="text"
-              placeholder="添加细节或心情批注……"
-              class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">备注说明 (可选)</label>
+              <input
+                v-model="txNote"
+                type="text"
+                placeholder="添加细节或型号批注……"
+                class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">所在城市 (可选 · 计入城市账单光谱)</label>
+              <CityPicker
+                v-model="selectedCityCode"
+                placeholder="检索城市..."
+                @select="handleEntryCitySelect"
+              />
+            </div>
+          </div>
+
+          <!-- 关联旅程足迹 (支持一次旅程归集多笔账单) -->
+          <div v-if="availableFootprints.length > 0" class="space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
+              关联旅程足迹 (可选 · 不选则按同城 7 日内自动归入对应旅程)
+            </label>
+            <PaperSelect
+              v-model="selectedFootprintId"
+              @change="onFootprintSelected"
+              :options="[
+                { value: null, label: '-- 自动匹配同城近期旅程 / 不指定 --' },
+                ...availableFootprints.map((fp) => ({
+                  value: fp.id,
+                  label: formatFootprintOptionLabel(fp),
+                })),
+              ]"
             />
           </div>
 
-          <!-- 联动心愿单 (RG-11, RC-53) -->
+          <!-- 联动心愿单 -->
           <div v-if="txType === 'expense' && availableWishes.length > 0" class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联心愿清单 (可选)</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联心愿清单 (自动达成归册)</label>
             <PaperSelect
               v-model="selectedWishId"
               @change="onWishSelected"
@@ -672,7 +870,7 @@ const handleSubmit = async () => {
             />
           </div>
 
-          <!-- 分期付款支持 (RG-11, RC-53) -->
+          <!-- 分期付款支持 -->
           <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5">
             <div class="flex items-center gap-2">
               <input
@@ -682,7 +880,7 @@ const handleSubmit = async () => {
                 class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
               />
               <label for="isInstallmentCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none">
-                分期付款 (花呗 / 京东白条 / 信贷分期)
+                分期付款 (花呗 / 京东白条 / 信用卡分期)
               </label>
             </div>
 
@@ -737,8 +935,8 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          <!-- 同步收录至随身设备库 (RC-53) -->
-          <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2">
+          <!-- 同步收录至随身与桌面固定资产库 -->
+          <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5">
             <div class="flex items-center gap-2">
               <input
                 id="syncToGearCheckbox"
@@ -753,32 +951,113 @@ const handleSubmit = async () => {
 
             <div v-if="syncToGear" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-mono-archive">
               <div>
-                <label class="block text-[var(--ink-muted)] mb-1">设备类别</label>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-[var(--ink-muted)]">设备类别</label>
+                  <button
+                    type="button"
+                    @click="openCategoryManager('gear')"
+                    class="text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+                  >
+                    管理分类
+                  </button>
+                </div>
                 <PaperSelect
                   v-model="gearCategory"
                   size="sm"
-                  :options="[
-                    { value: '影像与暗房', label: '影像与暗房' },
-                    { value: '工作台与算力', label: '工作台与算力' },
-                    { value: '手冲咖啡工坊', label: '手冲咖啡工坊' },
-                    { value: '夜骑巡航', label: '夜骑巡航' },
-                    { value: '纸笔与日常', label: '纸笔与日常' },
-                  ]"
+                  :options="gearCategories.map((c) => ({ value: c, label: c }))"
                 />
               </div>
-              <div class="flex items-end">
-                <span class="text-[11px] text-[var(--ink-muted)] pb-1.5">
-                  将以「日常自用」状态收录，原值 ¥{{ txAmount || '0.00' }}
-                </span>
+              <div>
+                <label class="block text-[var(--ink-muted)] mb-1">规格型号 (选填)</label>
+                <input
+                  v-model="gearSpec"
+                  type="text"
+                  placeholder="如: 16GB+512GB / 35mm f1.4"
+                  class="w-full px-2.5 py-1.5 text-xs bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
               </div>
             </div>
           </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">入账时间</label>
+            <PaperDatePicker
+              v-model="occurredAt"
+              enableTime
+              placeholder="选择入账时间..."
+            />
+          </div>
         </template>
 
-        <!-- 造物专有表单分支 (RC-55 统一录入模型) -->
+        <!-- ==================== 分支 B：造物 (project) ==================== -->
         <template v-else-if="selectedKind === 'project'">
-          <div class="space-y-4">
-            <!-- 项目标题与副标题 -->
+          <!-- 子模式切换：写造物进展手记 vs 立项新造物 -->
+          <div v-if="projects && projects.length > 0" class="flex items-center gap-2 pb-1">
+            <button
+              type="button"
+              @click="projectMode = 'entry'"
+              class="px-3 py-1.5 text-xs font-mono-archive rounded-xs border transition-colors cursor-pointer"
+              :class="projectMode === 'entry' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+            >
+              撰写已有项目进展手记
+            </button>
+            <button
+              type="button"
+              @click="projectMode = 'new'"
+              class="px-3 py-1.5 text-xs font-mono-archive rounded-xs border transition-colors cursor-pointer"
+              :class="projectMode === 'new' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+            >
+              ＋ 立项新造物项目
+            </button>
+          </div>
+
+          <!-- B1: 撰写已有项目的造物进展手记 -->
+          <div v-if="projectMode === 'entry' && projects && projects.length > 0" class="space-y-4">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">选择造物项目 *</label>
+              <PaperSelect
+                v-model="selectedProjectId"
+                :options="projects.map((p) => ({ value: p.id, label: `${p.title} (${p.status || 'Active'})` }))"
+              />
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">手记标题 (可选)</label>
+              <input
+                v-model="title"
+                type="text"
+                placeholder="例如：v1.2 核心架构重构完成"
+                class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              />
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">进展内容 *</label>
+              <textarea
+                v-model="content"
+                rows="5"
+                :placeholder="contentPlaceholder"
+                class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+              ></textarea>
+            </div>
+
+            <ImageUploader
+              :storageConfigured="storageConfigured"
+              @update:attachments="attachmentIds = $event"
+            />
+
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">记录时间</label>
+              <PaperDatePicker
+                v-model="occurredAt"
+                enableTime
+                placeholder="选择记录时间..."
+              />
+            </div>
+          </div>
+
+          <!-- B2: 立项新造物项目 -->
+          <div v-else class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
                 <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物名称 *</label>
@@ -800,15 +1079,21 @@ const handleSubmit = async () => {
               </div>
             </div>
 
-            <!-- 分类与状态 -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物分类</label>
-                <input
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物分类</label>
+                  <button
+                    type="button"
+                    @click="openCategoryManager('project')"
+                    class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
+                  >
+                    管理分类
+                  </button>
+                </div>
+                <PaperSelect
                   v-model="projCategory"
-                  type="text"
-                  placeholder="例如: 开源项目 / 效率工具 / 生活手艺"
-                  class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                  :options="projectCategories.map((c) => ({ value: c, label: c }))"
                 />
               </div>
               <div class="space-y-1.5">
@@ -825,9 +1110,8 @@ const handleSubmit = async () => {
               </div>
             </div>
 
-            <!-- 项目简介 -->
             <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">项目简介 (一两句话) *</label>
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">项目简介 *</label>
               <textarea
                 v-model="projDescription"
                 rows="2"
@@ -836,18 +1120,16 @@ const handleSubmit = async () => {
               ></textarea>
             </div>
 
-            <!-- 背后的故事 -->
             <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">背后的故事 / 实践历程 (可选)</label>
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">背后的故事 / 立项初衷 (可选)</label>
               <textarea
                 v-model="projStory"
-                rows="4"
-                placeholder="记录为何萌生创造它的念头、遇到的挑战或有趣的手艺经历……"
+                rows="3"
+                placeholder="记录为何萌生创造它的念头、技术选型或手艺经历……"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
               ></textarea>
             </div>
 
-            <!-- 代码仓链接 -->
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">代码仓 / 访问外链 (可选)</label>
               <input
@@ -857,25 +1139,171 @@ const handleSubmit = async () => {
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
+
+            <ImageUploader
+              :storageConfigured="storageConfigured"
+              @update:attachments="attachmentIds = $event"
+            />
           </div>
         </template>
 
-        <!-- 普通 Life Entry 表单分支 (生活 / 想法 / 照片 / 收藏) -->
+        <!-- ==================== 分支 C：心愿 (wish) ==================== -->
+        <template v-else-if="selectedKind === 'wish'">
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              @click="wishKind = 'item'"
+              class="py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
+              :class="wishKind === 'item' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+            >
+              好物心愿
+            </button>
+            <button
+              type="button"
+              @click="wishKind = 'travel'"
+              class="py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
+              :class="wishKind === 'travel' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+            >
+              远方旅程
+            </button>
+            <button
+              type="button"
+              @click="wishKind = 'milestone'"
+              class="py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
+              :class="wishKind === 'milestone' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+            >
+              阶段里程碑
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">心愿名称 *</label>
+              <input
+                v-model="title"
+                type="text"
+                placeholder="如：Leica Q3 / 大理旅居两周 / 完成半马"
+                class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">预估预算 (¥ · 可选)</label>
+              <input
+                v-model="wishBudgetYuan"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                class="w-full px-3 py-2 text-base font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-if="wishKind === 'item'" class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">规格型号 (可选)</label>
+              <input
+                v-model="wishSpec"
+                type="text"
+                placeholder="例如：黑色 / 28mm 定焦"
+                class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+              />
+            </div>
+            <div v-if="wishKind === 'travel'" class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">目的地城市 *</label>
+              <CityPicker
+                v-model="selectedCityCode"
+                placeholder="检索想去的目的地城市..."
+                @select="handleEntryCitySelect"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">期许达成日期 (可选)</label>
+              <PaperDatePicker
+                v-model="wishTargetDate"
+                placeholder="选择期许日期..."
+              />
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">心愿寄语 / 种草理由</label>
+            <textarea
+              v-model="content"
+              rows="4"
+              :placeholder="contentPlaceholder"
+              class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+            ></textarea>
+          </div>
+
+          <ImageUploader
+            :storageConfigured="storageConfigured"
+            @update:attachments="attachmentIds = $event"
+          />
+        </template>
+
+        <!-- ==================== 分支 D：日常 (life) 与 游历 (travel) ==================== -->
         <template v-else>
+          <!-- 游历专属：城市必选高亮置于顶部 + 关联多日旅程足迹 -->
+          <div v-if="selectedKind === 'travel'" class="p-3.5 rounded-xs border border-[var(--accent-warm)]/40 bg-[var(--bg-subtle)]/40 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-primary)] font-medium">
+                  到访城市 * (自动点亮山川足迹图谱)
+                </label>
+                <CityPicker
+                  v-model="selectedCityCode"
+                  placeholder="检索城市 (如: 雅安 / 杭州)..."
+                  @select="handleEntryCitySelect"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
+                  具体街巷 / 景点注记 (可选)
+                </label>
+                <input
+                  v-model="location"
+                  type="text"
+                  placeholder="例如：西湖苏堤 / 青衣江畔"
+                  class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                />
+              </div>
+            </div>
+
+            <!-- 关联已有旅程足迹 (支持一次多日旅游挂载多条游记手记) -->
+            <div v-if="availableFootprints.length > 0" class="space-y-1.5 pt-1 border-t border-[var(--border-subtle)]/60">
+              <label class="block text-xs font-mono-archive text-[var(--ink-secondary)]">
+                归属旅程足迹 (支持多条游记挂载至同一次旅途 · 不选则自动合并同城 7 日内行程)
+              </label>
+              <PaperSelect
+                v-model="selectedFootprintId"
+                size="sm"
+                @change="onFootprintSelected"
+                :options="[
+                  { value: null, label: '-- 自动聚合至同城近期旅程 / 开启新旅程 --' },
+                  ...availableFootprints.map((fp) => ({
+                    value: fp.id,
+                    label: formatFootprintOptionLabel(fp),
+                  })),
+                ]"
+              />
+            </div>
+          </div>
+
           <!-- 标题 (可选) -->
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              标题 (可选)
+              标题 (可选 · 不填则以随笔引言呈现)
             </label>
             <input
               v-model="title"
               type="text"
-              placeholder="给这条记录一个简短标题……"
+              :placeholder="selectedKind === 'travel' ? '例如：秋日杭城漫游 · Day 2 (不填默认生成 行迹 · 城市名)' : '给这条记录一个简短标题……'"
               class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
 
-          <!-- 内容主体 (必填) -->
+          <!-- 内容主体 -->
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               记录内容 *
@@ -894,7 +1322,7 @@ const handleSubmit = async () => {
             @update:attachments="attachmentIds = $event"
           />
 
-          <!-- 发生时间与驻足城市/地点 (支持自动下渗点亮山川行迹) -->
+          <!-- 发生时间与驻足城市 (日常模式下可选) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
@@ -905,9 +1333,9 @@ const handleSubmit = async () => {
               />
             </div>
 
-            <div class="space-y-1.5">
+            <div v-if="selectedKind === 'life'" class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-                所在城市 (可选 · 自动点亮山川足迹)
+                所在城市 (默认当前城市 · 自动同步足迹)
               </label>
               <CityPicker
                 v-model="selectedCityCode"
@@ -917,7 +1345,7 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          <div class="space-y-1.5">
+          <div v-if="selectedKind === 'life'" class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               具体地点 / 街巷注记 (可选)
             </label>
@@ -928,32 +1356,10 @@ const handleSubmit = async () => {
               class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
-
-          <!-- 项目关联 (可选) -->
-          <div v-if="projects && projects.length > 0" class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联造物项目 (可选)</label>
-            <PaperSelect
-              v-model="selectedProjectId"
-              :options="[
-                { value: null, label: '不关联项目' },
-                ...projects.map((p) => ({ value: p.id, label: p.title })),
-              ]"
-            />
-          </div>
         </template>
 
-        <!-- 发生时间 (记账时置底) -->
-        <div v-if="selectedKind === 'transaction'" class="space-y-1.5">
-          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">记录时间</label>
-          <PaperDatePicker
-            v-model="occurredAt"
-            enableTime
-            placeholder="选择记录时间..."
-          />
-        </div>
-
         <!-- 操作按钮 -->
-        <div class="pt-6 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
+        <div class="pt-5 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
           <button
             type="button"
             @click="handleClose"
@@ -970,7 +1376,6 @@ const handleSubmit = async () => {
             <span>{{ isSubmitting ? '保存中...' : '记录到生活档案' }}</span>
           </button>
         </div>
-
       </form>
     </div>
   </div>

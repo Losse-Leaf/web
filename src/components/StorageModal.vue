@@ -64,14 +64,14 @@ const emit = defineEmits<{
           </div>
         </div>
 
-        <div v-if="status?.configured" class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
+        <div v-if="status?.configured && status?.bucket" class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
           <span class="text-[var(--ink-muted)]">存储桶 (Bucket)</span>
           <span class="text-[var(--ink-primary)] font-mono-archive text-xs">
-            {{ status?.bucket || '—' }}
+            {{ status?.bucket }}
           </span>
         </div>
 
-        <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
+        <div v-if="!status?.configured || status?.public_domain" class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]/60 text-sm">
           <span class="text-[var(--ink-muted)]">{{ status?.configured ? '公网域名 (Domain)' : '本地访问路径' }}</span>
           <span class="text-[var(--ink-primary)] font-mono-archive text-xs truncate max-w-[200px]">
             {{ status?.configured ? (status?.public_domain || '—') : '/media' }}

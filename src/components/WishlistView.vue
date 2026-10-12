@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   Sparkles,
   Plus,
@@ -18,12 +18,20 @@ import type { Wish } from '../types'
 import WishFormModal from './WishFormModal.vue'
 import WishResolutionModal from './WishResolutionModal.vue'
 
-const emit = defineEmits<{
-  (e: 'wishResolved'): void
+defineProps<{
+  storageConfigured?: boolean
 }>()
 
-const wishes = ref<Wish[]>([])
+const emit = defineEmits<{
+  (e: 'wishResolved'): void
+  (e: 'requestAuth', callback: () => void): void
+}>()
+
+const allWishes = ref<Wish[]>([])
+const wishes = allWishes // 模板维度计数别名，保持全量指标统计
+const filteredWishes = ref<Wish[]>([])
 const isLoading = ref(false)
+const loadError = ref('')
 const selectedKind = ref<'all' | 'item' | 'travel' | 'milestone'>('all')
 const selectedStatus = ref<'wanting' | 'fulfilled' | 'relinquished' | 'all'>('wanting')
 
@@ -37,16 +45,44 @@ const isAdmin = computed(() => Boolean(getAdminToken()))
 const loadWishes = async () => {
   try {
     isLoading.value = true
-    const list = await fetchWishes()
-    wishes.value = list
-  } catch (err) {
+    loadError.value = ''
+    const [statsList, currentList] = await Promise.all([
+      fetchWishes(),
+      fetchWishes({
+        kind: selectedKind.value !== 'all' ? selectedKind.value : undefined,
+        status: selectedStatus.value !== 'all' ? selectedStatus.value : undefined,
+      }),
+    ])
+    allWishes.value = statsList || []
+    filteredWishes.value = currentList || []
+  } catch (err: any) {
     console.error('Failed to load wishes:', err)
+    loadError.value = err?.message || '心愿清单加载失败，请检查服务连接'
   } finally {
     isLoading.value = false
   }
 }
 
+watch([selectedKind, selectedStatus], async () => {
+  try {
+    const list = await fetchWishes({
+      kind: selectedKind.value !== 'all' ? selectedKind.value : undefined,
+      status: selectedStatus.value !== 'all' ? selectedStatus.value : undefined,
+    })
+    filteredWishes.value = list || []
+  } catch (err) {
+    console.warn('Failed to filter wishes:', err)
+  }
+})
+
 const openCreateWish = () => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => {
+      editingWish.value = null
+      isFormOpen.value = true
+    })
+    return
+  }
   editingWish.value = null
   isFormOpen.value = true
 }
@@ -66,6 +102,7 @@ const handleDeleteWish = async (w: Wish) => {
   try {
     await deleteWish(w.id)
     await loadWishes()
+    emit('wishResolved')
   } catch (err: any) {
     alert(err.message || '删除心愿失败')
   }
@@ -73,6 +110,7 @@ const handleDeleteWish = async (w: Wish) => {
 
 const handleWishSaved = () => {
   loadWishes()
+  emit('wishResolved')
 }
 
 const handleWishResolved = () => {
@@ -80,10 +118,10 @@ const handleWishResolved = () => {
   emit('wishResolved')
 }
 
-// 统计指标
-const wantingWishes = computed(() => wishes.value.filter((w) => w.status === 'wanting'))
-const fulfilledWishes = computed(() => wishes.value.filter((w) => w.status === 'fulfilled'))
-const relinquishedWishes = computed(() => wishes.value.filter((w) => w.status === 'relinquished'))
+// 统计指标基于全局心愿数据计算
+const wantingWishes = computed(() => allWishes.value.filter((w) => w.status === 'wanting'))
+const fulfilledWishes = computed(() => allWishes.value.filter((w) => w.status === 'fulfilled'))
+const relinquishedWishes = computed(() => allWishes.value.filter((w) => w.status === 'relinquished'))
 
 const totalWantingBudget = computed(() => {
   return wantingWishes.value.reduce((sum, w) => sum + (w.budget || 0), 0)
@@ -95,19 +133,6 @@ const totalFulfilledActual = computed(() => {
 
 const totalSavedBudget = computed(() => {
   return relinquishedWishes.value.reduce((sum, w) => sum + (w.budget || 0), 0)
-})
-
-// 过滤后的心愿列表
-const filteredWishes = computed(() => {
-  return wishes.value.filter((w) => {
-    if (selectedKind.value !== 'all' && w.kind !== selectedKind.value) {
-      return false
-    }
-    if (selectedStatus.value !== 'all' && w.status !== selectedStatus.value) {
-      return false
-    }
-    return true
-  })
 })
 
 const getKindLabel = (k: string) => {
@@ -144,12 +169,11 @@ onMounted(() => {
         </div>
 
         <button
-          v-if="isAdmin"
           @click="openCreateWish"
           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
         >
           <Plus class="w-3.5 h-3.5" />
-          <span>许下心愿</span>
+          <span>{{ isAdmin ? '许下心愿' : '许下心愿 (需登录)' }}</span>
         </button>
       </div>
 
@@ -270,6 +294,20 @@ onMounted(() => {
       正在翻阅心愿纸笺...
     </div>
 
+    <!-- 错误状态 -->
+    <div
+      v-else-if="loadError"
+      class="py-16 text-center border border-dashed border-rose-500/40 rounded-xs space-y-3 font-mono-archive"
+    >
+      <p class="text-xs text-rose-600 dark:text-rose-400">{{ loadError }}</p>
+      <button
+        @click="loadWishes"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer"
+      >
+        <span>重新加载</span>
+      </button>
+    </div>
+
     <!-- 空状态 -->
     <div
       v-else-if="filteredWishes.length === 0"
@@ -280,12 +318,12 @@ onMounted(() => {
         {{ selectedStatus === 'wanting' ? '当前没有在愿的心愿。' : '暂无对应分类的心愿记录。' }}
       </p>
       <button
-        v-if="isAdmin && selectedStatus === 'wanting'"
+        v-if="selectedStatus === 'wanting'"
         @click="openCreateWish"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer"
       >
         <Plus class="w-3.5 h-3.5" />
-        <span>写下第一个向往</span>
+        <span>{{ isAdmin ? '写下第一个向往' : '以主理人身份写下第一个向往' }}</span>
       </button>
     </div>
 
@@ -337,6 +375,18 @@ onMounted(() => {
             <p v-if="w.note" class="font-serif-editorial text-xs text-[var(--ink-secondary)] mt-1.5 leading-relaxed italic">
               “{{ w.note }}”
             </p>
+          </div>
+
+          <!-- 心愿参考配图预览 -->
+          <div v-if="w.attachments && w.attachments.length > 0" class="flex items-center gap-2 pt-1 overflow-x-auto">
+            <img
+              v-for="att in w.attachments"
+              :key="att.id"
+              :src="att.url"
+              :alt="w.title"
+              loading="lazy"
+              class="w-16 h-16 object-cover rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)] shrink-0"
+            />
           </div>
 
           <!-- 达成归册印记 -->
@@ -408,6 +458,7 @@ onMounted(() => {
       v-if="isFormOpen"
       :isOpen="isFormOpen"
       :editingWish="editingWish"
+      :storageConfigured="storageConfigured"
       @close="isFormOpen = false"
       @saved="handleWishSaved"
     />

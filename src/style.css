@@ -11,6 +11,8 @@
     --border-divider: rgba(24, 23, 22, 0.12);
     --accent-warm: #a24f2b;
     --accent-moss: #3f5a4a;
+    --accent-vermilion: #b83b2a;
+    --accent-indigo: #3b4f6b;
     --activity-empty: rgba(24, 23, 22, 0.08);
     --activity-l1: #8faea0;
     --activity-l2: #658c74;
@@ -30,6 +32,8 @@
     --border-divider: rgba(237, 232, 225, 0.14);
     --accent-warm: #c85635;
     --accent-moss: #507661;
+    --accent-vermilion: #d94f3d;
+    --accent-indigo: #557196;
     --activity-empty: rgba(237, 232, 225, 0.08);
     --activity-l1: #2d4c38;
     --activity-l2: #3f684e;

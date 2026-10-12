@@ -44,7 +44,7 @@ const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   lightboxPayload.value = {
     imageUrl: customUrl || getEntryFirstImage(entry),
     title: entry.title || '',
-    meta: entry.meta || '',
+    meta: entry.city_name || entry.location || '',
     location: entry.location || '',
     date: formatEntryDate(entry),
   }
@@ -60,15 +60,14 @@ watch(
   }
 )
 
-// 视图过滤分类
+// 视图过滤分类 (4 大纯化形态 + 账目投影)
 const categoryFilters: { key: ArchiveCategory; label: string }[] = [
   { key: 'all', label: '全部记录' },
   { key: 'daily', label: '日常' },
-  { key: 'thought', label: '想法' },
-  { key: 'photo', label: '照片' },
-  { key: 'transaction', label: '记账' },
-  { key: 'project', label: '项目' },
-  { key: 'collection', label: '收藏' },
+  { key: 'travel', label: '游历' },
+  { key: 'project', label: '造物' },
+  { key: 'wish', label: '心愿' },
+  { key: 'transaction', label: '账目' },
 ]
 
 const filteredEntries = computed(() => {
@@ -104,11 +103,10 @@ const getCategoryName = (entry: LifeEntry) => {
   const map: Record<ArchiveCategory, string> = {
     all: '全部记录',
     daily: '日常',
-    thought: '想法',
-    project: '项目',
-    collection: '收藏',
-    photo: '照片',
-    transaction: '记账',
+    travel: '游历',
+    project: '造物',
+    wish: '心愿',
+    transaction: '账目',
   }
   return map[cat] || '日常'
 }
@@ -183,10 +181,14 @@ const getGapDays = (index: number): number => {
       <div class="space-y-1.5 font-serif-editorial">
         <h3 class="text-lg text-[var(--ink-primary)]">
           {{
-            activeCategory === 'photo'
-              ? '还没有照片'
+            activeCategory === 'travel'
+              ? '还没有游历足迹记录'
+              : activeCategory === 'project'
+              ? '还没有造物手记'
+              : activeCategory === 'wish'
+              ? '还没有心愿印记'
               : activeCategory === 'transaction'
-              ? '这个月还没有记账'
+              ? '这个月还没有账目流水'
               : '还没有记录'
           }}
         </h3>
@@ -233,7 +235,7 @@ const getGapDays = (index: number): number => {
             <div
               class="w-2.5 h-2.5 rounded-full bg-[var(--bg-archive)] border-2 border-[var(--ink-secondary)] group-hover:border-[var(--accent-warm)] group-hover:scale-125 transition-all"
               :class="{
-                'border-[var(--accent-warm)] bg-[var(--accent-warm)]/20': entry.featured,
+                'border-[var(--accent-warm)] bg-[var(--accent-warm)]/20': entry.featured || getEntryCategory(entry) === 'wish',
                 'border-emerald-600': entry.type === 'transaction' || entry.is_transaction,
               }"
             ></div>
@@ -249,40 +251,22 @@ const getGapDays = (index: number): number => {
             <span
               class="text-[var(--ink-secondary)]"
               :class="{
-                'text-[var(--accent-warm)] font-medium': entry.type === 'thought',
+                'text-[var(--accent-warm)] font-medium': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel',
                 'text-emerald-700 font-medium': entry.type === 'transaction' || entry.is_transaction,
               }"
             >
               {{ getCategoryName(entry) }}
             </span>
-            <span v-if="entry.location" class="hidden sm:inline text-[var(--ink-muted)]">
-              · {{ entry.location }}
+            <span v-if="entry.city_name || entry.location" class="hidden sm:inline text-[var(--ink-muted)]">
+              · {{ entry.city_name || entry.location }}
             </span>
           </div>
 
           <!-- 多态内容排版 (Polymorphic Layouts) -->
 
-          <!-- 1. 想法 / 随笔形态 (Thought)：免标题，舒适大字号引言体，轻盈随手记 -->
-          <div v-if="entry.type === 'thought'" class="space-y-2">
-            <blockquote
-              class="font-serif-editorial text-lg sm:text-xl text-[var(--ink-primary)] leading-relaxed italic border-l-2 border-[var(--ink-muted)]/30 pl-4 py-1 group-hover:border-[var(--accent-warm)] transition-colors"
-            >
-              “{{ entry.content }}”
-            </blockquote>
-            <div
-              v-if="entry.title && entry.title !== entry.content && entry.title !== '想法'"
-              class="text-xs font-mono-archive text-[var(--ink-muted)] pl-4"
-            >
-              — {{ entry.title }}
-            </div>
-            <div v-if="entry.meta" class="text-xs font-mono-archive text-[var(--ink-muted)]/70 pl-4">
-              {{ entry.meta }}
-            </div>
-          </div>
-
-          <!-- 2. 记账形态 (Transaction)：单行账本微卡片，柴米油盐融入时间流 -->
+          <!-- 1. 账目形态 (Transaction)：单行账本微卡片，柴米油盐融入时间流 -->
           <div
-            v-else-if="entry.type === 'transaction' || entry.is_transaction"
+            v-if="entry.type === 'transaction' || entry.is_transaction"
             class="inline-flex flex-wrap items-center gap-3 py-2.5 px-4 bg-[var(--bg-subtle)]/60 rounded-xs border border-[var(--border-subtle)] group-hover:border-[var(--border-divider)] transition-colors"
           >
             <span
@@ -310,81 +294,43 @@ const getGapDays = (index: number): number => {
             </span>
           </div>
 
-          <!-- 3. 照片 / 胶卷形态 (Photo)：视觉画卷，大图与胶片参数 -->
-          <div v-else-if="entry.type === 'photo'" class="space-y-3">
-            <h3
-              v-if="entry.title"
-              class="text-xl sm:text-2xl font-serif-editorial font-medium tracking-tight text-[var(--ink-primary)] leading-snug group-hover:text-[var(--accent-warm)] transition-colors"
-            >
-              {{ entry.title }}
-            </h3>
-            <!-- 胶片装裱底片框 (Passe-partout) -->
-            <div
-              v-if="getEntryFirstImage(entry)"
-              class="film-frame bg-[var(--bg-subtle)]/80 p-2 sm:p-3 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] transition-all max-w-3xl group/photo cursor-zoom-in"
-              @click.stop="openLightbox(entry)"
-              title="点击在暗房灯箱中查看底片"
-            >
-              <div class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)]">
-                <img
-                  :src="getEntryFirstImage(entry)"
-                  :alt="entry.title"
-                  class="w-full max-h-[580px] object-cover editorial-image group-hover/photo:scale-[1.01] transition-transform duration-500"
-                  loading="lazy"
-                />
-                <div class="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono-archive rounded-xs opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center gap-1">
-                  <Maximize2 class="w-3 h-3" />
-                  <span>暗房灯箱</span>
-                </div>
-              </div>
-              <!-- 齿孔与冲印装裱条 -->
-              <div class="pt-2 px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                <span class="tracking-widest">EXP. · {{ entry.meta || '胶片装裱' }}</span>
-                <div class="flex items-center gap-2">
-                  <span v-if="entry.location">{{ entry.location }}</span>
-                  <span class="opacity-60 hidden sm:inline">[底片装裱]</span>
-                </div>
-              </div>
-            </div>
-            <p
-              v-if="entry.content"
-              class="text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed font-normal whitespace-pre-line max-w-2xl font-serif-editorial"
-            >
-              {{ entry.content }}
-            </p>
-            <div
-              v-if="entry.meta"
-              class="text-xs font-mono-archive text-[var(--ink-muted)] flex items-center justify-between max-w-2xl"
-            >
-              <span>— {{ entry.meta }}</span>
-              <span v-if="entry.location" class="hidden sm:inline">{{ entry.location }}</span>
-            </div>
-          </div>
-
-          <!-- 4. 造物 / 项目形态 (Project)：手艺与故事，带源码仓库直链 -->
+          <!-- 2. 造物形态 (Project)：手艺与进展手记，关联母项目与仓库直链 -->
           <div
-            v-else-if="entry.type === 'project'"
+            v-else-if="getEntryCategory(entry) === 'project'"
             class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 group-hover:border-[var(--border-divider)] transition-colors max-w-2xl"
           >
             <div class="flex items-center justify-between">
               <span class="text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
-                造物经历 · 亲手制作
+                造物手记 · {{ entry.project?.title || '长期创造' }}
               </span>
-              <span v-if="entry.meta" class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                {{ entry.meta }}
+              <span v-if="entry.project?.status" class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
+                {{ entry.project.status }}
               </span>
             </div>
             <h3
+              v-if="entry.title"
               class="text-xl font-serif-editorial font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors"
             >
               {{ entry.title }}
             </h3>
-            <p class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial">
+            <div
+              v-if="getEntryFirstImage(entry)"
+              class="overflow-hidden rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] max-w-xl"
+              @click.stop="openLightbox(entry)"
+            >
+              <img
+                :src="getEntryFirstImage(entry)"
+                :alt="entry.title"
+                class="w-full max-h-[420px] object-cover editorial-image"
+                loading="lazy"
+              />
+            </div>
+            <p class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial whitespace-pre-line">
               {{ entry.content }}
             </p>
-            <div v-if="entry.link" class="pt-1">
+            <div v-if="entry.project?.github_url" class="pt-1">
               <a
-                :href="entry.link"
+                :href="entry.project.github_url"
                 target="_blank"
                 rel="noopener noreferrer"
                 @click.stop
@@ -396,7 +342,50 @@ const getGapDays = (index: number): number => {
             </div>
           </div>
 
-          <!-- 5. 默认 / 日常形态 (Daily, Coffee, Music, Place, Books, Games, Collection) -->
+          <!-- 3. 心愿形态 (Wish)：许愿、归册与拔草印记 -->
+          <div
+            v-else-if="getEntryCategory(entry) === 'wish'"
+            class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 group-hover:border-[var(--accent-warm)]/60 transition-colors max-w-2xl"
+          >
+            <div class="flex items-center justify-between text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
+              <span>心愿印记 · {{ entry.wish?.kind === 'travel' ? '远方旅程' : entry.wish?.kind === 'milestone' ? '阶段目标' : '心仪好物' }}</span>
+              <span v-if="entry.wish?.status" class="text-[var(--ink-muted)]">
+                {{ entry.wish.status === 'fulfilled' ? '已圆满归册' : entry.wish.status === 'relinquished' ? '已理性拔草' : '期许中' }}
+              </span>
+            </div>
+            <h3
+              v-if="entry.title"
+              class="text-xl font-serif-editorial font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors"
+            >
+              {{ entry.title }}
+            </h3>
+            <div
+              v-if="getEntryFirstImage(entry)"
+              class="overflow-hidden rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] max-w-xl cursor-zoom-in"
+              @click.stop="openLightbox(entry)"
+            >
+              <img
+                :src="getEntryFirstImage(entry)"
+                :alt="entry.title"
+                class="w-full max-h-[420px] object-cover editorial-image"
+                loading="lazy"
+              />
+            </div>
+            <p class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial whitespace-pre-line">
+              {{ entry.content }}
+            </p>
+          </div>
+
+          <!-- 4. 无标题短随笔形态 (兼容轻量想法引言展示) -->
+          <div v-else-if="!entry.title && !getEntryFirstImage(entry)" class="space-y-2">
+            <blockquote
+              class="font-serif-editorial text-lg sm:text-xl text-[var(--ink-primary)] leading-relaxed italic border-l-2 border-[var(--ink-muted)]/30 pl-4 py-1 group-hover:border-[var(--accent-warm)] transition-colors"
+            >
+              “{{ entry.content }}”
+            </blockquote>
+          </div>
+
+          <!-- 5. 日常与游历形态 (Daily / Travel)：图文散页与胶片装裱 -->
           <div v-else class="space-y-3">
             <h3
               v-if="entry.title"
@@ -405,7 +394,7 @@ const getGapDays = (index: number): number => {
               {{ entry.title }}
             </h3>
 
-            <!-- 胶片装裱暗房底片框 (支持 R2 附件与历史底片) -->
+            <!-- 胶片装裱暗房底片框 -->
             <div
               v-if="getEntryFirstImage(entry)"
               class="film-frame bg-[var(--bg-subtle)]/80 p-2.5 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl cursor-zoom-in group/img space-y-2"
@@ -416,16 +405,19 @@ const getGapDays = (index: number): number => {
                 <img
                   :src="getEntryFirstImage(entry)"
                   :alt="entry.title"
-                  class="w-full max-h-[500px] object-cover editorial-image group-hover/img:scale-[1.01] transition-transform duration-500"
+                  class="w-full max-h-[520px] object-cover editorial-image group-hover/img:scale-[1.01] transition-transform duration-500"
                   loading="lazy"
                 />
+                <div class="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1">
+                  <Maximize2 class="w-3 h-3" />
+                  <span>暗房灯箱</span>
+                </div>
               </div>
 
-              <!-- 暗房相纸底款：EXP 编号与拍摄底片/器材元数据 -->
+              <!-- 暗房相纸底款：EXP 编号与地点坐标 -->
               <div class="px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                <span class="tracking-widest">EXP. {{ String(index + 1).padStart(2, '0') }} · 胶片底片</span>
-                <span v-if="entry.meta" class="truncate max-w-[70%] text-right">{{ entry.meta }}</span>
-                <span v-else-if="entry.location">{{ entry.location }}</span>
+                <span class="tracking-widest">EXP. {{ String(index + 1).padStart(2, '0') }} · 胶片装裱</span>
+                <span v-if="entry.city_name || entry.location">{{ entry.city_name || entry.location }}</span>
               </div>
             </div>
 
@@ -434,26 +426,6 @@ const getGapDays = (index: number): number => {
             >
               {{ entry.content }}
             </p>
-
-            <div
-              v-if="entry.meta && !getEntryFirstImage(entry)"
-              class="text-xs font-mono-archive text-[var(--ink-muted)]"
-            >
-              — {{ entry.meta }}
-            </div>
-
-            <div v-if="entry.link" class="pt-1">
-              <a
-                :href="entry.link"
-                target="_blank"
-                rel="noopener noreferrer"
-                @click.stop
-                class="inline-flex items-center gap-1.5 text-xs text-[var(--ink-primary)] hover-underline font-mono-archive"
-              >
-                <span>相关链接</span>
-                <ArrowUpRight class="w-3.5 h-3.5" />
-              </a>
-            </div>
           </div>
 
           <!-- 悬浮显露轻量操作提示 -->

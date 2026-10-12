@@ -154,7 +154,7 @@ onUnmounted(() => {
           </p>
 
           <div class="flex items-center justify-between pt-1 text-[11px] font-mono-archive text-[var(--ink-muted)]">
-            <span>{{ item.location || item.meta || '' }}</span>
+            <span>{{ item.location || item.city_name || '' }}</span>
             <span class="group-hover:translate-x-1 transition-transform text-[var(--ink-primary)] flex items-center gap-1">
               查看详情 <ArrowRight class="w-3 h-3" />
             </span>

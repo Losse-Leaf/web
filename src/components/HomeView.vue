@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeActivityMap from './LifeActivityMap.vue'
-import TravelAtlasView from './TravelAtlasView.vue'
+import MiniAtlasWidget from './MiniAtlasWidget.vue'
 import LifeStream from './LifeStream.vue'
 import { ArrowRight } from 'lucide-vue-next'
 
@@ -57,31 +57,37 @@ const currentCategoryInfo = computed(() => {
       return {
         label: '日常',
         title: '日常 · 生活时间流',
-        desc: '现实生活足迹：出门、吃饭、旅行、行迹与身边小事',
+        desc: '身边琐事与随笔思考：记录日常起居、片刻念头与定格光影',
       }
-    case 'thought':
+    case 'travel':
       return {
-        label: '想法',
-        title: '想法 · 生活时间流',
-        desc: '思想与文字：随笔、感悟、计划与碎片化思索',
+        label: '游历',
+        title: '游历 · 生活时间流',
+        desc: '山川行迹与漫游记忆：踏足远方城市、点亮足迹图谱的旅途印记',
       }
     case 'project':
       return {
-        label: '项目',
-        title: '项目 · 生活时间流',
-        desc: '创造与探索：造物项目、开源实践、工具设计与长线创作',
+        label: '造物',
+        title: '造物 · 生活时间流',
+        desc: '创造与探索：造物项目立项、进展手记、开源实践与长线创作',
       }
-    case 'collection':
+    case 'wish':
       return {
-        label: '收藏',
-        title: '收藏 · 生活时间流',
-        desc: '喜爱与长伴：唱片、书籍、游戏、设备与值得保留之物',
+        label: '心愿',
+        title: '心愿 · 生活时间流',
+        desc: '期许与圆满：许下心愿、好物归册与理性拔草的时光流转',
+      }
+    case 'transaction':
+      return {
+        label: '账目',
+        title: '账目 · 生活时间流',
+        desc: '柴米油盐与资产变动：日常收支、心愿兑现与固定资产流转',
       }
     default:
       return {
         label: '全部记录',
         title: '全部记录 · 生活时间流',
-        desc: '完整生活时间线：日常、想法、项目与收藏自然相融',
+        desc: '完整生活时间线：日常、游历、造物与心愿自然相融',
       }
   }
 })
@@ -158,9 +164,9 @@ const graphTab = ref<'time' | 'space'>('time')
           :selectedDate="selectedDate"
           @selectDate="handleDateSelect"
         />
-        <TravelAtlasView
+        <MiniAtlasWidget
           v-else
-          @selectEntry="emit('selectEntry', $event)"
+          @navigateAtlas="emit('navigate', 'atlas')"
         />
       </div>
     </section>

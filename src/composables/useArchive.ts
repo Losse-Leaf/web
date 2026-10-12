@@ -46,8 +46,7 @@ export function filterEntriesBySearch(entriesList: LifeEntry[], query: string): 
     const inContent = (e.content || '').toLowerCase().includes(q)
     const inLocation = (e.location || '').toLowerCase().includes(q)
     const inCity = (e.city_name || '').toLowerCase().includes(q)
-    const inMeta = (e.meta || '').toLowerCase().includes(q)
-    return inTitle || inContent || inLocation || inCity || inMeta
+    return inTitle || inContent || inLocation || inCity
   })
 }
 

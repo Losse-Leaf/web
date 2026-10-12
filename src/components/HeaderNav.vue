@@ -8,6 +8,7 @@ import {
   Search,
   Moon,
   Sun,
+  KeyRound,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
 import { getAdminToken } from '../utils/api'
@@ -33,6 +34,8 @@ const emit = defineEmits<{
   (e: 'openUpdateCheck'): void
   (e: 'openUpdateNotices'): void
   (e: 'toggleTheme'): void
+  (e: 'openLogin'): void
+  (e: 'logout'): void
 }>()
 
 const mobileMenuOpen = ref(false)
@@ -46,13 +49,13 @@ const displaySiteName = computed(() => {
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
 
-// 核心导航栏目（单轨统一；访客未登录时彻底不渲染私密记账/资产 RC-53）
+// 核心导航栏目（单轨统一；访客未登录时彻底不渲染私密资产管理 RC-53）
 const navItems = computed(() => {
   const items = [
     { key: 'home', label: '时间流' },
   ]
   if (isAdmin.value) {
-    items.push({ key: 'transactions', label: '记账' })
+    items.push({ key: 'transactions', label: '资产' })
   }
   items.push(
     { key: 'wishes', label: '心愿' },
@@ -99,8 +102,19 @@ const toolOptions = computed(() => {
         key: 'update-notices',
         label: '更新公告',
         action: () => emit('openUpdateNotices'),
+      },
+      {
+        key: 'logout',
+        label: '退出主理人',
+        action: () => emit('logout'),
       }
     )
+  } else {
+    opts.push({
+      key: 'login',
+      label: '主理人登录',
+      action: () => emit('openLogin'),
+    })
   }
   return opts
 })
@@ -205,11 +219,30 @@ onUnmounted(() => {
         <button
           @click="handleOpenAdd"
           class="flex items-center gap-1 text-xs py-1 px-2.5 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
-          title="记录一点什么 (生活记录 / 想法 / 照片 / 项目 / 收藏 / 记账)"
+          title="记录一点什么 (日常 / 游历 / 造物 / 心愿 / 账目)"
         >
           <Plus class="w-3.5 h-3.5" />
           <span class="font-serif-editorial text-[13px]">记录</span>
         </button>
+
+        <!-- 主理人身份状态 / 登录入口 -->
+        <button
+          v-if="!isAdmin"
+          @click="emit('openLogin')"
+          class="flex items-center gap-1 text-xs py-1 px-2 rounded-xs border border-[var(--accent-warm)]/50 hover:border-[var(--accent-warm)] bg-[var(--accent-warm)]/5 text-[var(--accent-warm)] transition-colors cursor-pointer"
+          title="输入管理员口令以主人身份登录"
+        >
+          <KeyRound class="w-3.5 h-3.5" />
+          <span class="font-serif-editorial text-[13px]">登录</span>
+        </button>
+        <div
+          v-else
+          class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-emerald-600/30 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-mono-archive text-[11px]"
+          title="当前处于受信任的主人管理模式"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>主理人</span>
+        </div>
 
         <!-- 设置/工具 ⌄ 二级轻量浮层 (数据备份 / 生活统计 / 存储设置) -->
         <div class="relative" ref="dropdownRef">
@@ -296,14 +329,22 @@ onUnmounted(() => {
       v-if="mobileMenuOpen"
       class="md:hidden border-b border-[var(--border-subtle)] bg-[var(--bg-archive)] px-6 py-6 space-y-6"
     >
-      <!-- 快捷新增 -->
-      <div>
+      <!-- 快捷新增与身份状态 -->
+      <div class="space-y-2">
         <button
           @click="handleOpenAdd"
           class="w-full py-2.5 px-3 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs text-xs font-mono-archive flex items-center justify-center gap-2 cursor-pointer"
         >
           <Plus class="w-4 h-4" />
           <span class="font-serif-editorial text-sm">记录一点什么</span>
+        </button>
+        <button
+          v-if="!isAdmin"
+          @click="emit('openLogin'); mobileMenuOpen = false"
+          class="w-full py-2 px-3 border border-[var(--accent-warm)]/50 bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] rounded-xs text-xs font-serif-editorial flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <KeyRound class="w-3.5 h-3.5" />
+          <span>主理人印鉴登录</span>
         </button>
       </div>
 

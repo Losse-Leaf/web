@@ -36,6 +36,7 @@ withDefaults(
 const emit = defineEmits<{
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'footprintSaved'): void
+  (e: 'openAddWithCity', city: { code: string; name: string }): void
 }>()
 
 const atlasData = ref<{
@@ -50,8 +51,22 @@ const atlasData = ref<{
 
 const rawFootprints = ref<Footprint[]>([])
 const isLoading = ref(false)
+const loadError = ref('')
 const isAddModalOpen = ref(false)
 const isDrawerOpen = ref(false)
+const addModalInitialCityCode = ref('')
+const addModalInitialCityName = ref('')
+
+const handleAddFootprintInCity = (city: { code: string; name: string }) => {
+  addModalInitialCityCode.value = city.code
+  addModalInitialCityName.value = city.name
+  isAddModalOpen.value = true
+}
+
+const handleAddEntryInCity = (city: { code: string; name: string }) => {
+  isDrawerOpen.value = false
+  emit('openAddWithCity', city)
+}
 
 // 视图模式：'celestial' (山川经纬星野) | 'tickets' (典藏票根印信架)
 const currentViewMode = ref<'celestial' | 'tickets'>('celestial')
@@ -73,6 +88,7 @@ const isAdmin = computed(() => Boolean(getAdminToken()))
 const loadAtlas = async () => {
   try {
     isLoading.value = true
+    loadError.value = ''
     const [atlasRes, footprintsRes] = await Promise.all([
       fetchFootprintsAtlas(),
       fetchFootprints(),
@@ -84,8 +100,9 @@ const loadAtlas = async () => {
     if (atlasRes.cities && atlasRes.cities.length > 0 && !focusedCityCode.value) {
       focusedCityCode.value = atlasRes.cities[0].city_code
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load footprints atlas:', err)
+    loadError.value = err?.message || '山河印迹加载失败，请检查服务连接'
   } finally {
     isLoading.value = false
   }
@@ -262,6 +279,93 @@ const timelineGroupedTickets = computed(() => {
   }))
 })
 
+// 到访频次三层视觉梯度 (单次淡墨、双次深青、三次以上朱砂红)
+const getCityAuraColor = (c: LitCityItem): string => {
+  if (c.visitCount >= 3) return '#b94a3b'
+  if (c.visitCount === 2) return 'var(--accent-moss)'
+  return 'var(--ink-secondary)'
+}
+
+const getCityCoreColor = (c: LitCityItem): string => {
+  if (c.visitCount >= 3) return '#b94a3b'
+  if (c.visitCount === 2) return 'var(--accent-moss)'
+  return 'var(--ink-primary)'
+}
+
+// 星野画布平移与无级缩放
+const zoomLevel = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const isDragging = ref(false)
+const dragStart = ref({ x: 0, y: 0 })
+
+const computedViewBox = computed(() => {
+  const baseW = 800
+  const baseH = 550
+  const w = baseW / zoomLevel.value
+  const h = baseH / zoomLevel.value
+  const centerX = 420 + panX.value
+  const centerY = 290 + panY.value
+  const minX = centerX - w / 2
+  const minY = centerY - h / 2
+  return `${minX} ${minY} ${w} ${h}`
+})
+
+const zoomIn = () => {
+  audio.playTink()
+  zoomLevel.value = Math.min(3.5, Number((zoomLevel.value + 0.3).toFixed(1)))
+}
+
+const zoomOut = () => {
+  audio.playTink()
+  zoomLevel.value = Math.max(0.8, Number((zoomLevel.value - 0.3).toFixed(1)))
+  if (zoomLevel.value <= 1) {
+    panX.value = 0
+    panY.value = 0
+  }
+}
+
+const resetZoom = () => {
+  audio.playTink()
+  zoomLevel.value = 1
+  panX.value = 0
+  panY.value = 0
+}
+
+const handleWheel = (e: WheelEvent) => {
+  if (e.ctrlKey || e.metaKey || zoomLevel.value > 1) {
+    e.preventDefault()
+    if (e.deltaY < 0) {
+      zoomLevel.value = Math.min(3.5, Number((zoomLevel.value + 0.15).toFixed(2)))
+    } else {
+      zoomLevel.value = Math.max(0.8, Number((zoomLevel.value - 0.15).toFixed(2)))
+      if (zoomLevel.value <= 1) {
+        panX.value = 0
+        panY.value = 0
+      }
+    }
+  }
+}
+
+const handleMouseDown = (e: MouseEvent) => {
+  if (zoomLevel.value <= 1) return
+  isDragging.value = true
+  dragStart.value = { x: e.clientX, y: e.clientY }
+}
+
+const handleMouseMove = (e: MouseEvent) => {
+  if (!isDragging.value) return
+  const dx = (e.clientX - dragStart.value.x) / zoomLevel.value
+  const dy = (e.clientY - dragStart.value.y) / zoomLevel.value
+  panX.value -= dx
+  panY.value -= dy
+  dragStart.value = { x: e.clientX, y: e.clientY }
+}
+
+const handleMouseUp = () => {
+  isDragging.value = false
+}
+
 // 切换视角
 const switchViewMode = (mode: 'celestial' | 'tickets') => {
   audio.playTink()
@@ -364,6 +468,20 @@ onMounted(() => {
       </div>
     </header>
 
+    <!-- 错误提示条 -->
+    <div
+      v-if="loadError"
+      class="p-4 border border-dashed border-rose-500/40 rounded-xs flex items-center justify-between gap-4 font-mono-archive text-xs"
+    >
+      <span class="text-rose-600 dark:text-rose-400">{{ loadError }}</span>
+      <button
+        @click="loadAtlas"
+        class="px-3 py-1 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer shrink-0"
+      >
+        重新加载
+      </button>
+    </div>
+
     <!-- 三联生活指标纸签 -->
     <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
@@ -428,9 +546,17 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="relative w-full aspect-[4/3] sm:aspect-[16/11] flex items-center justify-center">
+          <div
+            class="relative w-full aspect-[4/3] sm:aspect-[16/11] flex items-center justify-center overflow-hidden"
+            :class="{ 'cursor-grab': zoomLevel > 1 && !isDragging, 'cursor-grabbing': isDragging }"
+            @wheel="handleWheel"
+            @mousedown="handleMouseDown"
+            @mousemove="handleMouseMove"
+            @mouseup="handleMouseUp"
+            @mouseleave="handleMouseUp"
+          >
             <svg
-              viewBox="20 15 800 550"
+              :viewBox="computedViewBox"
               class="w-full h-full select-none"
             >
               <defs>
@@ -505,7 +631,7 @@ onMounted(() => {
                 />
               </g>
 
-              <!-- 5. 点亮城市的星芒节点 (真实点亮，不绘虚假航线与雷达圈) -->
+              <!-- 5. 点亮城市的星芒节点 (三层视觉梯度与触控热区倍增) -->
               <g>
                 <g
                   v-for="c in litCitiesList"
@@ -514,15 +640,22 @@ onMounted(() => {
                   @mouseenter="focusedCityCode = c.code"
                   @click="openCityDrawer(c.code, c.name)"
                 >
-                  <!-- 节点温润光晕 -->
+                  <!-- 触控感应透明扩展圈 (显著提升移动端命中率) -->
+                  <circle
+                    :cx="c.x"
+                    :cy="c.y"
+                    r="16"
+                    fill="transparent"
+                  />
+                  <!-- 节点温润光晕 (按到访频次三层视觉梯度) -->
                   <circle
                     :cx="c.x"
                     :cy="c.y"
                     :r="focusedCityCode === c.code ? 11 : 7.5"
                     fill="none"
-                    :stroke="c.code === '511800' || c.visitCount >= 3 ? '#b94a3b' : 'var(--ink-secondary)'"
+                    :stroke="getCityAuraColor(c)"
                     stroke-width="1.1"
-                    opacity="0.55"
+                    opacity="0.6"
                     filter="url(#focus-glow)"
                   />
                   <!-- 节点中心实心星芒 -->
@@ -530,16 +663,17 @@ onMounted(() => {
                     :cx="c.x"
                     :cy="c.y"
                     :r="focusedCityCode === c.code ? 4.8 : 3.5"
-                    :fill="c.code === '511800' || c.visitCount >= 3 ? '#b94a3b' : 'var(--ink-primary)'"
+                    :fill="getCityCoreColor(c)"
                   />
-                  <!-- 城市名称常驻注记 -->
+                  <!-- 城市名称常驻注记 (支持自适应显隐与避让) -->
                   <text
+                    v-if="zoomLevel > 1.2 || focusedCityCode === c.code || c.visitCount >= 2 || litCitiesList.length <= 15"
                     :x="c.x + 8"
                     :y="c.y + 4"
                     font-size="11"
                     font-family="serif"
                     fill="var(--ink-primary)"
-                    class="font-semibold transition-all"
+                    class="font-semibold transition-all pointer-events-none"
                     style="paint-order: stroke; stroke: var(--bg-archive); stroke-width: 3px; stroke-linejoin: round;"
                   >
                     {{ c.shortName }}
@@ -547,6 +681,33 @@ onMounted(() => {
                 </g>
               </g>
             </svg>
+
+            <!-- 星野画布无级缩放微操盘 -->
+            <div class="absolute bottom-3 right-3 flex items-center gap-1 p-1 bg-[var(--bg-archive)]/90 backdrop-blur-xs border border-[var(--border-subtle)] rounded-xs font-mono-archive text-xs shadow-xs z-10">
+              <button
+                @click="zoomIn"
+                class="w-6 h-6 flex items-center justify-center rounded-xs hover:bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
+                title="放大星图"
+              >
+                +
+              </button>
+              <span class="text-[10px] text-[var(--ink-muted)] px-1 select-none">{{ Math.round(zoomLevel * 100) }}%</span>
+              <button
+                @click="zoomOut"
+                class="w-6 h-6 flex items-center justify-center rounded-xs hover:bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
+                title="缩小星图"
+              >
+                -
+              </button>
+              <button
+                v-if="zoomLevel !== 1 || panX !== 0 || panY !== 0"
+                @click="resetZoom"
+                class="px-1.5 py-0.5 text-[10px] rounded-xs border border-[var(--border-subtle)] hover:bg-[var(--bg-subtle)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] ml-0.5 cursor-pointer"
+                title="重置星野视口"
+              >
+                复位
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1109,13 +1270,14 @@ onMounted(() => {
             @click="openCityDrawer(fp.city_code, fp.city_name)"
             class="bg-[var(--bg-subtle)]/40 hover:bg-[var(--bg-subtle)] border border-[var(--border-subtle)] p-4 rounded-xs transition-colors cursor-pointer space-y-2 group"
           >
-            <div class="flex items-center justify-between text-xs">
-              <div class="flex items-center gap-2 font-medium text-[var(--ink-primary)]">
-                <MapPin class="w-3.5 h-3.5 text-[#b94a3b]" />
+            <div class="flex items-center justify-between text-xs gap-2">
+              <div class="flex items-center gap-2 font-medium text-[var(--ink-primary)] truncate">
+                <MapPin class="w-3.5 h-3.5 text-[#b94a3b] shrink-0" />
                 <span class="font-serif-editorial">{{ fp.city_name }}</span>
+                <span v-if="fp.title" class="text-[var(--ink-secondary)] font-serif-editorial truncate">· {{ fp.title }}</span>
               </div>
-              <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                {{ fp.visited_at ? fp.visited_at.slice(0, 10) : '' }}
+              <span class="text-[11px] font-mono-archive text-[var(--ink-muted)] shrink-0">
+                {{ fp.visited_at ? fp.visited_at.slice(0, 10) : '' }}<template v-if="fp.departed_at && fp.departed_at.slice(0, 10) !== (fp.visited_at || '').slice(0, 10)"> ~ {{ fp.departed_at.slice(0, 10) }}</template>
               </span>
             </div>
 
@@ -1127,8 +1289,19 @@ onMounted(() => {
             </p>
 
             <div class="pt-2 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)]">
-              <span>查看城市相片、随笔与账单</span>
-              <ChevronRight class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <div class="flex items-center gap-2 font-mono-archive text-[10px]">
+                <span v-if="(fp.entries_count || 0) > 0" class="px-1.5 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-secondary)]">
+                  {{ fp.entries_count }} 篇游记手记
+                </span>
+                <span v-if="(fp.attachments?.length || 0) > 0" class="px-1.5 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-secondary)]">
+                  {{ fp.attachments?.length }} 张影像
+                </span>
+                <span v-if="isAdmin && (fp.total_spent || 0) > 0" class="px-1.5 py-0.5 rounded-xs border border-[var(--accent-warm)]/30 bg-[var(--accent-warm)]/5 text-[var(--accent-warm)]">
+                  旅途消费 ¥{{ (fp.total_spent! / 100).toFixed(2) }}
+                </span>
+                <span v-if="!(fp.entries_count || 0) && !(fp.total_spent || 0)">查看城市相片、随笔与账单</span>
+              </div>
+              <ChevronRight class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform shrink-0" />
             </div>
           </div>
         </div>
@@ -1139,7 +1312,9 @@ onMounted(() => {
     <AddFootprintModal
       :isOpen="isAddModalOpen"
       :storageConfigured="storageConfigured"
-      @close="isAddModalOpen = false"
+      :initialCityCode="addModalInitialCityCode"
+      :initialCityName="addModalInitialCityName"
+      @close="isAddModalOpen = false; addModalInitialCityCode = ''; addModalInitialCityName = ''"
       @saved="handleFootprintSaved"
     />
 
@@ -1152,6 +1327,8 @@ onMounted(() => {
       :cityName="selectedCityName"
       @close="isDrawerOpen = false"
       @selectEntry="emit('selectEntry', $event)"
+      @addFootprintInCity="handleAddFootprintInCity"
+      @addEntryInCity="handleAddEntryInCity"
     />
   </div>
 </template>

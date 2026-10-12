@@ -27,6 +27,10 @@ import type {
   AnnualAlmanacSummary,
   UpdateCheckResult,
   UpdateNotice,
+  GearItem,
+  CategoryOption,
+  CategoriesResponse,
+  CategoryScope,
 } from '../types'
 
 const API_BASE = '/api/v1'
@@ -52,8 +56,6 @@ export function removeAdminToken(): void {
   } catch {}
 }
 
-export const CLIENT_VERSION = '1.0.0'
-
 // 通用请求处理
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getAdminToken()
@@ -66,8 +68,6 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
-      'X-Client-Platform': 'web',
-      'X-Client-Version': CLIENT_VERSION,
       ...authHeaders,
       ...options?.headers,
     },
@@ -138,8 +138,6 @@ export async function fetchEntries(params?: {
   const token = getAdminToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'X-Client-Platform': 'web',
-    'X-Client-Version': CLIENT_VERSION,
   }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
@@ -203,6 +201,9 @@ export async function createLifeEntry(data: {
   city_code?: string
   city_name?: string
   project_id?: number | null
+  wish_id?: number | null
+  footprint_id?: number | null
+  featured?: boolean
   attachment_ids?: number[]
 }): Promise<LifeEntry> {
   const result = await request<LifeEntry>(`${API_BASE}/entries`, {
@@ -224,6 +225,9 @@ export async function updateLifeEntry(
     city_code?: string
     city_name?: string
     project_id?: number | null
+    wish_id?: number | null
+    footprint_id?: number | null
+    featured?: boolean
     attachment_ids?: number[]
   }
 ): Promise<LifeEntry> {
@@ -347,6 +351,8 @@ export async function createTransaction(data: {
   payment_method?: string
   occurred_at?: string
   wish_id?: number
+  footprint_id?: number | null
+  city_code?: string
   is_installment?: boolean
   installment_channel_code?: string
   installment_total_amount?: number
@@ -354,6 +360,9 @@ export async function createTransaction(data: {
   installment_monthly_pay?: number
   installment_remain_months?: number
   repayment_day?: number
+  link_gear_asset?: boolean
+  gear_category?: string
+  gear_spec?: string
 }): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions`, {
     method: 'POST',
@@ -367,13 +376,8 @@ export async function fetchWishes(params?: { kind?: string; status?: string }): 
   if (params?.kind) query.set('kind', params.kind)
   if (params?.status) query.set('status', params.status)
   const qs = query.toString()
-  try {
-    const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
-    return Array.isArray(res) ? res : (res?.wishes || [])
-  } catch (err) {
-    console.error('Failed to fetch wishes:', err)
-    return []
-  }
+  const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
+  return Array.isArray(res) ? res : (res?.wishes || [])
 }
 
 export async function createWish(data: {
@@ -393,7 +397,7 @@ export async function createWish(data: {
   })
 }
 
-export async function updateWish(id: number, data: Partial<Wish>): Promise<Wish> {
+export async function updateWish(id: number, data: Partial<Wish> & { attachment_ids?: number[] }): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -539,12 +543,7 @@ export async function pollPairingTicketStatus(ticket: string): Promise<PairStatu
 }
 
 export async function fetchTrustedDevices(): Promise<TrustedDevice[]> {
-  try {
-    return await request<TrustedDevice[]>(`${API_BASE}/auth/devices`)
-  } catch (err) {
-    console.error('Failed to fetch trusted devices:', err)
-    return []
-  }
+  return request<TrustedDevice[]>(`${API_BASE}/auth/devices`)
 }
 
 export async function revokeTrustedDevice(id: number): Promise<boolean> {
@@ -629,7 +628,7 @@ export async function verifyMasterPasscode(
   return res
 }
 
-// 12. 资产管理中枢与信贷渠道 (Assets & Credit Channels RC-53, FE-15, RG-20)
+// 12. 资产管理中枢、固定设备库与信贷渠道 (Assets, Gear & Credit Channels RC-53, FE-15, RG-20)
 export async function fetchAssetsOverview(): Promise<AssetsOverview> {
   return request<AssetsOverview>(`${API_BASE}/assets/overview`)
 }
@@ -643,13 +642,61 @@ export async function updateInitialLiquidBalance(
   })
 }
 
-export async function fetchCreditChannels(): Promise<CreditChannel[]> {
-  try {
-    return await request<CreditChannel[]>(`${API_BASE}/credit-channels`)
-  } catch (err) {
-    console.error('Failed to fetch credit channels:', err)
-    return []
+export async function addGearAsset(data: {
+  name: string
+  category: string
+  spec?: string
+  status?: string
+  price_cents?: number
+  purchase_date?: string
+  payment_method?: string
+  note?: string
+  sync_transaction?: boolean
+  create_transaction?: boolean
+  is_installment?: boolean
+  installment_channel_code?: string
+  installment_total_amount?: number
+  installment_months?: number
+  repayment_day?: number
+}): Promise<GearItem> {
+  return request<GearItem>(`${API_BASE}/assets/gear`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function sellGearAsset(
+  id: string,
+  data: {
+    sold_price_cents: number
+    sold_date?: string
+    payment_method?: string
+    sync_transaction?: boolean
+    note?: string
   }
+): Promise<GearItem> {
+  return request<GearItem>(
+    `${API_BASE}/assets/gear/${encodeURIComponent(id)}/sell`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  )
+}
+
+export async function deleteGearAsset(
+  id: string
+): Promise<{ id: string; deleted: boolean }> {
+  return request<{ id: string; deleted: boolean }>(
+    `${API_BASE}/assets/gear/${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE',
+    }
+  )
+}
+
+export async function fetchCreditChannels(): Promise<CreditChannel[]> {
+  return request<CreditChannel[]>(`${API_BASE}/credit-channels`)
 }
 
 export async function createCreditChannel(data: {
@@ -692,12 +739,7 @@ export async function fetchFootprints(params?: {
   if (params?.year) query.set('year', String(params.year))
   if (params?.since) query.set('since', params.since)
   const qs = query.toString()
-  try {
-    return await request<Footprint[]>(`${API_BASE}/footprints${qs ? '?' + qs : ''}`)
-  } catch (err) {
-    console.error('Failed to fetch footprints:', err)
-    return []
-  }
+  return request<Footprint[]>(`${API_BASE}/footprints${qs ? '?' + qs : ''}`)
 }
 
 export async function fetchFootprintsAtlas(): Promise<FootprintsAtlasResponse> {
@@ -716,6 +758,7 @@ export async function createFootprint(data: {
   city_code: string
   city_name: string
   visited_at: string
+  departed_at?: string
   title?: string
   note?: string
   life_entry_id?: number
@@ -733,7 +776,9 @@ export async function updateFootprint(
   data: Partial<{
     city_code: string
     city_name: string
+    title: string
     visited_at: string
+    departed_at: string
     note: string
     life_entry_id: number | null
     wish_id: number | null
@@ -875,6 +920,51 @@ export async function deleteUpdateNotice(id: number): Promise<boolean> {
     method: 'DELETE',
   })
   return true
+}
+
+// 16. 全局自定义分类字典 (Custom Categories CRUD)
+export async function fetchCategories(scope?: CategoryScope): Promise<CategoriesResponse> {
+  const qs = scope ? `?scope=${encodeURIComponent(scope)}` : ''
+  return request<CategoriesResponse>(`${API_BASE}/categories${qs}`)
+}
+
+export async function createCategoryOption(data: {
+  scope: CategoryScope
+  name: string
+  sort_order?: number
+}): Promise<CategoryOption> {
+  return request<CategoryOption>(`${API_BASE}/categories`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateCategoryOption(
+  id: number,
+  data: {
+    name?: string
+    sort_order?: number
+    rename_records?: boolean
+  }
+): Promise<CategoryOption> {
+  return request<CategoryOption>(`${API_BASE}/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteCategoryOption(id: number): Promise<boolean> {
+  await request(`${API_BASE}/categories/${id}`, {
+    method: 'DELETE',
+  })
+  return true
+}
+
+export async function resetCategoryOptions(scope?: CategoryScope): Promise<CategoriesResponse> {
+  return request<CategoriesResponse>(`${API_BASE}/categories/reset`, {
+    method: 'POST',
+    body: JSON.stringify({ scope: scope || '' }),
+  })
 }
 
 

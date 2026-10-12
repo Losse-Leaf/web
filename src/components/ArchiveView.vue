@@ -87,19 +87,19 @@ const yearEntries = computed(() => {
 
 const getTypeName = (type: string) => {
   const map: Record<string, string> = {
-    thought: '随想',
-    photo: '摄影',
-    coffee: '咖啡',
-    music: '听音',
-    book: '书摘',
-    place: '行迹',
+    life: '日常',
+    travel: '游历',
     project: '造物',
-    game: '游戏',
-    purchase: '好物',
-    gear: '装备',
+    wish: '心愿',
+    collection: '心愿',
+    thought: '日常',
+    photo: '日常',
     moment: '日常',
+    place: '游历',
+    purchase: '心愿',
+    gear: '心愿',
   }
-  return map[type] || type
+  return map[type] || '日常'
 }
 
 // 轻量统计
