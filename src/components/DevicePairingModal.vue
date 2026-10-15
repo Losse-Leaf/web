@@ -21,6 +21,7 @@ import {
   fetchTrustedDevices,
   revokeTrustedDevice,
   updateTrustedDeviceName,
+  fetchPairQRCode,
 } from '../utils/api'
 import { audio } from '../utils/audio'
 import { askConfirm } from '../composables/useConfirm'
@@ -43,6 +44,8 @@ const countdownSeconds = ref(300)
 const copied = ref(false)
 const ticketError = ref('')
 const pairingSuccess = ref(false)
+const selectedCandidateUrl = ref('')
+const isSwitchingNode = ref(false)
 let countdownTimer: number | null = null
 let pollTimer: number | null = null
 let initialDeviceCount = 0
@@ -128,6 +131,7 @@ const generateTicket = async () => {
       hub_url: window.location.origin,
     })
     currentTicket.value = res
+    selectedCandidateUrl.value = res.hub_url || ''
     startCountdown(res.expires_in_seconds || 300)
     startPairingPolling()
   } catch (err: any) {
@@ -136,6 +140,26 @@ const generateTicket = async () => {
     stopPairingPolling()
   } finally {
     isLoadingTicket.value = false
+  }
+}
+
+const handleSelectCandidate = async (candUrl: string) => {
+  if (!currentTicket.value || selectedCandidateUrl.value === candUrl) return
+  audio.playTink()
+  selectedCandidateUrl.value = candUrl
+  isSwitchingNode.value = true
+  try {
+    const res = await fetchPairQRCode(candUrl, currentTicket.value.ticket)
+    currentTicket.value = {
+      ...currentTicket.value,
+      hub_url: res.hub_url,
+      qr_payload: res.qr_payload,
+      qr_code_data_url: res.qr_code_data_url,
+    }
+  } catch (err) {
+    console.warn('Switching QR code endpoint failed:', err)
+  } finally {
+    isSwitchingNode.value = false
   }
 }
 
@@ -387,6 +411,32 @@ onUnmounted(() => {
                 <p>
                   <strong class="font-medium text-[var(--ink-primary)] font-mono-archive">macOS 桌面工作台</strong>：复制下方配对链接并在客户端设置中一键粘贴，系统将自动识别中枢地址并完成设备钤印。
                 </p>
+              </div>
+
+              <!-- 接入节点智能切换胶囊 -->
+              <div v-if="(currentTicket?.candidates || []).length > 1" class="space-y-1.5 pt-1">
+                <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
+                  <span>选择连接节点：</span>
+                  <span v-if="isSwitchingNode" class="text-[var(--accent-warm)]">正在更新二维码...</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 font-mono-archive text-[11px]">
+                  <button
+                    v-for="cand in currentTicket?.candidates"
+                    :key="cand.url"
+                    type="button"
+                    @click="handleSelectCandidate(cand.url)"
+                    class="px-2.5 py-1 rounded-xs border transition-colors cursor-pointer flex items-center gap-1"
+                    :class="
+                      selectedCandidateUrl === cand.url
+                        ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
+                        : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
+                    "
+                  >
+                    <span>{{ cand.type === 'tailscale' ? '📡' : (cand.type === 'lan' ? '📶' : '🌐') }}</span>
+                    <span>{{ cand.label }}</span>
+                    <span class="opacity-70 text-[10px]">({{ cand.ip }})</span>
+                  </button>
+                </div>
               </div>
 
               <div

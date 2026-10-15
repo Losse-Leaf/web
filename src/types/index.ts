@@ -230,6 +230,14 @@ export interface TrustedDevice {
   status: 'active' | 'revoked' | string
 }
 
+export interface NetworkCandidate {
+  type: 'tailscale' | 'lan' | 'origin' | string
+  label: string
+  ip: string
+  url: string
+  is_default?: boolean
+}
+
 export interface PairingTicketResult {
   ticket: string
   hub_url?: string
@@ -237,6 +245,7 @@ export interface PairingTicketResult {
   expires_in_seconds: number
   qr_payload: string
   qr_code_data_url?: string
+  candidates?: NetworkCandidate[]
 }
 
 export interface SystemStatus {
@@ -263,6 +272,7 @@ export interface BootstrapResult {
   qr_code_data_url?: string
   expires_at: string
   expires_in_seconds: number
+  candidates?: NetworkCandidate[]
 }
 
 export interface PairConfirmPayload {

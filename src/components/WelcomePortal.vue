@@ -34,6 +34,7 @@ import {
   getAdminToken,
   setAdminToken,
   removeAdminToken,
+  fetchPairQRCode,
 } from '../utils/api'
 import type { SystemStatus, BootstrapResult } from '../types'
 
@@ -83,6 +84,8 @@ const bootstrapError = ref('')
 const bootstrapTicket = ref<BootstrapResult | null>(null)
 const pairCountdown = ref(300)
 const pairCopied = ref(false)
+const selectedCandidateUrl = ref('')
+const isSwitchingNode = ref(false)
 let countdownTimer: number | null = null
 let pollTimer: number | null = null
 
@@ -201,6 +204,7 @@ const handleBootstrapStep1Submit = async () => {
     // 后端返回首台设备配对工单 (ticket / qr_payload)，进入 Step 2 等待首台设备绑定激活
     if (res.ticket) {
       bootstrapTicket.value = res
+      selectedCandidateUrl.value = res.hub_url || ''
       bootstrapStep.value = 2
       startBootstrapCountdown(res.expires_in_seconds || 300)
       startBootstrapStatusPolling(res.ticket)
@@ -209,6 +213,26 @@ const handleBootstrapStep1Submit = async () => {
     bootstrapError.value = err?.message || '发起首次装帧失败，请检查后端服务连接'
   } finally {
     isBootstrapping.value = false
+  }
+}
+
+const handleSelectCandidate = async (candUrl: string) => {
+  if (!bootstrapTicket.value || selectedCandidateUrl.value === candUrl) return
+  audio.playTink()
+  selectedCandidateUrl.value = candUrl
+  isSwitchingNode.value = true
+  try {
+    const res = await fetchPairQRCode(candUrl, bootstrapTicket.value.ticket)
+    bootstrapTicket.value = {
+      ...bootstrapTicket.value,
+      hub_url: res.hub_url,
+      qr_payload: res.qr_payload,
+      qr_code_data_url: res.qr_code_data_url,
+    }
+  } catch (err) {
+    console.warn('Switching bootstrap QR endpoint failed:', err)
+  } finally {
+    isSwitchingNode.value = false
   }
 }
 
@@ -654,6 +678,32 @@ onUnmounted(() => {
                     <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
                       请使用移动端扫描左侧纸墨二维码，或复制配对深链至 macOS 客户端一键完成设备钤印；接入后本页将自动激活并进入展厅。
                     </p>
+
+                    <!-- 接入节点智能切换胶囊 -->
+                    <div v-if="(bootstrapTicket?.candidates || []).length > 1" class="space-y-1.5 pt-1">
+                      <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
+                        <span>选择连接节点：</span>
+                        <span v-if="isSwitchingNode" class="text-[var(--accent-warm)]">正在更新二维码...</span>
+                      </div>
+                      <div class="flex flex-wrap gap-1.5 font-mono-archive text-[11px]">
+                        <button
+                          v-for="cand in bootstrapTicket?.candidates"
+                          :key="cand.url"
+                          type="button"
+                          @click="handleSelectCandidate(cand.url)"
+                          class="px-2.5 py-1 rounded-xs border transition-colors cursor-pointer flex items-center gap-1"
+                          :class="
+                            selectedCandidateUrl === cand.url
+                              ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
+                              : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
+                          "
+                        >
+                          <span>{{ cand.type === 'tailscale' ? '📡' : (cand.type === 'lan' ? '📶' : '🌐') }}</span>
+                          <span>{{ cand.label }}</span>
+                          <span class="opacity-70 text-[10px]">({{ cand.ip }})</span>
+                        </button>
+                      </div>
+                    </div>
 
                     <div
                       v-if="bootstrapTicket?.qr_payload"

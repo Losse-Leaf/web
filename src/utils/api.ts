@@ -662,6 +662,21 @@ export async function pollPairingTicketStatus(ticket: string): Promise<PairStatu
   return res
 }
 
+export async function fetchPairQRCode(hubUrl: string, ticket: string): Promise<{
+  hub_url: string
+  ticket: string
+  qr_payload: string
+  qr_code_data_url: string
+}> {
+  const query = new URLSearchParams({ hub: hubUrl, ticket })
+  return request<{
+    hub_url: string
+    ticket: string
+    qr_payload: string
+    qr_code_data_url: string
+  }>(`${API_BASE}/auth/pair/qr?${query.toString()}`)
+}
+
 export async function fetchTrustedDevices(): Promise<TrustedDevice[]> {
   return request<TrustedDevice[]>(`${API_BASE}/auth/devices`)
 }
