@@ -791,7 +791,7 @@ const handleSubmit = async () => {
     @click.self="handleClose"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl min-h-[480px] max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
       @paste="handleModalPaste"
     >
       <!-- 顶部轻量标头 -->

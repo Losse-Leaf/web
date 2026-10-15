@@ -312,18 +312,18 @@ const todayDisplay = computed(() => {
 const bootstrapGuides = [
   {
     num: '01',
-    title: '设定双重确认管理员密钥 (存入 SQLite)',
-    desc: '密钥经 SHA-256 哈希安全落库，彻底告别 .env 明文环境变量依赖。',
+    title: '设定主理人称谓与专属密钥',
+    desc: '铭刻您的称谓、常居城市与管理员密钥，守护私人账簿与生活手稿。',
   },
   {
     num: '02',
-    title: '自动上报当前域名/IP 生成散页风配对凭据',
-    desc: '由后端原生渲染 #181716 深暖墨黑与 #F9F8F5 哑光棉纸配对二维码。',
+    title: '生成首台设备配对印信',
+    desc: '生成专属纸墨二维码与配对链接，供随身手机或桌面端扫码接入。',
   },
   {
     num: '03',
-    title: '首台设备接入后自动激活系统并进入主站',
-    desc: '支持手机/桌面端扫码握手，或开发调试一键将当前浏览器作为首台设备激活。',
+    title: '首台设备授信后开启展厅',
+    desc: '支持移动端扫码、桌面端粘贴配对链接，或直接将当前浏览器设为首台受信任设备。',
   },
 ]
 
@@ -489,9 +489,9 @@ onUnmounted(() => {
 
           <!-- 右页：唯一首次装帧两步闭环向导 -->
           <div class="lg:col-span-6">
-            <div class="p-6 sm:p-8 rounded-xs border border-[var(--accent-warm)]/60 bg-[var(--bg-subtle)]/40 shadow-xl space-y-6 text-left">
+            <div class="p-6 sm:p-8 rounded-xs border border-[var(--accent-warm)]/60 bg-[var(--bg-subtle)]/40 shadow-xl space-y-6 text-left min-h-[430px] flex flex-col justify-between">
               <!-- 向导页眉 -->
-              <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4">
+              <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4 shrink-0">
                 <div class="flex items-center gap-2.5">
                   <PenTool class="w-4 h-4 text-[var(--accent-warm)]" />
                   <span class="font-serif-editorial text-lg sm:text-xl font-medium text-[var(--ink-primary)]">
@@ -504,9 +504,9 @@ onUnmounted(() => {
               </div>
 
               <!-- Step 1: 设定主理人档案与双重确认密钥 -->
-              <div v-if="bootstrapStep === 1" class="space-y-5">
+              <div v-if="bootstrapStep === 1" class="space-y-5 flex-1">
                 <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
-                  第一步：请铭刻主理人称谓并设定管理员密钥。密钥将经由 SHA-256 哈希加密存入本地 SQLite 数据库，随后进入首台设备配对激活。
+                  第一步：请填写主理人称谓并设定管理员密钥，随后进入首台设备授信激活。
                 </p>
 
                 <div class="space-y-4 font-mono-archive text-xs">
@@ -630,10 +630,8 @@ onUnmounted(() => {
                       </div>
                     </div>
 
-                    <div class="mt-2 flex items-center justify-between w-full text-[9px] font-mono-archive text-[var(--ink-muted)] tracking-widest px-0.5">
-                      <span>INK #181716</span>
-                      <span>·</span>
-                      <span>PAPER #F9F8F5</span>
+                    <div class="mt-2 flex items-center justify-center w-full text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider px-0.5">
+                      <span>扫码或复制链接接入</span>
                     </div>
                   </div>
 
@@ -683,12 +681,8 @@ onUnmounted(() => {
                   <span>{{ bootstrapError }}</span>
                 </div>
 
-                <!-- 开发阶段一键本机暗门 (RC-59) -->
+                <!-- 本机浏览器直连激活 -->
                 <div class="pt-3 border-t border-dashed border-[var(--border-divider)] space-y-2">
-                  <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
-                    <span>暂未安装移动端 / 桌面端？</span>
-                    <span>本机浏览器直连激活</span>
-                  </div>
                   <button
                     @click="handleQuickConfirmCurrentBrowser"
                     :disabled="isConfirmingWebDevice || pairCountdown <= 0"
@@ -698,8 +692,8 @@ onUnmounted(() => {
                     <span>
                       {{
                         isConfirmingWebDevice
-                          ? '正在将当前浏览器注册为首台授信设备...'
-                          : '开发调试 · 直接将当前浏览器作为首台设备完成装帧 →'
+                          ? '正在将当前浏览器设为首台设备...'
+                          : '在此浏览器直接完成装帧并进入展厅 →'
                       }}
                     </span>
                   </button>
@@ -886,7 +880,7 @@ onUnmounted(() => {
                   <input
                     v-model="passcode"
                     type="password"
-                    placeholder="输入管理员密钥 (默认: 123456)..."
+                    placeholder="请输入管理员密钥..."
                     @keydown.enter="handlePasscodeLogin"
                     class="flex-1 px-3.5 py-2.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                   />
@@ -897,16 +891,6 @@ onUnmounted(() => {
                   >
                     <span>{{ isLoggingIn ? '钤印核验中...' : '钤印进入' }}</span>
                     <ArrowRight class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div class="flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]">
-                  <span>本地测试默认管理员密钥为 123456</span>
-                  <button
-                    type="button"
-                    @click="passcode = '123456'; handlePasscodeLogin()"
-                    class="text-[var(--accent-warm)] hover:underline cursor-pointer"
-                  >
-                    一键填入 123456 登录 →
                   </button>
                 </div>
 

@@ -138,7 +138,7 @@ const handleRestoreDefaults = async () => {
     @click.self="closeCategoryManager"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl w-full max-w-2xl rounded-xs p-6 sm:p-8 text-left space-y-6 max-h-[88vh] flex flex-col"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl w-full max-w-2xl min-h-[500px] rounded-xs p-6 sm:p-8 text-left space-y-6 max-h-[88vh] flex flex-col"
     >
       <!-- 弹窗标头 -->
       <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)] shrink-0">

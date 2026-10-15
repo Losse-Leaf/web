@@ -262,7 +262,7 @@ onUnmounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
+      class="w-full max-w-xl min-h-[440px] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
     >
       <!-- 弹窗标题 -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
@@ -274,7 +274,7 @@ onUnmounted(() => {
             <ShieldCheck class="w-4 h-4 text-[var(--accent-moss)]" />
           </div>
           <p class="font-mono-archive text-xs text-[var(--ink-muted)]">
-            免密设备组授权与子钥匙管控中枢
+            多端设备授权与管理
           </p>
         </div>
         <button
@@ -369,23 +369,16 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="mt-2 flex items-center justify-between w-full text-[9px] font-mono-archive text-[var(--ink-muted)] tracking-widest px-0.5">
-                <span>前景 #181716</span>
-                <span>·</span>
-                <span>棉纸 #F9F8F5</span>
+              <div class="mt-2 text-[10px] font-mono-archive text-[var(--ink-muted)] text-center">
+                <span>纸墨二维码 · 5分钟内有效</span>
               </div>
             </div>
 
             <!-- 多端免密配对说明与中枢信息 -->
             <div class="flex-1 text-center sm:text-left space-y-3">
-              <div class="space-y-1">
-                <div class="text-[11px] font-mono-archive text-[var(--accent-warm)] tracking-widest uppercase">
-                  PAIRING CREDENTIAL · 授信配对
-                </div>
-                <h4 class="font-serif-editorial text-lg sm:text-xl font-medium text-[var(--ink-primary)]">
-                  扫码连接 或 复制配对链接
-                </h4>
-              </div>
+              <h4 class="font-serif-editorial text-lg sm:text-xl font-medium text-[var(--ink-primary)]">
+                扫码连接 或 复制配对链接
+              </h4>
 
               <div class="space-y-2 text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed">
                 <p>
@@ -423,7 +416,7 @@ onUnmounted(() => {
 
         <!-- 刷新工单按钮 -->
         <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-          <span class="text-[11px]">配对成功后下发高熵子钥匙，存入终端 Keychain / KeyStore。</span>
+          <span class="text-[11px]">新设备扫码后自动完成授权，无需输入密码。</span>
           <button
             @click="generateTicket"
             class="flex items-center gap-1 hover:text-[var(--ink-primary)] cursor-pointer text-xs"
@@ -526,7 +519,7 @@ onUnmounted(() => {
 
       <!-- 底部底款 -->
       <div class="pt-3 border-t border-[var(--border-subtle)] text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
-        <span>每台受信任设备均持有独立高熵子钥匙，可随时单点吊销</span>
+        <span>每台设备均持有独立授权凭据，可随时单独解除</span>
         <button
           @click="emit('close')"
           class="hover:text-[var(--ink-primary)] cursor-pointer hover-underline"

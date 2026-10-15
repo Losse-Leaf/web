@@ -6,7 +6,6 @@ import {
   FileJson,
   FileText,
   FileSpreadsheet,
-  ShieldCheck,
   Check,
   Archive,
   RotateCcw,
@@ -14,21 +13,15 @@ import {
   RefreshCw,
   Cloud,
   HardDrive,
-  Clock,
   Loader2,
   AlertTriangle,
-  Server,
   CheckCircle2,
   Eye,
   EyeOff,
   Save,
   Plug,
   Trash2,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp,
   FolderArchive,
-  Sparkles,
 } from 'lucide-vue-next'
 import type { LifeEntry, Transaction, Project, BackupItem, StorageStatus, StorageConfigPayload } from '../types'
 import { useExport } from '../composables/useExport'
@@ -371,7 +364,6 @@ const handleRestoreUpload = async () => {
 // 3. 对象存储配置交互
 const storageProviderType = ref<'r2' | 's3'>('r2')
 const showSecretKey = ref(false)
-const showR2Guide = ref(false)
 const isTestingStorage = ref(false)
 const isSavingStorage = ref(false)
 const isResettingStorage = ref(false)
@@ -418,20 +410,6 @@ const presignExpireOptions: PaperSelectOption[] = [
   { value: 86400, label: '24 小时', sublabel: '全天时效', badge: '1d' },
   { value: 604800, label: '7 天', sublabel: '最长上限', badge: '7d' },
 ]
-
-// S3 服务商预设模版快捷填入
-const applyS3Preset = (preset: 'minio' | 'cos' | 'oss' | 'aws') => {
-  audio.playTink()
-  if (preset === 'minio') {
-    storageForm.value.endpoint = 'http://localhost:9000'
-  } else if (preset === 'cos') {
-    storageForm.value.endpoint = 'https://cos.ap-guangzhou.myqcloud.com'
-  } else if (preset === 'oss') {
-    storageForm.value.endpoint = 'https://oss-cn-hangzhou.aliyuncs.com'
-  } else if (preset === 'aws') {
-    storageForm.value.endpoint = 'https://s3.ap-northeast-1.amazonaws.com'
-  }
-}
 
 const syncFormWithStatus = (status: StorageStatus | null) => {
   if (!status) return
@@ -618,7 +596,7 @@ onMounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-3xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-5 sm:p-7 text-left space-y-6 max-h-[92dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
+      class="w-full max-w-3xl min-h-[480px] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-5 sm:p-7 text-left space-y-5 max-h-[92dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
     >
       <!-- 弹窗顶栏 -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
@@ -724,84 +702,20 @@ onMounted(() => {
       <!-- ========================================== -->
       <!-- 选项卡 1：全量 ZIP 快照与灾备 -->
       <!-- ========================================== -->
-      <div v-if="activeTab === 'backup'" class="space-y-6">
-        <!-- 3 大状态策略指标卡 -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <!-- 卡片 1：定时计划 -->
-          <div class="p-3.5 bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] rounded-xs space-y-1.5 transition-all">
-            <div class="flex items-center justify-between text-[var(--ink-muted)] text-xs">
-              <span class="flex items-center gap-1.5">
-                <Clock class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-                <span>定时备份计划</span>
+      <div v-if="activeTab === 'backup'" class="space-y-5">
+        <!-- 策略状态简报与操作条 -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 bg-[var(--bg-subtle)]/50 border border-[var(--border-subtle)] rounded-xs">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+                全量数据快照归档
               </span>
-              <span class="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono-archive">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>运行中</span>
-              </span>
-            </div>
-            <div class="text-[var(--ink-primary)] font-serif-editorial text-base font-medium">
-              每日 03:30 (北京时间)
-            </div>
-            <div class="text-[11px] text-[var(--ink-muted)]">
-              后台原子快照 · 零停机热打包
-            </div>
-          </div>
-
-          <!-- 卡片 2：存储目的地 -->
-          <div class="p-3.5 bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] rounded-xs space-y-1.5 transition-all">
-            <div class="flex items-center justify-between text-[var(--ink-muted)] text-xs">
-              <span class="flex items-center gap-1.5">
-                <component
-                  :is="localStorageStatus?.configured ? Cloud : HardDrive"
-                  class="w-3.5 h-3.5"
-                  :class="localStorageStatus?.configured ? 'text-blue-600' : 'text-[var(--accent-warm)]'"
-                />
-                <span>灾备目的地</span>
-              </span>
-              <span
-                class="px-1.5 py-0.2 rounded-xs text-[10px] font-mono-archive"
-                :class="localStorageStatus?.configured ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'bg-[var(--bg-subtle)] text-[var(--ink-muted)]'"
-              >
-                {{ localStorageStatus?.configured ? '云端多活' : '本地留存' }}
-              </span>
-            </div>
-            <div class="text-[var(--ink-primary)] font-serif-editorial text-base font-medium truncate">
-              {{ localStorageStatus?.configured ? 'Cloudflare R2' : '本地磁盘存储' }}
-            </div>
-            <div class="text-[11px] text-[var(--ink-muted)] truncate font-mono-archive">
-              {{ localStorageStatus?.configured ? (localStorageStatus.bucket || '已挂载云存储桶') : 'data/backups/ 目录' }}
-            </div>
-          </div>
-
-          <!-- 卡片 3：保留配额与总容量 -->
-          <div class="p-3.5 bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] rounded-xs space-y-1.5 transition-all">
-            <div class="flex items-center justify-between text-[var(--ink-muted)] text-xs">
-              <span class="flex items-center gap-1.5">
-                <ShieldCheck class="w-3.5 h-3.5 text-[var(--accent-moss)]" />
-                <span>滑动保留配额</span>
-              </span>
-              <span class="text-[10px] text-[var(--ink-muted)] font-mono-archive">
+              <span class="px-1.5 py-0.2 rounded-xs text-[10px] font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[var(--ink-muted)]">
                 {{ backups.length }}/7 份
               </span>
             </div>
-            <div class="text-[var(--ink-primary)] font-serif-editorial text-base font-medium">
-              最多保留 7 份
-            </div>
-            <div class="text-[11px] text-[var(--ink-muted)] font-mono-archive">
-              累计占用 {{ formatBytes(totalBackupBytes) }} · 滚动淘汰
-            </div>
-          </div>
-        </div>
-
-        <!-- 立即生成快照操作条 -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 bg-[var(--bg-subtle)]/40 border border-[var(--border-subtle)] rounded-xs">
-          <div class="space-y-0.5">
-            <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)] flex items-center gap-1.5">
-              <Sparkles class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-              <span>即时全量快照归档</span>
-            </div>
-            <p class="text-xs text-[var(--ink-muted)] leading-relaxed">
-              基于 SQLite VACUUM INTO 原子快照，打包全量生活档案、日常账目及媒体底片为独立 .zip 归档。
+            <p class="text-xs text-[var(--ink-muted)] leading-relaxed font-serif-editorial">
+              每日 03:30 自动备份 · 累计占用 {{ formatBytes(totalBackupBytes) }} · 目的地：{{ localStorageStatus?.configured ? 'Cloudflare R2' : '本地存储' }}
             </p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
@@ -821,7 +735,7 @@ onMounted(() => {
             >
               <Loader2 v-if="isCreatingBackup" class="w-3.5 h-3.5 animate-spin" />
               <Archive v-else class="w-3.5 h-3.5" />
-              <span>{{ isCreatingBackup ? '正在原子打包...' : '立即生成快照' }}</span>
+              <span>{{ isCreatingBackup ? '正在生成...' : '立即生成快照' }}</span>
             </button>
           </div>
         </div>
@@ -857,13 +771,13 @@ onMounted(() => {
           </div>
 
           <!-- 快照条目列表 -->
-          <div v-else class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+          <div v-else class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
             <div
               v-for="item in backups"
               :key="item.filename"
-              class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+              class="p-3 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
             >
-              <div class="space-y-1.5 min-w-0 flex-1">
+              <div class="space-y-1 min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-mono-archive text-xs font-medium text-[var(--ink-primary)] truncate" :title="item.filename">
                     {{ item.filename }}
@@ -929,15 +843,15 @@ onMounted(() => {
         </div>
 
         <!-- 本地上传并整库还原 (Dropzone) -->
-        <div class="pt-4 border-t border-[var(--border-subtle)] space-y-3">
-          <div class="space-y-0.5">
-            <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)] flex items-center gap-1.5">
-              <Upload class="w-4 h-4 text-[var(--accent-warm)]" />
+        <div class="pt-3 border-t border-[var(--border-subtle)] space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-serif-editorial">
+            <span class="text-[var(--ink-primary)] font-medium flex items-center gap-1.5">
+              <Upload class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
               <span>从本地 ZIP 压缩包还原</span>
-            </div>
-            <p class="text-xs text-[var(--ink-muted)] font-serif-editorial">
-              支持上传散页导出的 .zip 完整快照一键覆盖恢复。执行前系统将自动生成前置应急快照，保障数据绝对安全。
-            </p>
+            </span>
+            <span class="text-[11px] text-[var(--ink-muted)]">
+              上传先前导出的 .zip 快照覆盖恢复
+            </span>
           </div>
 
           <input
@@ -953,27 +867,22 @@ onMounted(() => {
             @dragover.prevent="isDragging = true"
             @dragleave.prevent="isDragging = false"
             @drop.prevent="onFileDrop"
-            class="p-4 border rounded-xs transition-all"
+            class="p-3.5 border rounded-xs transition-all"
             :class="[
               isDragging ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30',
             ]"
           >
             <!-- 尚未选择文件状态 -->
             <div v-if="!selectedFile" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div class="space-y-1">
-                <div class="font-serif-editorial text-xs text-[var(--ink-primary)] font-medium">
-                  拖拽 .zip 备份文件至此，或通过系统文件选择器导入
-                </div>
-                <div class="text-[11px] text-[var(--ink-muted)] font-serif-editorial">
-                  包含 database/looseleaf.db 与媒体附件的完整压缩包
-                </div>
+              <div class="text-[11px] text-[var(--ink-muted)] font-serif-editorial">
+                拖拽 .zip 备份文件至此，或点击右侧按钮选择文件
               </div>
               <button
                 @click="fileInputRef?.click()"
                 type="button"
-                class="px-3.5 py-1.5 text-xs font-serif-editorial border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center gap-1.5 bg-[var(--bg-archive)] text-[var(--ink-primary)] shrink-0 transition-colors self-start sm:self-auto"
+                class="px-3 py-1 text-xs font-serif-editorial border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center gap-1.5 bg-[var(--bg-archive)] text-[var(--ink-primary)] shrink-0 transition-colors self-start sm:self-auto"
               >
-                <Upload class="w-3.5 h-3.5" />
+                <Upload class="w-3 h-3" />
                 <span>选择 ZIP 文件</span>
               </button>
             </div>
@@ -1030,316 +939,179 @@ onMounted(() => {
       <!-- ========================================== -->
       <!-- 选项卡 2：对象存储设置 -->
       <!-- ========================================== -->
-      <div v-else-if="activeTab === 'storage'" class="space-y-6">
-        <!-- 运行模式现状看板 -->
-        <div class="p-4 bg-[var(--bg-subtle)]/70 rounded-xs border border-[var(--border-subtle)] space-y-3 font-serif-editorial">
-          <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]/60 text-xs">
-            <span class="text-[var(--ink-muted)]">存储架构模式</span>
-            <div class="flex items-center gap-1.5">
-              <span
-                v-if="localStorageStatus?.configured"
-                class="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-medium"
-              >
-                <CheckCircle2 class="w-3.5 h-3.5" />
-                <span>{{ localStorageStatus?.provider || 'Cloudflare R2' }} (已挂载联动)</span>
-              </span>
-              <span
-                v-else
-                class="text-[var(--ink-secondary)] flex items-center gap-1 font-medium"
-              >
-                <HardDrive class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-                <span>本地磁盘自主存储模式 (/media)</span>
-              </span>
-            </div>
+      <div v-else-if="activeTab === 'storage'" class="space-y-4">
+        <!-- 存储状态概要条 -->
+        <div class="p-3.5 bg-[var(--bg-subtle)]/50 rounded-xs border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-serif-editorial">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-[var(--ink-muted)]">当前存储：</span>
+            <span
+              v-if="localStorageStatus?.configured"
+              class="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-medium"
+            >
+              <CheckCircle2 class="w-3.5 h-3.5" />
+              <span>{{ localStorageStatus?.provider || 'Cloudflare R2' }} (已挂载)</span>
+            </span>
+            <span
+              v-else
+              class="text-[var(--ink-secondary)] flex items-center gap-1 font-medium"
+            >
+              <HardDrive class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+              <span>本地磁盘存储 (/media)</span>
+            </span>
+            <span class="text-[var(--ink-muted)]">·</span>
+            <span class="text-[var(--ink-muted)] font-mono-archive">
+              媒体文件 {{ localStorageStatus?.local_file_count || 0 }} 件 ({{ formatBytes(localStorageStatus?.local_total_bytes || 0) }})
+            </span>
           </div>
 
-          <!-- 4 维指标网格 -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-serif-editorial">
-            <div class="p-2.5 bg-[var(--bg-archive)] rounded-xs border border-[var(--border-subtle)]/60 space-y-1">
-              <span class="text-[11px] text-[var(--ink-muted)] block">存储桶 (Bucket)</span>
-              <span class="text-[var(--ink-primary)] font-mono-archive text-xs font-medium block truncate">
-                {{ localStorageStatus?.configured ? (localStorageStatus.bucket || '—') : '本地 data/uploads' }}
-              </span>
-            </div>
-
-            <div class="p-2.5 bg-[var(--bg-archive)] rounded-xs border border-[var(--border-subtle)]/60 space-y-1">
-              <span class="text-[11px] text-[var(--ink-muted)] block">访问接入端点</span>
-              <span class="text-[var(--ink-primary)] font-mono-archive text-xs font-medium block truncate">
-                {{ localStorageStatus?.configured ? (localStorageStatus.endpoint || '—') : '/media' }}
-              </span>
-            </div>
-
-            <div class="p-2.5 bg-[var(--bg-archive)] rounded-xs border border-[var(--border-subtle)]/60 space-y-1">
-              <span class="text-[11px] text-[var(--ink-muted)] block">公网加速域名</span>
-              <span class="text-[var(--ink-primary)] font-mono-archive text-xs font-medium block truncate">
-                {{ localStorageStatus?.configured ? (localStorageStatus.public_domain || '临时签名直传') : '本地同源静态' }}
-              </span>
-            </div>
-
-            <div class="p-2.5 bg-[var(--bg-archive)] rounded-xs border border-[var(--border-subtle)]/60 space-y-1">
-              <span class="text-[11px] text-[var(--ink-muted)] block">本地已有媒体</span>
-              <span class="text-[var(--ink-primary)] font-mono-archive text-xs font-medium block truncate">
-                {{ localStorageStatus?.local_file_count || 0 }} 件 · {{ formatBytes(localStorageStatus?.local_total_bytes || 0) }}
-              </span>
-            </div>
-          </div>
-
-          <p class="text-xs text-[var(--ink-muted)] leading-relaxed pt-1">
-            {{
-              localStorageStatus?.configured
-                ? '系统已与对象存储建立直传通道，新上传的底片与附件直传云端，全量快照每日自动推送至该桶。'
-                : '当前运行于服务端本地磁盘存储模式，照片与底片安全持久化于本机，无需依赖外部云厂商，完全保障私密数据主权。'
-            }}
-          </p>
-
-          <!-- 双向同步本地与云端媒体 -->
-          <div
-            v-if="localStorageStatus?.configured"
-            class="pt-2.5 border-t border-[var(--border-subtle)]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
-          >
-            <div class="space-y-0.5">
-              <div class="text-[var(--ink-primary)] font-medium">本地与云端媒体对齐</div>
-              <div v-if="mediaSyncResult" class="text-[11px] font-mono-archive text-emerald-700 dark:text-emerald-400">
-                已上传 {{ mediaSyncResult.uploaded_to_r2 ?? 0 }} 项至云端，已拉取 {{ mediaSyncResult.downloaded_to_local ?? 0 }} 项至本地
-              </div>
-              <div v-else class="text-[11px] text-[var(--ink-muted)]">
-                将历史本地残留附件补传至 R2，或将云端缺失附件拉取回本地缓存
-              </div>
-            </div>
+          <div v-if="localStorageStatus?.configured" class="flex items-center gap-2">
+            <span v-if="mediaSyncResult" class="text-[11px] font-mono-archive text-emerald-700 dark:text-emerald-400">
+              已同步：上传 {{ mediaSyncResult.uploaded_to_r2 ?? 0 }} / 拉取 {{ mediaSyncResult.downloaded_to_local ?? 0 }}
+            </span>
             <button
               type="button"
               @click="handleMigrateStorageMedia"
               :disabled="isMigratingMedia"
-              class="px-3.5 py-1.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] text-[var(--ink-primary)] rounded-xs text-xs font-serif-editorial transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 self-start sm:self-auto disabled:opacity-50"
+              class="px-2.5 py-1 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] text-[var(--ink-primary)] rounded-xs text-xs transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
             >
-              <RefreshCw class="w-3.5 h-3.5 text-[var(--accent-warm)]" :class="{ 'animate-spin': isMigratingMedia }" />
-              <span>{{ isMigratingMedia ? '正在双向同步媒体...' : '双向同步本地与云端媒体' }}</span>
+              <RefreshCw class="w-3 h-3 text-[var(--accent-warm)]" :class="{ 'animate-spin': isMigratingMedia }" />
+              <span>{{ isMigratingMedia ? '同步中...' : '双向同步媒体' }}</span>
             </button>
           </div>
         </div>
 
-        <!-- 在线配置控制台 -->
-        <div class="p-5 bg-[var(--bg-subtle)]/40 rounded-xs border border-[var(--border-subtle)] space-y-5">
-          <div class="flex items-center justify-between">
-            <div class="space-y-0.5">
-              <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                对象存储接入凭据
-              </div>
-              <div class="text-xs text-[var(--ink-muted)] font-serif-editorial">
-                支持 Cloudflare R2 及兼容 S3 协议存储。保存后即刻热重载生效，无需重启服务。
-              </div>
+        <!-- 存储配置表单 -->
+        <div class="p-4 sm:p-5 bg-[var(--bg-subtle)]/40 rounded-xs border border-[var(--border-subtle)] space-y-4">
+          <div class="flex items-center justify-between pb-1">
+            <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+              对象存储接入凭据
+            </span>
+            <!-- 模式切换 -->
+            <div class="flex items-center gap-1 p-0.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-serif-editorial">
+              <button
+                type="button"
+                @click="storageProviderType = 'r2'"
+                class="py-1 px-2.5 rounded-xs transition-all cursor-pointer font-medium"
+                :class="storageProviderType === 'r2' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
+              >
+                Cloudflare R2
+              </button>
+              <button
+                type="button"
+                @click="storageProviderType = 's3'"
+                class="py-1 px-2.5 rounded-xs transition-all cursor-pointer font-medium"
+                :class="storageProviderType === 's3' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
+              >
+                S3 兼容协议
+              </button>
             </div>
-
-            <!-- Cloudflare R2 指南折叠按钮 -->
-            <button
-              type="button"
-              @click="showR2Guide = !showR2Guide"
-              class="text-xs font-serif-editorial text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] flex items-center gap-1 cursor-pointer"
-            >
-              <HelpCircle class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-              <span>获取指南</span>
-              <component :is="showR2Guide ? ChevronUp : ChevronDown" class="w-3 h-3" />
-            </button>
           </div>
 
-          <!-- R2 配置简明指引展开卡片 -->
-          <div
-            v-if="showR2Guide"
-            class="p-3.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-serif-editorial text-[var(--ink-secondary)] space-y-1.5 leading-relaxed"
-          >
-            <div class="font-medium text-[var(--ink-primary)]">3 步快速获取 Cloudflare R2 凭据：</div>
-            <ol class="list-decimal list-inside space-y-1 text-[var(--ink-secondary)] pl-1">
-              <li>登录 Cloudflare 仪表盘，进入左侧「R2 对象存储」控制台；</li>
-              <li>在右侧「账户详细信息」中复制 32 位「账户 ID (Account ID)」，并创建一个存储桶（例如 loose-leaf）；</li>
-              <li>点击「管理 R2 API 令牌」->「创建 API 令牌」，权限选择「对象读写」，获取 Access Key ID 与 Secret Access Key。</li>
-            </ol>
-          </div>
-
-          <!-- 提供商协议切换 -->
-          <div class="flex items-center gap-2 p-1 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-xs font-serif-editorial">
-            <button
-              type="button"
-              @click="storageProviderType = 'r2'"
-              class="flex-1 py-1.5 px-3 rounded-xs transition-all text-center cursor-pointer font-medium"
-              :class="
-                storageProviderType === 'r2'
-                  ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] shadow-xs'
-                  : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-              "
-            >
-              Cloudflare R2 (推荐 · 零出口流量费)
-            </button>
-            <button
-              type="button"
-              @click="storageProviderType = 's3'"
-              class="flex-1 py-1.5 px-3 rounded-xs transition-all text-center cursor-pointer font-medium"
-              :class="
-                storageProviderType === 's3'
-                  ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] shadow-xs'
-                  : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
-              "
-            >
-              自定义 S3 兼容协议 (MinIO / COS / OSS / AWS)
-            </button>
-          </div>
-
-          <!-- 自定义 S3 常用快捷填充模板 -->
-          <div v-if="storageProviderType === 's3'" class="flex items-center gap-1.5 flex-wrap text-xs font-serif-editorial">
-            <span class="text-[var(--ink-muted)] text-[11px]">快捷填入预设模板：</span>
-            <button
-              type="button"
-              @click="applyS3Preset('minio')"
-              class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] cursor-pointer"
-            >
-              MinIO 本地自建
-            </button>
-            <button
-              type="button"
-              @click="applyS3Preset('cos')"
-              class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] cursor-pointer"
-            >
-              腾讯云 COS
-            </button>
-            <button
-              type="button"
-              @click="applyS3Preset('oss')"
-              class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] cursor-pointer"
-            >
-              阿里云 OSS
-            </button>
-            <button
-              type="button"
-              @click="applyS3Preset('aws')"
-              class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] cursor-pointer"
-            >
-              AWS S3
-            </button>
-          </div>
-
-          <!-- 表单网格 (2列响应式布局) -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 font-serif-editorial">
-            <!-- Col 1: Cloudflare Account ID / S3 Endpoint -->
+          <!-- 表单网格 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 font-serif-editorial">
+            <!-- Col 1: Account ID / Endpoint -->
             <div v-if="storageProviderType === 'r2'">
-              <label class="block text-xs font-medium text-[var(--ink-secondary)] mb-1">
+              <label class="block text-xs text-[var(--ink-secondary)] mb-1">
                 Cloudflare 账户 ID (Account ID) <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.account_id"
                 type="text"
-                placeholder="例如 0123456789abcdef0123456789abcdef"
-                class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)] transition-colors"
+                placeholder="Cloudflare 控制台中的 32 位账户 ID"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
-              <p class="text-[11px] text-[var(--ink-muted)] mt-1 truncate font-mono-archive">
-                端点: https://{{ storageForm.account_id || '<账户ID>' }}.r2.cloudflarestorage.com
-              </p>
             </div>
-
             <div v-else>
-              <label class="block text-xs font-medium text-[var(--ink-secondary)] mb-1">
+              <label class="block text-xs text-[var(--ink-secondary)] mb-1">
                 S3 服务端点 (Endpoint) <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.endpoint"
                 type="text"
                 placeholder="例如 https://s3.ap-northeast-1.amazonaws.com"
-                class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)] transition-colors"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
-              <p class="text-[11px] text-[var(--ink-muted)] mt-1">
-                兼容 S3 协议端点（需包含 http:// 或 https:// 协议头）
-              </p>
             </div>
 
             <!-- Col 2: 存储桶名称 -->
             <div>
-              <label class="block text-xs font-medium text-[var(--ink-secondary)] mb-1">
+              <label class="block text-xs text-[var(--ink-secondary)] mb-1">
                 存储桶名称 (Bucket Name) <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.bucket_name"
                 type="text"
                 placeholder="例如 loose-leaf"
-                class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)] transition-colors"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
-              <p class="text-[11px] text-[var(--ink-muted)] mt-1">
-                存储桶名称需全局唯一且符合 S3 命名规范
-              </p>
             </div>
 
-            <!-- Col 3: 访问密钥 ID -->
+            <!-- Col 3: Access Key ID -->
             <div>
-              <label class="block text-xs font-medium text-[var(--ink-secondary)] mb-1">
+              <label class="block text-xs text-[var(--ink-secondary)] mb-1">
                 访问密钥 ID (Access Key ID) <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.access_key_id"
                 type="text"
-                placeholder="例如 0123456789abcdef..."
-                class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)] transition-colors"
+                placeholder="Access Key ID"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
             </div>
 
-            <!-- Col 4: 私有访问密钥 (带显隐与已存储安全提示) -->
+            <!-- Col 4: Secret Access Key -->
             <div>
               <div class="flex items-center justify-between mb-1">
-                <label class="text-xs font-medium text-[var(--ink-secondary)]">
+                <label class="text-xs text-[var(--ink-secondary)]">
                   私有访问密钥 (Secret Access Key)
                   <span v-if="!localStorageStatus?.has_secret_key" class="text-rose-600">*</span>
                 </label>
                 <span v-if="localStorageStatus?.has_secret_key" class="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono-archive">
-                  已安全存储
+                  已保存
                 </span>
               </div>
               <div class="relative">
                 <input
                   v-model="storageForm.secret_access_key"
                   :type="showSecretKey ? 'text' : 'password'"
-                  :placeholder="localStorageStatus?.has_secret_key ? '已安全存储 (留空表示沿用现有密钥)' : '请输入 Secret Access Key'"
-                  class="w-full px-3 py-2 pr-9 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)] transition-colors"
+                  :placeholder="localStorageStatus?.has_secret_key ? '已保存 (留空保持不变)' : 'Secret Access Key'"
+                  class="w-full px-3 py-1.5 pr-8 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
                 />
                 <button
                   type="button"
                   @click="showSecretKey = !showSecretKey"
-                  class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
                   tabindex="-1"
                 >
                   <EyeOff v-if="showSecretKey" class="w-3.5 h-3.5" />
                   <Eye v-else class="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p class="text-[11px] text-[var(--ink-muted)] mt-1">
-                密钥仅在服务端安全落盘，API 响应绝不回传明文
-              </p>
             </div>
 
-            <!-- Col 5: 公网域名 / 自定义 CDN -->
+            <!-- Col 5: 公网域名 -->
             <div>
-              <label class="block text-xs font-medium text-[var(--ink-secondary)] mb-1">
-                公网加速域名 / 自定义 CDN (选填)
+              <label class="block text-xs text-[var(--ink-secondary)] mb-1">
+                公网加速域名 (选填)
               </label>
               <input
                 v-model="storageForm.public_domain"
                 type="text"
                 placeholder="例如 https://media.example.com"
-                class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)] transition-colors"
+                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
-              <p class="text-[11px] text-[var(--ink-muted)] mt-1">
-                若存储桶绑定了自定义域名或开启了公开直链，填入后直链消费；留空则使用临时签名
-              </p>
             </div>
 
-            <!-- Col 6: 预签名凭证有效期 -->
+            <!-- Col 6: 有效期 -->
             <div>
-              <label class="block text-xs font-medium text-[var(--ink-secondary)] mb-1">
-                临时预签名访问有效期
+              <label class="block text-xs text-[var(--ink-secondary)] mb-1">
+                临时链接有效期
               </label>
               <PaperSelect
                 v-model="storageForm.presign_expire_seconds"
                 :options="presignExpireOptions"
                 font="serif"
               />
-              <p class="text-[11px] text-[var(--ink-muted)] mt-1">
-                各端访问私有多媒体时动态生成的临时访问凭证时效
-              </p>
             </div>
           </div>
 
@@ -1371,11 +1143,11 @@ onMounted(() => {
                 type="button"
                 @click="handleResetStorage"
                 :disabled="isResettingStorage || isSavingStorage || isTestingStorage"
-                class="px-3.5 py-2 border border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 rounded-xs text-xs font-serif-editorial transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                class="px-3 py-1.5 border border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 rounded-xs text-xs font-serif-editorial transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
                 <RotateCcw v-if="!isResettingStorage" class="w-3.5 h-3.5" />
                 <Loader2 v-else class="w-3.5 h-3.5 animate-spin" />
-                <span>恢复为本地磁盘存储</span>
+                <span>恢复为本地存储</span>
               </button>
             </div>
 
@@ -1384,7 +1156,7 @@ onMounted(() => {
                 type="button"
                 @click="handleTestStorage"
                 :disabled="isTestingStorage || isSavingStorage || isResettingStorage"
-                class="px-4 py-2 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-primary)] rounded-xs text-xs font-serif-editorial transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                class="px-3.5 py-1.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-primary)] rounded-xs text-xs font-serif-editorial transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Plug v-if="!isTestingStorage" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
                 <Loader2 v-else class="w-3.5 h-3.5 animate-spin text-[var(--accent-warm)]" />
@@ -1395,11 +1167,11 @@ onMounted(() => {
                 type="button"
                 @click="handleSaveStorage"
                 :disabled="isSavingStorage || isTestingStorage || isResettingStorage"
-                class="px-5 py-2 bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs text-xs font-serif-editorial font-medium transition-opacity cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+                class="px-4 py-1.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs text-xs font-serif-editorial font-medium transition-opacity cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
               >
                 <Save v-if="!isSavingStorage" class="w-3.5 h-3.5" />
                 <Loader2 v-else class="w-3.5 h-3.5 animate-spin" />
-                <span>保存并应用</span>
+                <span>保存配置</span>
               </button>
             </div>
           </div>
@@ -1409,44 +1181,25 @@ onMounted(() => {
       <!-- ========================================== -->
       <!-- 选项卡 3：文稿与数据导出 (JSON / MD / CSV) -->
       <!-- ========================================== -->
-      <div v-else-if="activeTab === 'export'" class="space-y-5">
-        <!-- 档案馆现状概览 -->
-        <div class="p-4 bg-[var(--bg-subtle)]/70 rounded-xs border border-[var(--border-subtle)] space-y-2 text-xs font-serif-editorial text-[var(--ink-secondary)]">
-          <div class="text-[var(--ink-primary)] font-medium">当前生活档案资产指标</div>
-          <div class="grid grid-cols-3 gap-2.5 pt-1 text-center">
-            <div class="p-3 border border-[var(--border-subtle)] rounded-xs bg-[var(--bg-archive)]">
-              <div class="text-lg text-[var(--accent-warm)] font-medium font-serif-editorial">{{ entries.length }}</div>
-              <div class="text-[11px] text-[var(--ink-muted)]">生活印记</div>
-            </div>
-            <div class="p-3 border border-[var(--border-subtle)] rounded-xs bg-[var(--bg-archive)]">
-              <div class="text-lg text-[var(--ink-primary)] font-medium font-serif-editorial">{{ transactions.length }}</div>
-              <div class="text-[11px] text-[var(--ink-muted)]">日常账目</div>
-            </div>
-            <div class="p-3 border border-[var(--border-subtle)] rounded-xs bg-[var(--bg-archive)]">
-              <div class="text-lg text-[var(--accent-moss)] font-medium font-serif-editorial">{{ projects.length }}</div>
-              <div class="text-[11px] text-[var(--ink-muted)]">造物项目</div>
-            </div>
-          </div>
-        </div>
-
+      <div v-else-if="activeTab === 'export'" class="space-y-4">
         <!-- 三种格式导出选项卡 -->
-        <div class="space-y-3">
+        <div class="space-y-3 font-serif-editorial">
           <!-- 1. JSON 完整备份 -->
           <div
-            class="p-4 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+            class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
           >
-            <div class="space-y-1 max-w-full sm:max-w-[70%]">
-              <div class="flex items-center gap-2 font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-2 text-sm font-medium text-[var(--ink-primary)]">
                 <FileJson class="w-4 h-4 text-[var(--accent-warm)]" />
-                <span>全量结构化 JSON 数据备份</span>
+                <span>全量 JSON 数据备份</span>
               </div>
-              <p class="text-xs text-[var(--ink-muted)] font-serif-editorial leading-relaxed">
-                包含条目、附件列表、记账、项目与主理人配置的完整结构化对象，供二次开发或跨平台导入。
+              <p class="text-xs text-[var(--ink-muted)]">
+                包含生活档案、记账流水、造物项目与心愿单的完整结构化数据。
               </p>
             </div>
             <button
               @click="handleExportJSON"
-              class="px-4 py-2 text-xs font-serif-editorial font-medium border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 self-start sm:self-auto"
+              class="px-3.5 py-1.5 text-xs font-medium border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 self-start sm:self-auto"
             >
               <component :is="downloadedType === 'json' ? Check : Download" class="w-3.5 h-3.5" />
               <span>{{ downloadedType === 'json' ? '已导出' : '导出 JSON' }}</span>
@@ -1455,20 +1208,20 @@ onMounted(() => {
 
           <!-- 2. Markdown 日记文稿 -->
           <div
-            class="p-4 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+            class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
           >
-            <div class="space-y-1 max-w-full sm:max-w-[70%]">
-              <div class="flex items-center gap-2 font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-2 text-sm font-medium text-[var(--ink-primary)]">
                 <FileText class="w-4 h-4 text-[var(--accent-moss)]" />
-                <span>生活手账 Markdown 实体文稿</span>
+                <span>生活手账 Markdown 文稿</span>
               </div>
-              <p class="text-xs text-[var(--ink-muted)] font-serif-editorial leading-relaxed">
-                所有生活日常、思考与底片手记，自动排版为标准 Markdown 纯文本，适合本地 Obsidian / Logseq 沉淀。
+              <p class="text-xs text-[var(--ink-muted)]">
+                按时间倒序整理的标准 Markdown 文稿，适合导入 Obsidian 等笔记工具。
               </p>
             </div>
             <button
               @click="handleExportMarkdown"
-              class="px-4 py-2 text-xs font-serif-editorial border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all text-[var(--ink-primary)] shrink-0 self-start sm:self-auto"
+              class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all text-[var(--ink-primary)] shrink-0 self-start sm:self-auto"
             >
               <component :is="downloadedType === 'markdown' ? Check : Download" class="w-3.5 h-3.5" />
               <span>{{ downloadedType === 'markdown' ? '已导出' : '导出 .md' }}</span>
@@ -1477,20 +1230,20 @@ onMounted(() => {
 
           <!-- 3. CSV 记账表格 -->
           <div
-            class="p-4 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+            class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
           >
-            <div class="space-y-1 max-w-full sm:max-w-[70%]">
-              <div class="flex items-center gap-2 font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-2 text-sm font-medium text-[var(--ink-primary)]">
                 <FileSpreadsheet class="w-4 h-4 text-amber-700" />
                 <span>财务记账流水 CSV 表格</span>
               </div>
-              <p class="text-xs text-[var(--ink-muted)] font-serif-editorial leading-relaxed">
-                包含 UTF-8 BOM 标头，Excel 与 Numbers 打开无乱码，适合月度收支对账与税务统计。
+              <p class="text-xs text-[var(--ink-muted)]">
+                包含收支金额、分类、方式与时间明细，支持 Excel / Numbers 直接打开。
               </p>
             </div>
             <button
               @click="handleExportCSV"
-              class="px-4 py-2 text-xs font-serif-editorial border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all text-[var(--ink-primary)] shrink-0 self-start sm:self-auto"
+              class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all text-[var(--ink-primary)] shrink-0 self-start sm:self-auto"
             >
               <component :is="downloadedType === 'csv' ? Check : Download" class="w-3.5 h-3.5" />
               <span>{{ downloadedType === 'csv' ? '已导出' : '导出 CSV' }}</span>

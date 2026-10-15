@@ -49,7 +49,6 @@ import {
   fetchSiteConfig,
   fetchCuratorProfile,
   fetchSystemStatus,
-  verifyMasterPasscode,
   resetEntriesETag,
   clearApiCache,
 } from './utils/api'
@@ -465,13 +464,6 @@ onMounted(async () => {
         clearEnteredArchive()
         hasEnteredArchive.value = false
       } else {
-        // 本地调试环境自动零摩擦授权 (若尚未持有 Token，自动以默认口令 123456 获取主理人权限)
-        if (!getAdminToken() && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-          try {
-            await verifyMasterPasscode('123456')
-            await loadRemoteTransactions()
-          } catch {}
-        }
         if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
           hasEnteredArchive.value = true
         }

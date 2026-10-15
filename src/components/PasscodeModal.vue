@@ -104,7 +104,7 @@ const handleSubmit = async () => {
               ref="inputRef"
               v-model="passcode"
               :type="showPassword ? 'text' : 'password'"
-              placeholder="请输入管理员密钥 (默认: 123456)..."
+              placeholder="请输入管理员密钥..."
               required
               class="w-full pl-3 pr-10 py-2 bg-[var(--bg-subtle)]/40 border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-sm text-[var(--ink-primary)] font-mono-archive"
             />
@@ -116,16 +116,6 @@ const handleSubmit = async () => {
             >
               <EyeOff v-if="showPassword" class="w-4 h-4" />
               <Eye v-else class="w-4 h-4" />
-            </button>
-          </div>
-          <div class="flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] pt-0.5">
-            <span>本地默认管理口令为 123456</span>
-            <button
-              type="button"
-              @click="passcode = '123456'; handleSubmit()"
-              class="text-[var(--accent-warm)] hover:underline cursor-pointer"
-            >
-              一键填入并登录 →
             </button>
           </div>
         </div>

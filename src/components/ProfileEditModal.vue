@@ -424,9 +424,9 @@ onUnmounted(() => {
 
         <div class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-3">
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/60 pb-2">
-            <span>01 肖像印记与头像上传</span>
-            <span v-if="avatarKey" class="text-emerald-600 truncate max-w-[200px]" :title="avatarKey">
-              相对路径: {{ avatarKey }}
+            <span>01 肖像印记</span>
+            <span v-if="avatarKey" class="text-emerald-600 text-[11px]">
+              已就绪
             </span>
           </div>
 
@@ -487,7 +487,7 @@ onUnmounted(() => {
               </div>
 
               <p class="text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed">
-                直接选择你的真实照片或拖入画框。系统将自动上传至后端并获得相对路径，保存后将永久缓存至本地，无需记住或填写任何图床外链。
+                直接选择你的真实照片或拖入画框，保存后自动同步。
               </p>
 
               <div v-if="avatarUploadError" class="text-xs font-mono-archive text-amber-600">

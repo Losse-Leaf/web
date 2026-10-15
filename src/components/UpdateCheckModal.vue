@@ -50,7 +50,7 @@ onMounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-md bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-4 sm:p-6 text-left space-y-5 animate-in fade-in zoom-in-95 duration-200"
+      class="w-full max-w-md min-h-[290px] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-4 sm:p-6 text-left space-y-5 animate-in fade-in zoom-in-95 duration-200 flex flex-col justify-between"
     >
       <!-- 弹窗标题 -->
       <div class="flex items-center justify-between pb-3.5 border-b border-[var(--border-subtle)]">
