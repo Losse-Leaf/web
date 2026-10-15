@@ -691,16 +691,19 @@ onUnmounted(() => {
                           :key="cand.url"
                           type="button"
                           @click="handleSelectCandidate(cand.url)"
-                          class="px-2.5 py-1 rounded-xs border transition-colors cursor-pointer flex items-center gap-1"
+                          class="px-2.5 py-1.5 rounded-xs border transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap text-xs select-none"
                           :class="
                             selectedCandidateUrl === cand.url
                               ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
                               : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
                           "
                         >
-                          <span>{{ cand.type === 'tailscale' ? '📡' : (cand.type === 'lan' ? '📶' : '🌐') }}</span>
+                          <span
+                            class="w-1.5 h-1.5 rounded-full shrink-0"
+                            :class="selectedCandidateUrl === cand.url ? 'bg-[var(--accent-warm)]' : 'bg-[var(--border-divider)]'"
+                          ></span>
                           <span>{{ cand.label }}</span>
-                          <span class="opacity-70 text-[10px]">({{ cand.ip }})</span>
+                          <span class="opacity-70 text-[11px] font-mono-archive">({{ cand.ip }})</span>
                         </button>
                       </div>
                     </div>
