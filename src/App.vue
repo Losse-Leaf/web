@@ -249,6 +249,10 @@ const openStatsModal = async () => {
 }
 
 const openStorageBackupModal = async (tab: 'backup' | 'storage' | 'export' = 'backup') => {
+  if (!getAdminToken()) {
+    handleRequestAuth(() => openStorageBackupModal(tab), '请输入管理员密钥以访问存储设置与灾备中枢')
+    return
+  }
   storageBackupInitialTab.value = tab
   isStorageBackupOpen.value = true
   try {
@@ -691,6 +695,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       :storageStatus="storageStatus"
       @close="isStorageBackupOpen = false"
       @restored="handleRestored"
+      @requestAuth="handleRequestAuth"
     />
 
     <!-- 3. 新增生活记录/记账 弹窗 (RG-11) -->

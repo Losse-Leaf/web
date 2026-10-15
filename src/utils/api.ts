@@ -89,12 +89,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   const res = await fetch(url, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders,
-      ...options?.headers,
+      ...(options?.headers as Record<string, string> | undefined),
     },
-    ...options,
   })
 
   if (!res.ok) {
@@ -353,7 +353,6 @@ export async function fetchStorageStatus(): Promise<StorageStatus> {
 export async function testStorageConfig(payload: StorageConfigPayload): Promise<{ status: string; message: string; latency_ms?: number }> {
   return request<{ status: string; message: string; latency_ms?: number }>(`${API_BASE}/storage/test`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
 }
@@ -361,7 +360,6 @@ export async function testStorageConfig(payload: StorageConfigPayload): Promise<
 export async function updateStorageConfig(payload: StorageConfigPayload): Promise<StorageStatus> {
   return request<StorageStatus>(`${API_BASE}/storage/config`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
 }

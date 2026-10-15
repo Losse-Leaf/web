@@ -48,6 +48,7 @@ import {
   resetStorageConfig,
   migrateStorageMedia,
   clearApiCache,
+  getAdminToken,
 } from '../utils/api'
 
 const props = withDefaults(
@@ -67,6 +68,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'restored'): void
+  (e: 'requestAuth', callback?: () => void, prompt?: string): void
 }>()
 
 // 激活选项卡：'backup' (全量快照与灾备) | 'storage' (对象存储设置) | 'export' (文稿与数据导出)
@@ -460,6 +462,10 @@ watch(
 
 const handleTestStorage = async () => {
   if (isTestingStorage.value) return
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleTestStorage(), '请输入管理员密钥以测试对象存储连接')
+    return
+  }
   storageTestResult.value = null
 
   if (!storageForm.value.bucket_name?.trim()) {
@@ -519,6 +525,10 @@ const handleTestStorage = async () => {
 
 const handleSaveStorage = async () => {
   if (isSavingStorage.value) return
+  if (!getAdminToken()) {
+    emit('requestAuth', () => handleSaveStorage(), '请输入管理员密钥以保存对象存储配置')
+    return
+  }
 
   if (!storageForm.value.bucket_name?.trim()) {
     showAlertMsg('error', '请填写存储桶名称 (Bucket Name)')
