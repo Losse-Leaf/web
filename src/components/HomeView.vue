@@ -130,15 +130,21 @@ const headerLocation = computed(() => {
       </div>
     </section>
 
-    <!-- 那年今日 · 岁月回响 (On This Day 历史同日卡片) -->
+    <!-- 那年今日 · 岁月回响 (On This Day 历史同日旧信笺卡片) -->
     <section
       v-if="onThisDayEntries.length > 0"
-      class="mt-6 p-4 sm:p-5 rounded-xs border border-[var(--accent-warm)]/35 bg-[var(--bg-subtle)]/50 space-y-3"
+      class="relative mt-6 p-4 sm:p-5 rounded-xs border border-[var(--accent-warm)]/35 bg-[var(--bg-subtle)]/65 space-y-3.5 shadow-2xs"
     >
-      <div class="flex items-center justify-between text-xs font-mono-archive">
-        <div class="flex items-center gap-2 text-[var(--accent-warm)]">
-          <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-warm)]"></span>
-          <span class="tracking-widest font-medium">那年今日 · 岁月回响</span>
+      <!-- 四角复古裁切基准线 -->
+      <span class="pointer-events-none select-none absolute top-1.5 left-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌜</span>
+      <span class="pointer-events-none select-none absolute top-1.5 right-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌝</span>
+      <span class="pointer-events-none select-none absolute bottom-1.5 left-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌞</span>
+      <span class="pointer-events-none select-none absolute bottom-1.5 right-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌟</span>
+
+      <div class="flex items-center justify-between text-xs font-mono-archive px-1">
+        <div class="flex items-center gap-2.5 text-[var(--accent-warm)]">
+          <span class="vermilion-seal px-1.5 py-0.5 text-[10px] tracking-widest font-semibold">岁月回响</span>
+          <span class="tracking-widest font-medium">那年今日 · ON THIS DAY</span>
         </div>
         <span class="text-[11px] text-[var(--ink-muted)]">
           共 {{ onThisDayEntries.length }} 篇往年同日印记
@@ -150,7 +156,7 @@ const headerLocation = computed(() => {
           v-for="item in onThisDayEntries.slice(0, 4)"
           :key="item.id"
           @click="emit('selectEntry', item)"
-          class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)]/90 hover:border-[var(--accent-warm)]/60 transition-colors cursor-pointer group space-y-1.5"
+          class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)]/90 hover:bg-[var(--bg-archive)] hover:border-[var(--accent-warm)]/65 hover:shadow-xs transition-all duration-300 cursor-pointer group space-y-1.5"
         >
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span class="text-[var(--accent-warm)] font-medium">{{ formatYearsAgoLabel(item) }}</span>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue'
 import {
   Plus,
   Compass,
@@ -13,9 +13,10 @@ import {
 import { fetchFootprintsAtlas, fetchFootprints, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
 import type { AtlasCitySummary, Footprint, LifeEntry } from '../types'
-import AddFootprintModal from './AddFootprintModal.vue'
-import CityMemoryDrawerModal from './CityMemoryDrawerModal.vue'
 import { CHINA_CITIES, type CityOption } from '../utils/cities'
+
+const AddFootprintModal = defineAsyncComponent(() => import('./AddFootprintModal.vue'))
+const CityMemoryDrawerModal = defineAsyncComponent(() => import('./CityMemoryDrawerModal.vue'))
 import {
   REGION_GROUPS,
   PROVINCE_SHORT_MAP,
@@ -1451,6 +1452,7 @@ onMounted(() => {
 
     <!-- 录入足迹弹窗 -->
     <AddFootprintModal
+      v-if="isAddModalOpen"
       :isOpen="isAddModalOpen"
       :storageConfigured="storageConfigured"
       :initialCityCode="addModalInitialCityCode"
@@ -1462,6 +1464,7 @@ onMounted(() => {
 
     <!-- 两级回忆抽屉组件 (支持省份与城市无缝穿梭与四章节聚合) -->
     <CityMemoryDrawerModal
+      v-if="isDrawerOpen"
       :isOpen="isDrawerOpen"
       :adcode="selectedProvinceAdcode"
       :provinceName="selectedProvinceName"

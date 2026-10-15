@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import {
   ArrowUpRight,
   BookOpen,
@@ -14,10 +14,11 @@ import type { CuratorProfile, LifeEntry } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
 import { getAdminToken } from '../utils/api'
 import { getBeijingYear, parseOccurredDate } from '../utils/format'
-import ProfileEditModal from './ProfileEditModal.vue'
 import EditorialLightbox from './EditorialLightbox.vue'
 import LifeActivityMap from './LifeActivityMap.vue'
-import AlmanacModal from './AlmanacModal.vue'
+
+const ProfileEditModal = defineAsyncComponent(() => import('./ProfileEditModal.vue'))
+const AlmanacModal = defineAsyncComponent(() => import('./AlmanacModal.vue'))
 
 const props = defineProps<{
   profile?: CuratorProfile | null
@@ -436,6 +437,7 @@ onUnmounted(() => {
 
     <!-- 编辑资料与器物弹窗 -->
     <ProfileEditModal
+      v-if="isEditOpen"
       :isOpen="isEditOpen"
       :profile="localProfile"
       @close="isEditOpen = false"
@@ -455,6 +457,7 @@ onUnmounted(() => {
 
     <!-- 年度生活年鉴画报弹窗 -->
     <AlmanacModal
+      v-if="isAlmanacOpen"
       :isOpen="isAlmanacOpen"
       :initialYear="almanacYear"
       @close="isAlmanacOpen = false"

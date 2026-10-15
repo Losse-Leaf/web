@@ -132,15 +132,15 @@ export function renderEditorialContent(content?: string): string {
     .map((line) => {
       if (/^>\s?/.test(line)) {
         const inner = formatEditorialInline(line.replace(/^>\s?/, ''))
-        return `<blockquote class="my-1.5 pl-3.5 py-0.5 border-l-2 border-[var(--accent-warm)] italic text-[var(--ink-primary)]/90 font-serif-editorial">${inner}</blockquote>`
+        return `<blockquote class="my-2 pl-4 pr-3 py-1.5 border-l-2 border-[var(--accent-warm)] bg-[var(--bg-subtle)]/45 rounded-r-xs italic text-[var(--ink-primary)]/90 font-serif-editorial relative"><span class="text-[var(--accent-warm)]/50 font-serif-editorial mr-1 select-none">“</span>${inner}</blockquote>`
       }
       if (/^[-*]\s+\[\s\]\s+/.test(line)) {
         const inner = formatEditorialInline(line.replace(/^[-*]\s+\[\s\]\s+/, ''))
-        return `<div class="my-1 flex items-baseline gap-2"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--ink-muted)] text-[10px] leading-none select-none shrink-0">&#9744;</span><span>${inner}</span></div>`
+        return `<div class="my-1.5 flex items-baseline gap-2.5"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--ink-muted)]/80 bg-[var(--bg-archive)] text-[10px] font-mono-archive leading-none select-none shrink-0 text-transparent">&#9744;</span><span class="text-[var(--ink-primary)]">${inner}</span></div>`
       }
       if (/^[-*]\s+\[[xX]\]\s+/.test(line)) {
         const inner = formatEditorialInline(line.replace(/^[-*]\s+\[[xX]\]\s+/, ''))
-        return `<div class="my-1 flex items-baseline gap-2 text-[var(--ink-muted)]"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--accent-warm)] bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[10px] leading-none select-none shrink-0">&#10003;</span><span class="line-through decoration-[var(--ink-muted)]/60">${inner}</span></div>`
+        return `<div class="my-1.5 flex items-baseline gap-2.5 text-[var(--ink-muted)]"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--accent-warm)] bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[10px] font-mono-archive leading-none select-none shrink-0">&#10003;</span><span class="line-through decoration-[var(--accent-warm)]/45">${inner}</span></div>`
       }
       if (!line.trim()) {
         return '<div class="h-3"></div>'

@@ -429,14 +429,18 @@ const getKindLabel = (type: string) => {
             </div>
           </div>
 
-          <!-- 接触印相表 (Contact Sheet 2x2 / 3x3 网格) -->
+          <!-- 接触印相表 (Contact Sheet 2x2 / 3x3 网格 + 35mm 胶卷齿孔条) -->
           <div
             v-if="displayImages.length >= 4 && galleryViewMode === 'contact'"
             class="p-2.5 sm:p-3.5 bg-[#181716] text-[#F9F8F5] rounded-xs border border-[var(--border-subtle)] space-y-2.5 shadow-inner"
           >
             <div class="flex items-center justify-between text-[10px] font-mono-archive text-[#a8a29e] tracking-widest px-0.5">
-              <span>CONTACT SHEET · 接触印相表</span>
+              <span>KODAK TRI-X 400 · CONTACT PROOF SHEET</span>
               <span>{{ parseOccurredDate(entry.occurred_at).dotDate }} · {{ displayImages.length }} FRAMES</span>
+            </div>
+            <!-- 35mm 顶部胶片齿孔装饰 -->
+            <div class="flex items-center justify-between gap-1.5 py-0.5 opacity-45">
+              <span v-for="n in 14" :key="'top-' + n" class="w-2.5 h-1.5 rounded-[1px] bg-[#2c2a29] border border-white/15"></span>
             </div>
             <div
               class="grid gap-2.5"
@@ -446,7 +450,7 @@ const getKindLabel = (type: string) => {
                 v-for="(imgUrl, idx) in displayImages"
                 :key="idx"
                 @click="openImageLightbox(imgUrl)"
-                class="group/frame relative bg-black/80 p-1.5 rounded-xs border border-white/10 hover:border-[var(--accent-warm)]/80 transition-colors cursor-zoom-in space-y-1"
+                class="contact-loupe-frame group/frame relative bg-black/80 p-1.5 rounded-xs border border-white/10 hover:border-[var(--accent-warm)]/80 cursor-zoom-in space-y-1"
               >
                 <div class="aspect-[4/3] overflow-hidden rounded-xs bg-black">
                   <img
@@ -457,10 +461,14 @@ const getKindLabel = (type: string) => {
                   />
                 </div>
                 <div class="flex items-center justify-between text-[9px] font-mono-archive text-[#a8a29e] px-0.5">
-                  <span>EXP. {{ String(idx + 1).padStart(2, '0') }}A</span>
+                  <span>FRAME {{ String(idx + 1).padStart(2, '0') }}A</span>
                   <span class="text-[var(--accent-warm)]/90">▲ {{ idx + 1 }}</span>
                 </div>
               </div>
+            </div>
+            <!-- 35mm 底部胶片齿孔装饰 -->
+            <div class="flex items-center justify-between gap-1.5 py-0.5 opacity-45">
+              <span v-for="n in 14" :key="'bot-' + n" class="w-2.5 h-1.5 rounded-[1px] bg-[#2c2a29] border border-white/15"></span>
             </div>
           </div>
 

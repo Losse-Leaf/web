@@ -118,12 +118,6 @@ export const PROVINCE_ADCODE_MAP: Record<string, string> = {
   台湾: '710000',
 }
 
-export const getProvinceAdcodeByCityCode = (cityCode: string): string => {
-  if (!cityCode || cityCode.length < 2) return '110000'
-  const prefix = cityCode.slice(0, 2)
-  return `${prefix}0000`
-}
-
 // 34 省级行政区山川风物题记 (用于山河印谱百宝格)
 export const PROVINCE_EPITHET_MAP: Record<string, string> = {
   四川: '天府锦官 · 蜀山云雪',

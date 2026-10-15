@@ -49,18 +49,6 @@ export const entryMatchesCategory = (entry: LifeEntry, category: ArchiveCategory
   return cat === category
 }
 
-export const getCategoryDisplayName = (cat: ArchiveCategory): string => {
-  const map: Record<ArchiveCategory, string> = {
-    all: '全部记录',
-    daily: '日常',
-    travel: '游历',
-    project: '造物',
-    wish: '心愿',
-    transaction: '账目',
-  }
-  return map[cat] || '全部记录'
-}
-
 export interface Attachment {
   id: number
   entry_id?: number
@@ -230,9 +218,6 @@ export interface CuratorProfile {
   edc_gear?: GearItem[]
   updated_at?: string
 }
-
-// 统一主理人档案模型契约，清除 UserProfile / philosophy / gearList 冗余 (RC-29, RC-31, RC-32)
-export type UserProfile = CuratorProfile
 
 export interface TrustedDevice {
   id: number

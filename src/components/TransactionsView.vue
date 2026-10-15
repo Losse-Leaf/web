@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import {
   Plus,
   ChevronLeft,
@@ -39,10 +39,11 @@ import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import { formatMoney, getBeijingDateString, parseOccurredDate } from '../utils/format'
 import { loadCuratorProfile } from '../utils/profile'
-import CreditChannelsModal from './CreditChannelsModal.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import CityPicker from './CityPicker.vue'
+
+const CreditChannelsModal = defineAsyncComponent(() => import('./CreditChannelsModal.vue'))
 
 const props = defineProps<{
   transactions?: Transaction[]

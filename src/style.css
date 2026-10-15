@@ -303,3 +303,41 @@ html.dark .film-frame {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+/* 暗房接触印相表 (Silver-Halide Contact Sheet & Sprocket Holes) */
+.contact-sheet-strip {
+  position: relative;
+  background-color: #141312;
+  background-image:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+}
+
+.sprocket-rail {
+  height: 10px;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0px,
+    transparent 6px,
+    rgba(249, 248, 245, 0.16) 6px,
+    rgba(249, 248, 245, 0.16) 14px,
+    transparent 14px,
+    transparent 22px
+  );
+}
+
+.contact-loupe-frame {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.35s ease;
+}
+
+.contact-loupe-frame:hover {
+  transform: translateY(-2px) scale(1.015);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(200, 86, 53, 0.5);
+}
+
+/* 出版物藏书票边框 (Ex-Libris Bookplate) */
+.ex-libris-plate {
+  position: relative;
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg-archive) 100%);
+  box-shadow: inset 0 0 0 3px var(--bg-archive), inset 0 0 0 4px var(--border-divider);
+}
+
+

@@ -1,26 +1,28 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import HeaderNav from './components/HeaderNav.vue'
 import HomeView from './components/HomeView.vue'
-import ArchiveView from './components/ArchiveView.vue'
-import ProjectsView from './components/ProjectsView.vue'
-import WishlistView from './components/WishlistView.vue'
-import TravelAtlasView from './components/TravelAtlasView.vue'
-import AboutView from './components/AboutView.vue'
 import FooterArchive from './components/FooterArchive.vue'
-import TransactionsView from './components/TransactionsView.vue'
-import NewEntryModal from './components/NewEntryModal.vue'
-import EntryDetailModal from './components/EntryDetailModal.vue'
-import StorageBackupModal from './components/StorageBackupModal.vue'
-import StatsModal from './components/StatsModal.vue'
-import SearchModal from './components/SearchModal.vue'
-import DevicePairingModal from './components/DevicePairingModal.vue'
-import UpdateCheckModal from './components/UpdateCheckModal.vue'
-import CategoryManagerModal from './components/CategoryManagerModal.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
-import PasscodeModal from './components/PasscodeModal.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 import FloatingActionButton from './components/FloatingActionButton.vue'
+
+// 异步按需分包加载非首屏重型视图与管理模态框，彻底消除 >500kB 单包警告并加速首屏 (FE-23)
+const ArchiveView = defineAsyncComponent(() => import('./components/ArchiveView.vue'))
+const ProjectsView = defineAsyncComponent(() => import('./components/ProjectsView.vue'))
+const WishlistView = defineAsyncComponent(() => import('./components/WishlistView.vue'))
+const TravelAtlasView = defineAsyncComponent(() => import('./components/TravelAtlasView.vue'))
+const AboutView = defineAsyncComponent(() => import('./components/AboutView.vue'))
+const TransactionsView = defineAsyncComponent(() => import('./components/TransactionsView.vue'))
+const NewEntryModal = defineAsyncComponent(() => import('./components/NewEntryModal.vue'))
+const EntryDetailModal = defineAsyncComponent(() => import('./components/EntryDetailModal.vue'))
+const StorageBackupModal = defineAsyncComponent(() => import('./components/StorageBackupModal.vue'))
+const StatsModal = defineAsyncComponent(() => import('./components/StatsModal.vue'))
+const SearchModal = defineAsyncComponent(() => import('./components/SearchModal.vue'))
+const DevicePairingModal = defineAsyncComponent(() => import('./components/DevicePairingModal.vue'))
+const UpdateCheckModal = defineAsyncComponent(() => import('./components/UpdateCheckModal.vue'))
+const CategoryManagerModal = defineAsyncComponent(() => import('./components/CategoryManagerModal.vue'))
+const PasscodeModal = defineAsyncComponent(() => import('./components/PasscodeModal.vue'))
 import { getAdminToken, removeAdminToken } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
@@ -417,7 +419,7 @@ const handleHashChange = async () => {
   }
 }
 
-const { loadCategories } = useCategories()
+const { loadCategories, isCategoryManagerOpen } = useCategories()
 
 onMounted(async () => {
   loadCategories()
@@ -563,12 +565,9 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     <!-- 极简出版风顶部导航 -->
     <HeaderNav
       :currentView="currentView"
-      :currentCategory="currentCategory"
       :theme="theme"
       :config="siteConfig"
-      :profile="curatorProfile"
       @navigate="navigateTo"
-      @changeCategory="handleCategoryChange"
       @openAdd="openNewEntry()"
       @openSearch="isSearchOpen = true"
       @openStorageBackup="openStorageBackupModal"
@@ -747,13 +746,14 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     />
 
     <!-- 8. 全局自定义分类与字典管理 弹窗 -->
-    <CategoryManagerModal />
+    <CategoryManagerModal v-if="isCategoryManagerOpen" />
 
     <!-- 10. 全站统一确认 / 提示弹窗 (原生 confirm/alert 收口 FE-21) -->
     <ConfirmDialog />
 
     <!-- 11. 主理人印鉴登录弹窗 -->
     <PasscodeModal
+      v-if="isPasscodeModalOpen"
       :isOpen="isPasscodeModalOpen"
       :prompt="passcodeModalPrompt"
       @close="isPasscodeModalOpen = false; passcodeModalCallback = null"

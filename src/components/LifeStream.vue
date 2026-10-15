@@ -214,33 +214,44 @@ const getGapDays = (index: number): number => {
       </button>
     </div>
 
-    <!-- 空状态 -->
-    <div v-if="filteredEntries.length === 0" class="py-20 text-center space-y-4">
-      <div class="space-y-1.5 font-serif-editorial">
-        <h3 class="text-lg text-[var(--ink-primary)]">
-          {{
-            activeCategory === 'travel'
-              ? '还没有游历足迹记录'
-              : activeCategory === 'project'
-              ? '还没有造物手记'
-              : activeCategory === 'wish'
-              ? '还没有心愿印记'
-              : activeCategory === 'transaction'
-              ? '这个月还没有账目流水'
-              : '还没有记录'
-          }}
-        </h3>
-        <p class="text-xs text-[var(--ink-muted)] leading-relaxed">
-          从今天开始，<br />
-          记录一些你不想忘记的事情。
-        </p>
+    <!-- 空状态：散页藏书票 (Ex-Libris Bookplate) -->
+    <div v-if="filteredEntries.length === 0" class="py-16 flex justify-center">
+      <div class="relative max-w-md w-full px-8 py-10 text-center space-y-4 border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 rounded-xs">
+        <span class="pointer-events-none select-none absolute top-2 left-2.5 text-xs text-[var(--ink-muted)]/60 font-mono-archive">⌜</span>
+        <span class="pointer-events-none select-none absolute top-2 right-2.5 text-xs text-[var(--ink-muted)]/60 font-mono-archive">⌝</span>
+        <span class="pointer-events-none select-none absolute bottom-2 left-2.5 text-xs text-[var(--ink-muted)]/60 font-mono-archive">⌞</span>
+        <span class="pointer-events-none select-none absolute bottom-2 right-2.5 text-xs text-[var(--ink-muted)]/60 font-mono-archive">⌟</span>
+
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-mono-archive tracking-widest uppercase vermilion-seal">
+          <span>EX LIBRIS · 散页藏书票</span>
+        </div>
+
+        <div class="space-y-1.5 font-serif-editorial pt-1">
+          <h3 class="text-lg text-[var(--ink-primary)]">
+            {{
+              activeCategory === 'travel'
+                ? '还没有游历足迹记录'
+                : activeCategory === 'project'
+                ? '还没有造物手记'
+                : activeCategory === 'wish'
+                ? '还没有心愿印记'
+                : activeCategory === 'transaction'
+                ? '这个月还没有账目流水'
+                : '尚待落笔的空白散页'
+            }}
+          </h3>
+          <p class="text-xs text-[var(--ink-muted)] leading-relaxed">
+            从今天开始，<br />
+            记录一些你不想忘记的事情。
+          </p>
+        </div>
+        <button
+          @click="emit('openAdd')"
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"
+        >
+          <span>＋ 添加第一条记录</span>
+        </button>
       </div>
-      <button
-        @click="emit('openAdd')"
-        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"
-      >
-        <span>＋ 添加第一条记录</span>
-      </button>
     </div>
 
     <!-- 核心：纵向时间线 (Vertical Spine Timeline) -->
@@ -545,19 +556,6 @@ const getGapDays = (index: number): number => {
           </div>
         </article>
       </template>
-    </div>
-
-    <!-- 空状态提示 (RC-38) -->
-    <div
-      v-if="entries.length === 0"
-      class="py-24 text-center space-y-3 font-serif-editorial text-[var(--ink-muted)]"
-    >
-      <p class="text-xl text-[var(--ink-primary)]">
-        暂无生活印记收录
-      </p>
-      <p class="font-mono-archive text-xs tracking-wider">
-        每一刻具体的日常都值得定格。点击右下角「+」写下第一篇档案。
-      </p>
     </div>
 
     <!-- 暗房底片灯箱 -->

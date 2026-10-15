@@ -12,19 +12,16 @@ import {
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
 import { getAdminToken } from '../utils/api'
-import type { ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
+import type { SiteConfig } from '../types'
 
 const props = defineProps<{
   currentView: string
-  currentCategory: ArchiveCategory
   theme?: 'paper' | 'darkroom'
   config?: SiteConfig | null
-  profile?: CuratorProfile | null
 }>()
 
 const emit = defineEmits<{
   (e: 'navigate', view: string): void
-  (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'openAdd'): void
   (e: 'openStats'): void
   (e: 'openStorageBackup', tab?: 'backup' | 'storage' | 'export'): void

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import {
   Sparkles,
   Plus,
@@ -10,13 +10,13 @@ import {
   Calendar,
   Compass,
 } from 'lucide-vue-next'
-import { fetchWishes, deleteWish } from '../utils/api'
+import { fetchWishes, deleteWish, getAdminToken } from '../utils/api'
 import { formatMoney } from '../utils/format'
-import { getAdminToken } from '../utils/api'
 import type { Wish } from '../types'
-import WishFormModal from './WishFormModal.vue'
 import { askConfirm, showAlert } from '../composables/useConfirm'
-import WishResolutionModal from './WishResolutionModal.vue'
+
+const WishFormModal = defineAsyncComponent(() => import('./WishFormModal.vue'))
+const WishResolutionModal = defineAsyncComponent(() => import('./WishResolutionModal.vue'))
 
 const props = defineProps<{
   storageConfigured?: boolean

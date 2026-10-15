@@ -25,11 +25,16 @@ const currentYear = computed(() => getBeijingYear())
     <div class="max-w-5xl mx-auto px-4 sm:px-8 space-y-8 font-mono-archive text-xs text-[var(--ink-muted)]">
       
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-[var(--border-subtle)]">
-        <div>
-          <span class="text-[var(--ink-primary)] font-semibold tracking-wider font-serif-editorial text-sm">
-            《散页》
-          </span>
-          <p class="mt-1 text-[11px] text-[var(--ink-secondary)] font-serif-editorial">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2.5">
+            <span class="text-[var(--ink-primary)] font-semibold tracking-wider font-serif-editorial text-sm">
+              《{{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}》
+            </span>
+            <span class="text-[10px] tracking-[0.18em] uppercase text-[var(--ink-muted)] border border-[var(--border-subtle)] px-1.5 py-0.2 rounded-xs">
+              COLOPHON · 版本底款
+            </span>
+          </div>
+          <p class="text-[11px] text-[var(--ink-secondary)] font-serif-editorial">
             个人生活志 · 记录日常、打理资产、兑现心愿、丈量山河、实践造物。
           </p>
         </div>

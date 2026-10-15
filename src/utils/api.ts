@@ -131,13 +131,8 @@ try {
   entriesETag = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
 } catch {}
 
-const etagMap = new Map<string, string>()
-const payloadMap = new Map<string, unknown>()
-
 export function resetEntriesETag(): void {
   entriesETag = ''
-  etagMap.delete(`${API_BASE}/entries`)
-  payloadMap.delete(`${API_BASE}/entries`)
   try {
     localStorage.removeItem(ENTRIES_ETAG_KEY)
   } catch {}
@@ -145,9 +140,9 @@ export function resetEntriesETag(): void {
 
 export function clearApiCache(): void {
   resetEntriesETag()
-  etagMap.clear()
-  payloadMap.clear()
   try {
+    localStorage.removeItem('looseleaf_cached_entries')
+    localStorage.removeItem('looseleaf_cached_transactions')
     localStorage.removeItem('looseleaf_entries_cache')
     localStorage.removeItem('looseleaf_transactions_cache')
     localStorage.removeItem('looseleaf_curator_profile')

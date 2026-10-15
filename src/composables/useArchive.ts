@@ -5,9 +5,6 @@ import { fetchEntries, resetEntriesETag } from '../utils/api'
 
 const ENTRIES_CACHE_KEY = 'looseleaf_cached_entries'
 
-// 生活档案数据统一管理 (真实空态，遵循单一事实来源 RC-38)
-export const DEFAULT_ENTRIES: LifeEntry[] = []
-
 function getInitialEntries(): LifeEntry[] {
   try {
     const raw = localStorage.getItem(ENTRIES_CACHE_KEY)

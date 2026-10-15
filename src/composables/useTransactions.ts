@@ -4,9 +4,6 @@ import { fetchTransactions } from '../utils/api'
 
 const TX_CACHE_KEY = 'looseleaf_cached_transactions'
 
-// 真实记账数据统一管理 (真实空态，遵循单一事实来源 RC-38)
-export const DEFAULT_TRANSACTIONS: Transaction[] = []
-
 function getInitialTransactions(): Transaction[] {
   try {
     const raw = localStorage.getItem(TX_CACHE_KEY)

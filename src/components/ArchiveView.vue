@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, defineAsyncComponent } from 'vue'
 import { BookOpen } from 'lucide-vue-next'
 import type { LifeEntry } from '../types'
 import { parseOccurredDate, getBeijingYear } from '../utils/format'
 import { fetchEntries } from '../utils/api'
-import AlmanacModal from './AlmanacModal.vue'
+
+const AlmanacModal = defineAsyncComponent(() => import('./AlmanacModal.vue'))
 
 const props = defineProps<{
   entries: LifeEntry[]
