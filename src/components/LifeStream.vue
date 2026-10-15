@@ -4,7 +4,8 @@ import type { LifeEntry, ArchiveCategory } from '../types'
 import { getEntryCategory, entryMatchesCategory } from '../types'
 import { ArrowUpRight, Maximize2 } from 'lucide-vue-next'
 import EditorialLightbox from './EditorialLightbox.vue'
-import { formatMoney, parseOccurredDate } from '../utils/format'
+import { formatMoney, parseOccurredDate, renderEditorialContent } from '../utils/format'
+import { getAdminToken } from '../utils/api'
 
 const props = defineProps<{
   entries: LifeEntry[]
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   (e: 'openAdd'): void
 }>()
 
+const isAdmin = computed(() => Boolean(getAdminToken()))
 const activeCategory = ref<ArchiveCategory>(props.currentCategory || 'all')
 
 // 暗房灯箱状态
@@ -38,6 +40,31 @@ const getEntryFirstImage = (entry: LifeEntry): string => {
     return entry.attachments[0].url
   }
   return ''
+}
+
+const getEntryImages = (entry: LifeEntry): { id: number; url: string }[] => {
+  if (entry.attachments && entry.attachments.length > 0) {
+    return entry.attachments.filter((a) => Boolean(a.url)) as { id: number; url: string }[]
+  }
+  return []
+}
+
+// 跨月物候封签判定 (RC-48)
+const getEntryMonthKey = (entry: LifeEntry): string => {
+  const { year, month } = parseOccurredDate(entry.occurred_at)
+  return `${year}.${month}`
+}
+
+const isFirstEntryOfMonth = (index: number): boolean => {
+  if (index === 0) return true
+  const currentKey = getEntryMonthKey(filteredEntries.value[index])
+  const prevKey = getEntryMonthKey(filteredEntries.value[index - 1])
+  return currentKey !== prevKey
+}
+
+const formatMonthHeader = (entry: LifeEntry): string => {
+  const { year, month } = parseOccurredDate(entry.occurred_at)
+  return `${year} 年 ${Number(month)} 月`
 }
 
 const openLightbox = (entry: LifeEntry, customUrl?: string) => {
@@ -60,15 +87,20 @@ watch(
   }
 )
 
-// 视图过滤分类 (4 大纯化形态 + 账目投影)
-const categoryFilters: { key: ArchiveCategory; label: string }[] = [
-  { key: 'all', label: '全部记录' },
-  { key: 'daily', label: '日常' },
-  { key: 'travel', label: '游历' },
-  { key: 'project', label: '造物' },
-  { key: 'wish', label: '心愿' },
-  { key: 'transaction', label: '账目' },
-]
+// 视图过滤分类 (4 大纯化形态 + 主理人可见账目投影)
+const categoryFilters = computed<{ key: ArchiveCategory; label: string }[]>(() => {
+  const base: { key: ArchiveCategory; label: string }[] = [
+    { key: 'all', label: '全部记录' },
+    { key: 'daily', label: '日常' },
+    { key: 'travel', label: '游历' },
+    { key: 'project', label: '造物' },
+    { key: 'wish', label: '心愿' },
+  ]
+  if (isAdmin.value) {
+    base.push({ key: 'transaction', label: '账目' })
+  }
+  return base
+})
 
 const filteredEntries = computed(() => {
   let list = props.entries
@@ -139,24 +171,30 @@ const getGapDays = (index: number): number => {
 
 <template>
   <div class="w-full text-left">
-    <!-- 视角分类筛选栏 (极简呼吸感) -->
+    <!-- 单行视角分类筛选与条目计数栏 -->
     <div
       v-if="showFilters"
-      class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-12 text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)] pb-4"
+      class="flex flex-wrap items-center justify-between gap-4 mb-10 text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)] pb-4"
     >
-      <span class="text-[var(--ink-secondary)] mr-1">视角：</span>
-      <button
-        v-for="f in categoryFilters"
-        :key="f.key"
-        @click="handleCategoryClick(f.key)"
-        class="transition-colors cursor-pointer py-1 hover:text-[var(--ink-primary)]"
-        :class="{
-          'text-[var(--ink-primary)] font-semibold border-b border-[var(--ink-primary)]':
-            activeCategory === f.key,
-        }"
-      >
-        {{ f.label }}
-      </button>
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <span class="text-[var(--ink-secondary)] mr-1">视角：</span>
+        <button
+          v-for="f in categoryFilters"
+          :key="f.key"
+          @click="handleCategoryClick(f.key)"
+          class="transition-colors cursor-pointer py-1 hover:text-[var(--ink-primary)]"
+          :class="{
+            'text-[var(--ink-primary)] font-semibold border-b border-[var(--ink-primary)]':
+              activeCategory === f.key,
+          }"
+        >
+          {{ f.label }}
+        </button>
+      </div>
+
+      <span class="text-[11px] text-[var(--ink-muted)] shrink-0">
+        共 {{ filteredEntries.length }} 条记录
+      </span>
     </div>
 
     <!-- 日期筛选提醒 -->
@@ -211,17 +249,29 @@ const getGapDays = (index: number): number => {
       class="relative pl-6 sm:pl-10 border-l border-[var(--border-subtle)] ml-3 sm:ml-5 space-y-12 sm:space-y-16 py-2"
     >
       <template v-for="(entry, index) in filteredEntries" :key="entry.id">
-        <!-- 岁月留白刻度 (跨越 >= 14 天的静默时段) -->
+        <!-- 跨月自然物候封签 (Month Tab) -->
+        <div
+          v-if="isFirstEntryOfMonth(index)"
+          class="relative -ml-6 sm:-ml-10 pt-4 pb-2 flex items-center gap-3 select-none"
+        >
+          <div class="px-3 py-1 bg-[var(--bg-subtle)] text-[var(--ink-primary)] border border-[var(--border-subtle)] rounded-xs font-serif-editorial text-xs font-medium tracking-wider shadow-2xs flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-warm)]"></span>
+            <span>{{ formatMonthHeader(entry) }}</span>
+          </div>
+          <div class="flex-grow h-px bg-[var(--border-subtle)]/60 max-w-sm"></div>
+        </div>
+
+        <!-- 岁月留白刻度 (跨越 >= 14 天的静默时段，实体装订缝线效果) -->
         <div
           v-if="getGapDays(index) >= 14"
-          class="relative py-2 flex items-center gap-3 sm:gap-4 text-xs font-mono-archive text-[var(--ink-muted)] select-none -my-4 sm:-my-6"
+          class="relative py-2 flex items-center gap-3 sm:gap-4 text-xs font-mono-archive text-[var(--ink-muted)] select-none -my-3 sm:-my-4"
         >
           <!-- 标尺切线点 -->
           <div class="absolute -left-[30px] sm:-left-[46px] w-2.5 h-px bg-[var(--ink-muted)]/60"></div>
-          <span class="tracking-widest text-[11px] text-[var(--ink-muted)]/80">
-            跨越 {{ getGapDays(index) }} 天的时光留白
+          <span class="tracking-widest text-[11px] text-[var(--ink-muted)]/80 flex items-center gap-1.5">
+            <span>· · · 跨越 {{ getGapDays(index) }} 天的时光留白 · · ·</span>
           </span>
-          <span class="flex-grow h-px bg-[var(--border-subtle)]/70 max-w-xs"></span>
+          <span class="flex-grow border-b border-dashed border-[var(--border-divider)] max-w-xs"></span>
         </div>
 
         <article
@@ -241,23 +291,24 @@ const getGapDays = (index: number): number => {
             ></div>
           </div>
 
-          <!-- 顶部元信息行：日期 · 时间 · 类型标签 · 地点 -->
-          <div class="flex items-center gap-2 text-xs font-mono-archive text-[var(--ink-muted)] mb-2.5">
-            <span class="font-semibold text-[var(--ink-primary)]">
+          <!-- 顶部元信息行：日期 · 时间 · 类型纸签 · 地点 -->
+          <div class="flex flex-wrap items-center gap-2 text-xs font-mono-archive text-[var(--ink-muted)] mb-3">
+            <span class="font-semibold text-[var(--ink-primary)] tracking-wide">
               {{ formatEntryDate(entry) }}
             </span>
-            <span v-if="formatEntryTime(entry)">· {{ formatEntryTime(entry) }}</span>
-            <span>·</span>
+            <span v-if="formatEntryTime(entry)" class="text-[var(--ink-muted)]">{{ formatEntryTime(entry) }}</span>
+            <span class="text-[var(--border-divider)] select-none">/</span>
             <span
-              class="text-[var(--ink-secondary)]"
+              class="px-1.5 py-0.2 rounded-xs border text-[10px] font-medium transition-colors"
               :class="{
-                'text-[var(--accent-warm)] font-medium': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel',
-                'text-emerald-700 font-medium': entry.type === 'transaction' || entry.is_transaction,
+                'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel',
+                'border-emerald-700/40 bg-emerald-700/8 text-emerald-700': entry.type === 'transaction' || entry.is_transaction,
+                'border-[var(--border-subtle)] text-[var(--ink-secondary)]': !entry.is_transaction && getEntryCategory(entry) !== 'wish' && getEntryCategory(entry) !== 'travel',
               }"
             >
               {{ getCategoryName(entry) }}
             </span>
-            <span v-if="entry.city_name || entry.location" class="hidden sm:inline text-[var(--ink-muted)]">
+            <span v-if="entry.city_name || entry.location" class="text-[var(--ink-secondary)]">
               · {{ entry.city_name || entry.location }}
             </span>
           </div>
@@ -325,9 +376,10 @@ const getGapDays = (index: number): number => {
                 loading="lazy"
               />
             </div>
-            <p class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial whitespace-pre-line">
-              {{ entry.content }}
-            </p>
+            <div
+              class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial"
+              v-html="renderEditorialContent(entry.content)"
+            ></div>
             <div v-if="entry.project?.github_url" class="pt-1">
               <a
                 :href="entry.project.github_url"
@@ -371,9 +423,10 @@ const getGapDays = (index: number): number => {
                 loading="lazy"
               />
             </div>
-            <p class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial whitespace-pre-line">
-              {{ entry.content }}
-            </p>
+            <div
+              class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial"
+              v-html="renderEditorialContent(entry.content)"
+            ></div>
           </div>
 
           <!-- 4. 无标题短随笔形态 (兼容轻量想法引言展示) -->
@@ -386,7 +439,7 @@ const getGapDays = (index: number): number => {
           </div>
 
           <!-- 5. 日常与游历形态 (Daily / Travel)：图文散页与胶片装裱 -->
-          <div v-else class="space-y-3">
+          <div v-else class="space-y-3.5">
             <h3
               v-if="entry.title"
               class="text-xl sm:text-2xl font-serif-editorial font-medium tracking-tight text-[var(--ink-primary)] leading-snug group-hover:text-[var(--accent-warm)] transition-colors"
@@ -394,38 +447,94 @@ const getGapDays = (index: number): number => {
               {{ entry.title }}
             </h3>
 
-            <!-- 胶片装裱暗房底片框 -->
+            <!-- 胶片装裱暗房底片框 (支持单图宽幅 / 双图并列 / 多图画廊拼版) -->
             <div
-              v-if="getEntryFirstImage(entry)"
-              class="film-frame bg-[var(--bg-subtle)]/80 p-2.5 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl cursor-zoom-in group/img space-y-2"
-              @click.stop="openLightbox(entry)"
-              title="点击在暗房灯箱中放大"
+              v-if="getEntryImages(entry).length > 0"
+              class="film-frame bg-[var(--bg-subtle)]/70 p-2 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl group/img space-y-2.5"
             >
-              <div class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)]">
+              <!-- 单图宽幅：带哑光内框留白与画幅自适应 -->
+              <div
+                v-if="getEntryImages(entry).length === 1"
+                class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in border border-[var(--border-subtle)]/70 p-1.5 sm:p-2"
+                @click.stop="openLightbox(entry, getEntryImages(entry)[0].url)"
+                title="点击在暗房灯箱中放大"
+              >
                 <img
-                  :src="getEntryFirstImage(entry)"
+                  :src="getEntryImages(entry)[0].url"
                   :alt="entry.title"
-                  class="w-full max-h-[520px] object-cover editorial-image group-hover/img:scale-[1.01] transition-transform duration-500"
+                  class="w-full max-h-[580px] object-contain sm:object-cover rounded-xs editorial-image group-hover/img:scale-[1.008] transition-transform duration-500 mx-auto"
                   loading="lazy"
                 />
-                <div class="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1">
+                <div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-xs">
                   <Maximize2 class="w-3 h-3" />
                   <span>暗房灯箱</span>
                 </div>
               </div>
 
-              <!-- 暗房相纸底款：EXP 编号与地点坐标 -->
-              <div class="px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                <span class="tracking-widest">EXP. {{ String(index + 1).padStart(2, '0') }} · 胶片装裱</span>
-                <span v-if="entry.city_name || entry.location">{{ entry.city_name || entry.location }}</span>
+              <!-- 双图对称拼版：画幅自适应与独立边框 -->
+              <div
+                v-else-if="getEntryImages(entry).length === 2"
+                class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-1 bg-[var(--bg-archive)]/60 rounded-xs border border-[var(--border-subtle)]/70"
+              >
+                <div
+                  v-for="(img, imgIdx) in getEntryImages(entry)"
+                  :key="img.id || imgIdx"
+                  class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in aspect-[4/3] group/single border border-[var(--border-subtle)]/50"
+                  @click.stop="openLightbox(entry, img.url)"
+                  title="点击在暗房灯箱中放大"
+                >
+                  <img
+                    :src="img.url"
+                    :alt="entry.title"
+                    class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                  <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[9px] font-mono-archive rounded-xs opacity-0 group-hover/single:opacity-100 transition-opacity">
+                    EXP. {{ String(imgIdx + 1).padStart(2, '0') }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3+ 多图画廊拼版：自然网格比例与帧号标示 -->
+              <div
+                v-else
+                class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-1 bg-[var(--bg-archive)]/60 rounded-xs border border-[var(--border-subtle)]/70"
+              >
+                <div
+                  v-for="(img, imgIdx) in getEntryImages(entry)"
+                  :key="img.id || imgIdx"
+                  class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in aspect-[4/3] group/single border border-[var(--border-subtle)]/50"
+                  @click.stop="openLightbox(entry, img.url)"
+                  title="点击在暗房灯箱中放大"
+                >
+                  <img
+                    :src="img.url"
+                    :alt="entry.title"
+                    class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                  <div class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[9px] font-mono-archive rounded-xs opacity-0 group-hover/single:opacity-100 transition-opacity">
+                    EXP. {{ String(imgIdx + 1).padStart(2, '0') }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 暗房相纸底款：EXP 编号、相纸张数与地点坐标 -->
+              <div class="px-1.5 pt-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
+                <span class="tracking-wider flex items-center gap-1.5">
+                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent-warm)]/70"></span>
+                  <span>EXP. {{ String(index + 1).padStart(2, '0') }} · {{ getEntryImages(entry).length }} 张相纸装裱</span>
+                </span>
+                <span v-if="entry.city_name || entry.location" class="tracking-wide text-[var(--ink-secondary)]">
+                  {{ entry.city_name || entry.location }}
+                </span>
               </div>
             </div>
 
-            <p
-              class="text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed font-normal whitespace-pre-line max-w-2xl font-serif-editorial"
-            >
-              {{ entry.content }}
-            </p>
+            <div
+              class="text-base sm:text-lg text-[var(--ink-secondary)] leading-[1.8] font-normal max-w-2xl font-serif-editorial prose-editorial"
+              v-html="renderEditorialContent(entry.content)"
+            ></div>
           </div>
 
           <!-- 悬浮显露轻量操作提示 -->

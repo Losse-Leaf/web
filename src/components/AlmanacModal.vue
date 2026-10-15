@@ -135,7 +135,7 @@ const formatDate = (dateStr?: string) => {
       <div v-else-if="summary" class="space-y-16 print:space-y-12">
 
         <!-- 第一幕：岁月卷首 (Prologue) -->
-        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)]">
+        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)] page-break-after print:pb-0 print:border-none">
           <div class="space-y-2">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
               ACT I · PROLOGUE
@@ -143,7 +143,7 @@ const formatDate = (dateStr?: string) => {
             <h1 class="font-serif-editorial text-3xl sm:text-4xl text-[var(--ink-primary)] font-medium tracking-tight">
               {{ currentYear }} · 岁月卷首
             </h1>
-            <p class="font-serif-editorial text-sm text-[var(--ink-secondary)] leading-relaxed italic pt-1">
+            <p class="font-serif-editorial text-sm text-[var(--ink-secondary)] leading-relaxed italic pt-1 prose-editorial">
               “将散落于四季的时光纸页，汇聚为一本可随时翻阅的真实生活年鉴。时间是这里唯一的刻度。”
             </p>
           </div>
@@ -184,7 +184,7 @@ const formatDate = (dateStr?: string) => {
         </section>
 
         <!-- 第二幕：山川行迹 (Atlas) -->
-        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)]">
+        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)] page-break-after print:pb-0 print:border-none">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
               ACT II · ATLAS
@@ -238,7 +238,7 @@ const formatDate = (dateStr?: string) => {
         </section>
 
         <!-- 第三幕：心愿圆满 (Wishes) -->
-        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)]">
+        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)] page-break-after print:pb-0 print:border-none">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
               ACT III · WISHES
@@ -289,7 +289,7 @@ const formatDate = (dateStr?: string) => {
 
         <!-- 第四幕：浮光掠影 (Highlights) -->
         <section
-          class="space-y-6"
+          class="space-y-6 page-break-after print:pb-0 print:border-none"
           :class="isAdmin ? 'pb-12 border-b border-[var(--border-subtle)]' : 'pb-4'"
         >
           <div class="space-y-1">

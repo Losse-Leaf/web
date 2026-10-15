@@ -11,12 +11,11 @@ import FooterArchive from './components/FooterArchive.vue'
 import TransactionsView from './components/TransactionsView.vue'
 import NewEntryModal from './components/NewEntryModal.vue'
 import EntryDetailModal from './components/EntryDetailModal.vue'
-import StorageModal from './components/StorageModal.vue'
+import StorageBackupModal from './components/StorageBackupModal.vue'
 import StatsModal from './components/StatsModal.vue'
 import SearchModal from './components/SearchModal.vue'
-import ExportModal from './components/ExportModal.vue'
 import DevicePairingModal from './components/DevicePairingModal.vue'
-import UpdateNoticeModal from './components/UpdateNoticeModal.vue'
+import UpdateCheckModal from './components/UpdateCheckModal.vue'
 import CategoryManagerModal from './components/CategoryManagerModal.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import PasscodeModal from './components/PasscodeModal.vue'
@@ -49,6 +48,8 @@ import {
   fetchCuratorProfile,
   fetchSystemStatus,
   verifyMasterPasscode,
+  resetEntriesETag,
+  clearApiCache,
 } from './utils/api'
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
 import { markEnteredArchive, clearEnteredArchive, hasEnteredArchiveSession } from './utils/auth'
@@ -128,13 +129,12 @@ const handleOpenAddWithCity = (city: { code: string; name: string }) => {
   openNewEntry('travel', undefined, city)
 }
 
-const isStorageOpen = ref(false)
+const isStorageBackupOpen = ref(false)
+const storageBackupInitialTab = ref<'backup' | 'storage' | 'export'>('backup')
 const isStatsOpen = ref(false)
 const isSearchOpen = ref(false)
-const isExportOpen = ref(false)
 const isPairingOpen = ref(false)
-const isUpdateModalOpen = ref(false)
-const updateModalInitialTab = ref<'check' | 'notices'>('check')
+const isUpdateCheckOpen = ref(false)
 
 const isPasscodeModalOpen = ref(false)
 const passcodeModalPrompt = ref('')
@@ -142,6 +142,7 @@ const passcodeModalCallback = ref<(() => void) | null>(null)
 const wishesRefreshKey = ref(0)
 const atlasRefreshKey = ref(0)
 const txRefreshKey = ref(0)
+const archiveRefreshKey = ref(0)
 
 const handleRequestAuth = (callback?: () => void, prompt?: string) => {
   if (Boolean(getAdminToken())) {
@@ -170,10 +171,9 @@ const handleLogout = () => {
   window.location.reload()
 }
 
-const openUpdateModal = (tab: 'check' | 'notices') => {
+const openUpdateCheckModal = () => {
   if (!getAdminToken()) return
-  updateModalInitialTab.value = tab
-  isUpdateModalOpen.value = true
+  isUpdateCheckOpen.value = true
 }
 
 const systemStatus = ref<SystemStatus | null>(null)
@@ -211,8 +211,8 @@ const handleCategoryChange = (cat: ArchiveCategory) => {
 
 const navigateTo = (view: string) => {
   if (['transactions', 'assets'].includes(view) && !getAdminToken()) {
-    currentView.value = 'archive'
-    window.location.hash = 'archive'
+    currentView.value = 'home'
+    window.location.hash = 'home'
     return
   }
   currentView.value = view
@@ -246,8 +246,9 @@ const openStatsModal = async () => {
   }
 }
 
-const openStorageModal = async () => {
-  isStorageOpen.value = true
+const openStorageBackupModal = async (tab: 'backup' | 'storage' | 'export' = 'backup') => {
+  storageBackupInitialTab.value = tab
+  isStorageBackupOpen.value = true
   try {
     storageStatus.value = await fetchStorageStatus()
   } catch (err) {
@@ -260,14 +261,17 @@ const handleEntryCreated = (newEntry: LifeEntry) => {
   loadRemoteEntries()
   wishesRefreshKey.value++
   atlasRefreshKey.value++
+  archiveRefreshKey.value++
   if (
     currentView.value !== 'home' &&
     currentView.value !== 'life' &&
+    currentView.value !== 'archive' &&
     currentView.value !== 'projects' &&
     currentView.value !== 'wishes' &&
     currentView.value !== 'wishlist' &&
     currentView.value !== 'atlas' &&
-    currentView.value !== 'footprints'
+    currentView.value !== 'footprints' &&
+    currentView.value !== 'about'
   ) {
     navigateTo('home')
   }
@@ -279,6 +283,7 @@ const handleEntryUpdated = (updated: LifeEntry) => {
   loadRemoteEntries()
   wishesRefreshKey.value++
   atlasRefreshKey.value++
+  archiveRefreshKey.value++
 }
 
 const handleEntryDeleted = (id: number) => {
@@ -292,6 +297,7 @@ const handleEntryDeleted = (id: number) => {
   loadRemoteEntries()
   wishesRefreshKey.value++
   atlasRefreshKey.value++
+  archiveRefreshKey.value++
 }
 
 const handleTxCreated = async (tx: Transaction) => {
@@ -326,6 +332,12 @@ const handleGearChanged = async () => {
   }
 }
 
+const handleRestored = () => {
+  clearApiCache()
+  resetEntriesETag()
+  window.location.reload()
+}
+
 const handleProjectCreated = (newProj: Project) => {
   projects.value = [newProj, ...projects.value]
   loadRemoteEntries()
@@ -343,6 +355,7 @@ const handleProjectDeleted = (id: number) => {
 const refreshData = async () => {
   wishesRefreshKey.value++
   atlasRefreshKey.value++
+  archiveRefreshKey.value++
   try {
     const [, statsData, statusData, profData] = await Promise.allSettled([
       Promise.all([loadRemoteEntries(), loadRemoteTransactions()]),
@@ -392,8 +405,8 @@ const handleHashChange = async () => {
     ['transactions', 'archive', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
   ) {
     if (['transactions', 'assets'].includes(hash) && !getAdminToken()) {
-      currentView.value = 'archive'
-      window.location.hash = 'archive'
+      currentView.value = 'home'
+      window.location.hash = 'home'
       selectedEntry.value = null
       return
     }
@@ -425,8 +438,12 @@ onMounted(async () => {
       projects.value = projRes.value
     }
     if (cfgRes.status === 'fulfilled' && cfgRes.value) {
-      siteConfig.value = cfgRes.value
-      document.title = cfgRes.value.site_name || '散页 · 生活档案与时光手账'
+      const cfg = cfgRes.value
+      if (cfg.site_name && cfg.site_name.includes('时光手账')) {
+        cfg.site_name = '散页 · 个人生活志'
+      }
+      siteConfig.value = cfg
+      document.title = cfg.site_name || '散页 · 个人生活志'
     }
     if (profRes.status === 'fulfilled' && profRes.value) {
       syncProfileCache(profRes.value)
@@ -554,13 +571,11 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @changeCategory="handleCategoryChange"
       @openAdd="openNewEntry()"
       @openSearch="isSearchOpen = true"
-      @openExport="isExportOpen = true"
+      @openStorageBackup="openStorageBackupModal"
       @openPairing="isPairingOpen = true"
-      @openUpdateCheck="openUpdateModal('check')"
-      @openUpdateNotices="openUpdateModal('notices')"
+      @openUpdateCheck="openUpdateCheckModal"
       @toggleTheme="toggleTheme"
       @openStats="openStatsModal"
-      @openStorage="openStorageModal"
       @openLogin="() => handleRequestAuth(undefined, '以主人身份登录自留地')"
       @logout="handleLogout"
     />
@@ -598,6 +613,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <ArchiveView
         v-else-if="currentView === 'archive'"
         :entries="entries"
+        :refreshKey="archiveRefreshKey"
         @selectEntry="openEntryDetail"
       />
 
@@ -614,7 +630,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @requestAuth="handleRequestAuth"
       />
 
-      <!-- 5. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
+      <!-- 4. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
       <WishlistView
         v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
         :storageConfigured="storageConfigured"
@@ -623,7 +639,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @requestAuth="handleRequestAuth"
       />
 
-      <!-- 6. ATLAS 视图：山川行迹经纬星野与典藏票根 (FE-12, FE-13, RC-98) -->
+      <!-- 5. ATLAS 视图：山川行迹印谱百宝格与典藏票根 (FE-12, FE-13, RC-98) -->
       <TravelAtlasView
         v-else-if="currentView === 'atlas' || currentView === 'footprints'"
         :storageConfigured="storageConfigured"
@@ -634,12 +650,14 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @requestAuth="handleRequestAuth"
       />
 
-      <!-- 7. ABOUT 视图：自然真诚的个人自白与档案馆初衷 -->
+      <!-- 6. ABOUT 视图：主理人个人主页（肖像、自白、年度生活年鉴、时间热力图与器物图鉴） -->
       <AboutView
         v-else-if="currentView === 'about'"
         :profile="curatorProfile"
+        :entries="allTimelineEntries"
         @profileUpdated="curatorProfile = $event"
         @requestAuth="handleRequestAuth"
+        @selectEntry="openEntryDetail"
       />
 
     </main>
@@ -663,14 +681,17 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @selectEntry="openEntryDetail"
     />
 
-    <!-- 2. 数据主权全量备份与导出中心 (JSON / MD / CSV) -->
-    <ExportModal
-      v-if="isExportOpen"
-      :isOpen="isExportOpen"
+    <!-- 2. 存储设置与全量灾备中枢 (ZIP 灾备 / 对象存储 / 文稿导出) -->
+    <StorageBackupModal
+      v-if="isStorageBackupOpen"
+      :isOpen="isStorageBackupOpen"
+      :initialTab="storageBackupInitialTab"
       :entries="entries"
       :transactions="transactionsList"
       :projects="projects"
-      @close="isExportOpen = false"
+      :storageStatus="storageStatus"
+      @close="isStorageBackupOpen = false"
+      @restored="handleRestored"
     />
 
     <!-- 3. 新增生活记录/记账 弹窗 (RG-11) -->
@@ -703,15 +724,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @requestAuth="handleRequestAuth"
     />
 
-    <!-- 5. 对象存储状态 弹窗 -->
-    <StorageModal
-      v-if="isStorageOpen"
-      :isOpen="isStorageOpen"
-      :status="storageStatus"
-      @close="isStorageOpen = false"
-    />
-
-    <!-- 6. 统计指标 弹窗 -->
+    <!-- 5. 统计指标 弹窗 -->
     <StatsModal
       v-if="isStatsOpen"
       :isOpen="isStatsOpen"
@@ -719,22 +732,21 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @close="isStatsOpen = false"
     />
 
-    <!-- 7. 设备免密配对与受信任设备管理 弹窗 -->
+    <!-- 6. 设备免密配对与受信任设备管理 弹窗 -->
     <DevicePairingModal
       v-if="isPairingOpen"
       :isOpen="isPairingOpen"
       @close="isPairingOpen = false"
     />
 
-    <!-- 8. 系统版本检测与更新公告存档 弹窗（管理端专用 RC-97） -->
-    <UpdateNoticeModal
-      v-if="isUpdateModalOpen"
-      :isOpen="isUpdateModalOpen"
-      :initialTab="updateModalInitialTab"
-      @close="isUpdateModalOpen = false"
+    <!-- 7. 系统版本检测 弹窗（管理端专用） -->
+    <UpdateCheckModal
+      v-if="isUpdateCheckOpen"
+      :isOpen="isUpdateCheckOpen"
+      @close="isUpdateCheckOpen = false"
     />
 
-    <!-- 9. 全局自定义分类与字典管理 弹窗 -->
+    <!-- 8. 全局自定义分类与字典管理 弹窗 -->
     <CategoryManagerModal />
 
     <!-- 10. 全站统一确认 / 提示弹窗 (原生 confirm/alert 收口 FE-21) -->

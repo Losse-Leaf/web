@@ -12,6 +12,7 @@ import {
   Check,
   Clock,
   AlertCircle,
+  Edit2,
 } from 'lucide-vue-next'
 import type { TrustedDevice, PairingTicketResult } from '../types'
 import {
@@ -19,6 +20,7 @@ import {
   pollPairingTicketStatus,
   fetchTrustedDevices,
   revokeTrustedDevice,
+  updateTrustedDeviceName,
 } from '../utils/api'
 import { audio } from '../utils/audio'
 import { askConfirm } from '../composables/useConfirm'
@@ -167,6 +169,43 @@ const handleRevoke = async (id: number) => {
   devices.value = devices.value.filter((d) => d.id !== id)
 }
 
+const editingDeviceKey = ref<string | number | null>(null)
+const editingDeviceName = ref('')
+const isSavingDeviceName = ref(false)
+
+const getDeviceKey = (dev: TrustedDevice): string | number => {
+  return dev.device_id || dev.id
+}
+
+const startRenameDevice = (dev: TrustedDevice) => {
+  audio.playTink()
+  editingDeviceKey.value = getDeviceKey(dev)
+  editingDeviceName.value = dev.name || ''
+}
+
+const cancelRenameDevice = () => {
+  editingDeviceKey.value = null
+  editingDeviceName.value = ''
+}
+
+const saveRenameDevice = async (dev: TrustedDevice) => {
+  const cleanName = editingDeviceName.value.trim()
+  if (!cleanName || isSavingDeviceName.value) return
+  isSavingDeviceName.value = true
+  try {
+    const targetId = dev.device_id || dev.id
+    const updated = await updateTrustedDeviceName(targetId, cleanName)
+    dev.name = updated?.name || cleanName
+    audio.playTink()
+    editingDeviceKey.value = null
+    editingDeviceName.value = ''
+  } catch (err) {
+    console.error('Failed to rename device:', err)
+  } finally {
+    isSavingDeviceName.value = false
+  }
+}
+
 const copyPayload = async () => {
   if (!currentTicket.value) return
   audio.playTink()
@@ -255,7 +294,7 @@ onUnmounted(() => {
             ? 'text-[var(--ink-primary)] font-semibold border-b-2 border-[var(--ink-primary)]'
             : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
         >
-          配对新设备 (PIN / 扫码)
+          配对新设备 (扫码 / 链接)
         </button>
         <button
           @click="activeTab = 'devices'"
@@ -269,7 +308,7 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- 板块 1：生成配对 PIN 码与散页纸墨风二维码 (RC-61) -->
+      <!-- 板块 1：散页纸墨风二维码与配对链接 -->
       <div v-if="activeTab === 'pair'" class="space-y-6">
         <!-- 配对成功横幅 -->
         <div
@@ -306,7 +345,7 @@ onUnmounted(() => {
             </span>
           </div>
 
-          <!-- 散页纸墨风二维码暗房装裱框 + 6 位匹配码并列呈现 (RC-61) -->
+          <!-- 散页纸墨风二维码暗房装裱框 + 配对指引与操作 -->
           <div class="flex flex-col sm:flex-row items-center gap-6 py-1">
             <!-- 散页纸墨风二维码装裱容器：.film-frame + 四角复古裁切基准线 + #F9F8F5 棉纸内衬 -->
             <div class="film-frame p-4 rounded-xs relative inline-flex flex-col items-center shrink-0">
@@ -326,7 +365,7 @@ onUnmounted(() => {
                   v-else
                   class="w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-3"
                 >
-                  {{ isLoadingTicket ? '正在签发配对码...' : '使用右侧 6 位匹配码握手' }}
+                  {{ isLoadingTicket ? '正在生成配对凭据...' : '扫描二维码或复制配对链接' }}
                 </div>
               </div>
 
@@ -337,37 +376,47 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- 6 位高辨识度匹配码与说明 -->
-            <div class="flex-1 text-center sm:text-left space-y-2.5">
-              <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-widest">
-                扫描二维码 或 输入 6 位匹配码
+            <!-- 多端免密配对说明与中枢信息 -->
+            <div class="flex-1 text-center sm:text-left space-y-3">
+              <div class="space-y-1">
+                <div class="text-[11px] font-mono-archive text-[var(--accent-warm)] tracking-widest uppercase">
+                  PAIRING CREDENTIAL · 授信配对
+                </div>
+                <h4 class="font-serif-editorial text-lg sm:text-xl font-medium text-[var(--ink-primary)]">
+                  扫码连接 或 复制配对链接
+                </h4>
               </div>
-              <div class="font-mono-archive text-4xl sm:text-5xl tracking-widest font-semibold text-[var(--ink-primary)] select-all">
-                {{ currentTicket?.pin_code || '------' }}
+
+              <div class="space-y-2 text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed">
+                <p>
+                  <strong class="font-medium text-[var(--ink-primary)] font-mono-archive">移动端随行记录</strong>：使用 iOS 或 Android 客户端扫描左侧纸墨二维码。
+                </p>
+                <p>
+                  <strong class="font-medium text-[var(--ink-primary)] font-mono-archive">macOS 桌面工作台</strong>：复制下方配对链接并在客户端设置中一键粘贴，系统将自动识别中枢地址并完成设备钤印。
+                </p>
               </div>
-              <p class="text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed pt-1">
-                在移动端或 macOS 桌面端「连接中枢」扫描左侧二维码或输入此 6 位匹配码，即可获发独立设备子钥匙。
-              </p>
+
               <div
                 v-if="currentTicket?.hub_url"
-                class="text-[11px] font-mono-archive text-[var(--ink-muted)] truncate"
+                class="pt-1 text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-center sm:justify-start gap-1"
               >
-                中枢地址：{{ currentTicket.hub_url }}
+                <span>中枢节点：</span>
+                <span class="text-[var(--ink-secondary)] select-all">{{ currentTicket.hub_url }}</span>
               </div>
             </div>
           </div>
 
           <!-- 配对专属协议 Deep Link -->
-          <div class="pt-3 border-t border-[var(--border-subtle)]/60 flex items-center justify-between gap-3 text-xs font-mono-archive">
-            <div class="truncate text-[11px] text-[var(--ink-muted)] select-all">
+          <div class="pt-3 border-t border-[var(--border-subtle)]/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs font-mono-archive">
+            <div class="truncate text-[11px] text-[var(--ink-muted)] select-all bg-[var(--bg-archive)]/60 px-2.5 py-1.5 rounded-xs border border-[var(--border-subtle)]/40 font-mono-archive">
               {{ currentTicket?.qr_payload || 'looseleaf://pair' }}
             </div>
             <button
               @click="copyPayload"
-              class="px-2.5 py-1 shrink-0 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center gap-1 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors"
+              class="px-3.5 py-1.5 shrink-0 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors"
             >
-              <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" />
-              <span>{{ copied ? '已复制' : '复制配对链接' }}</span>
+              <component :is="copied ? Check : Copy" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+              <span>{{ copied ? '已复制配对链接' : '复制配对链接' }}</span>
             </button>
           </div>
         </div>
@@ -406,9 +455,45 @@ onUnmounted(() => {
 
             <div class="space-y-1 min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                  {{ dev.name }}
-                </span>
+                <template v-if="editingDeviceKey === getDeviceKey(dev)">
+                  <input
+                    v-model="editingDeviceName"
+                    type="text"
+                    maxlength="40"
+                    @keyup.enter="saveRenameDevice(dev)"
+                    @keyup.esc="cancelRenameDevice"
+                    class="px-2 py-0.5 text-sm font-serif-editorial bg-[var(--bg-archive)] border border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)] w-36 sm:w-44"
+                  />
+                  <button
+                    type="button"
+                    @click="saveRenameDevice(dev)"
+                    :disabled="isSavingDeviceName"
+                    class="px-2 py-0.5 text-[11px] font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer"
+                  >
+                    保存
+                  </button>
+                  <button
+                    type="button"
+                    @click="cancelRenameDevice"
+                    class="px-1.5 py-0.5 text-[11px] font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+                  >
+                    取消
+                  </button>
+                </template>
+                <template v-else>
+                  <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+                    {{ dev.name }}
+                  </span>
+                  <button
+                    type="button"
+                    @click="startRenameDevice(dev)"
+                    class="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[10px] font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] border border-transparent hover:border-[var(--border-subtle)] rounded-xs cursor-pointer transition-colors"
+                    title="修改设备显示名称"
+                  >
+                    <Edit2 class="w-2.5 h-2.5" />
+                    <span>改名</span>
+                  </button>
+                </template>
                 <span class="text-[10px] font-mono-archive uppercase px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-muted)]">
                   {{ dev.platform }}
                 </span>

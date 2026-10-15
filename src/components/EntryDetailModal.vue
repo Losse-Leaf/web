@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle } from 'lucide-vue-next'
+import { ref, computed, watch } from 'vue'
+import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle, LayoutGrid, Rows3 } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import CityPicker from './CityPicker.vue'
+import EditorialLightbox from './EditorialLightbox.vue'
 import { matchCityFromLocation, saveLastUsedCity } from '../utils/cities'
 import { updateLifeEntry, deleteLifeEntry, getAdminToken } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
-import { parseOccurredDate } from '../utils/format'
+import { parseOccurredDate, renderEditorialContent } from '../utils/format'
 import { showAlert } from '../composables/useConfirm'
 
 const props = defineProps<{
@@ -161,10 +162,30 @@ const handleDelete = async () => {
 const displayImages = computed(() => {
   if (!props.entry) return []
   if (props.entry.attachments && props.entry.attachments.length > 0) {
-    return props.entry.attachments.map((a) => a.url)
+    return props.entry.attachments.map((a) => a.url).filter(Boolean)
   }
   return []
 })
+
+// 暗房接触印相表 (Contact Sheet) 与单张画廊切换 (当照片 >= 4 张时默认提供接触印相表切换)
+const galleryViewMode = ref<'stack' | 'contact'>('contact')
+const isLightboxOpen = ref(false)
+const lightboxUrl = ref('')
+
+watch(
+  () => props.entry?.id,
+  () => {
+    galleryViewMode.value = displayImages.value.length >= 4 ? 'contact' : 'stack'
+    isEditing.value = false
+    showDeleteConfirm.value = false
+  },
+  { immediate: true }
+)
+
+const openImageLightbox = (url: string) => {
+  lightboxUrl.value = url
+  isLightboxOpen.value = true
+}
 
 const getKindLabel = (type: string) => {
   // RC-128 四母体收敛后仅认 4 类纯粹形态 (FE-20 / BE-36)
@@ -366,30 +387,106 @@ const getKindLabel = (type: string) => {
       <!-- 浏览模式 (Editorial 典雅展示) -->
       <article v-else class="space-y-8 font-serif-editorial">
         <!-- 标题 -->
-        <h1 v-if="entry.title" class="text-2xl sm:text-3xl font-medium tracking-tight text-[var(--ink-primary)] leading-snug">
+        <h1 v-if="entry.title" class="type-page-heading text-[var(--ink-primary)] leading-snug">
           {{ entry.title }}
         </h1>
 
-        <!-- 大尺寸图片画廊 -->
-        <div v-if="displayImages.length > 0" class="space-y-4">
+        <!-- 大尺寸图片画廊 / 暗房接触印相表 (Contact Sheet) -->
+        <div v-if="displayImages.length > 0" class="space-y-3">
+          <!-- 当照片 >= 4 张时提供画廊形态切换栏 -->
           <div
-            v-for="(imgUrl, idx) in displayImages"
-            :key="idx"
-            class="overflow-hidden rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)]"
+            v-if="displayImages.length >= 4"
+            class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)] pb-1 border-b border-[var(--border-subtle)]/60"
           >
-            <img
-              :src="imgUrl"
-              :alt="entry.title"
-              class="w-full max-h-[680px] object-cover editorial-image"
-              loading="lazy"
-            />
+            <span>共 {{ displayImages.length }} 帧影像底片</span>
+            <div class="inline-flex items-center gap-1 p-0.5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs">
+              <button
+                type="button"
+                @click="galleryViewMode = 'contact'"
+                class="px-2 py-0.5 rounded-xs flex items-center gap-1 transition-colors cursor-pointer"
+                :class="
+                  galleryViewMode === 'contact'
+                    ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]'
+                    : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+                "
+              >
+                <LayoutGrid class="w-3 h-3" />
+                <span>接触印相表</span>
+              </button>
+              <button
+                type="button"
+                @click="galleryViewMode = 'stack'"
+                class="px-2 py-0.5 rounded-xs flex items-center gap-1 transition-colors cursor-pointer"
+                :class="
+                  galleryViewMode === 'stack'
+                    ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]'
+                    : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+                "
+              >
+                <Rows3 class="w-3 h-3" />
+                <span>逐幅纵览</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 接触印相表 (Contact Sheet 2x2 / 3x3 网格) -->
+          <div
+            v-if="displayImages.length >= 4 && galleryViewMode === 'contact'"
+            class="p-2.5 sm:p-3.5 bg-[#181716] text-[#F9F8F5] rounded-xs border border-[var(--border-subtle)] space-y-2.5 shadow-inner"
+          >
+            <div class="flex items-center justify-between text-[10px] font-mono-archive text-[#a8a29e] tracking-widest px-0.5">
+              <span>CONTACT SHEET · 接触印相表</span>
+              <span>{{ parseOccurredDate(entry.occurred_at).dotDate }} · {{ displayImages.length }} FRAMES</span>
+            </div>
+            <div
+              class="grid gap-2.5"
+              :class="displayImages.length === 4 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'"
+            >
+              <div
+                v-for="(imgUrl, idx) in displayImages"
+                :key="idx"
+                @click="openImageLightbox(imgUrl)"
+                class="group/frame relative bg-black/80 p-1.5 rounded-xs border border-white/10 hover:border-[var(--accent-warm)]/80 transition-colors cursor-zoom-in space-y-1"
+              >
+                <div class="aspect-[4/3] overflow-hidden rounded-xs bg-black">
+                  <img
+                    :src="imgUrl"
+                    :alt="entry.title"
+                    class="w-full h-full object-cover group-hover/frame:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                </div>
+                <div class="flex items-center justify-between text-[9px] font-mono-archive text-[#a8a29e] px-0.5">
+                  <span>EXP. {{ String(idx + 1).padStart(2, '0') }}A</span>
+                  <span class="text-[var(--accent-warm)]/90">▲ {{ idx + 1 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 逐幅纵览画廊 -->
+          <div v-else class="space-y-4">
+            <div
+              v-for="(imgUrl, idx) in displayImages"
+              :key="idx"
+              @click="openImageLightbox(imgUrl)"
+              class="overflow-hidden rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] cursor-zoom-in"
+            >
+              <img
+                :src="imgUrl"
+                :alt="entry.title"
+                class="w-full max-h-[680px] object-cover editorial-image"
+                loading="lazy"
+              />
+            </div>
           </div>
         </div>
 
-        <!-- 正文叙事 -->
-        <div class="text-lg text-[var(--ink-secondary)] leading-relaxed whitespace-pre-line font-normal">
-          {{ entry.content }}
-        </div>
+        <!-- 正文叙事 (支持轻量出版级排版) -->
+        <div
+          class="text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed font-normal prose-editorial"
+          v-html="renderEditorialContent(entry.content)"
+        ></div>
 
         <!-- 注脚信息：地点、关联造物与关联心愿 -->
         <div class="pt-6 border-t border-[var(--border-subtle)] space-y-2 text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -420,6 +517,16 @@ const getKindLabel = (type: string) => {
         </div>
       </article>
 
+      <!-- 暗房底片灯箱 -->
+      <EditorialLightbox
+        :isOpen="isLightboxOpen"
+        :imageUrl="lightboxUrl"
+        :title="entry.title || ''"
+        :meta="entry.city_name || entry.location || ''"
+        :location="entry.location || ''"
+        :date="parseOccurredDate(entry.occurred_at).dotDate"
+        @close="isLightboxOpen = false"
+      />
     </div>
   </div>
 </template>

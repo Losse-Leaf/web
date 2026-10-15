@@ -2,27 +2,32 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   ArrowUpRight,
+  BookOpen,
+  Calendar,
   Edit3,
   MapPin,
   Mail,
   Github,
-  Maximize2,
-  User,
+  X,
 } from 'lucide-vue-next'
-import type { CuratorProfile } from '../types'
+import type { CuratorProfile, LifeEntry } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
 import { getAdminToken } from '../utils/api'
-import { getBeijingYear } from '../utils/format'
+import { getBeijingYear, parseOccurredDate } from '../utils/format'
 import ProfileEditModal from './ProfileEditModal.vue'
 import EditorialLightbox from './EditorialLightbox.vue'
+import LifeActivityMap from './LifeActivityMap.vue'
+import AlmanacModal from './AlmanacModal.vue'
 
 const props = defineProps<{
   profile?: CuratorProfile | null
+  entries?: LifeEntry[]
 }>()
 
 const emit = defineEmits<{
   (e: 'profileUpdated', profile: CuratorProfile): void
   (e: 'requestAuth', callback: () => void): void
+  (e: 'selectEntry', entry: LifeEntry): void
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
@@ -35,6 +40,36 @@ const localProfile = ref<CuratorProfile>(loadCuratorProfile())
 const isEditOpen = ref(false)
 const isLightboxOpen = ref(false)
 const selectedCategory = ref<string>('all')
+
+// 年度生活年鉴状态与年份列表
+const isAlmanacOpen = ref(false)
+const almanacYear = ref<number>(currentYear)
+const selectedHeatmapDate = ref<string>('')
+
+const allEntries = computed(() => props.entries || [])
+
+const availableAlmanacYears = computed(() => {
+  const yearSet = new Set<number>([currentYear])
+  allEntries.value.forEach((entry) => {
+    const y = parseInt(parseOccurredDate(entry.occurred_at).year, 10)
+    if (!isNaN(y) && y >= 2000 && y <= 2100) {
+      yearSet.add(y)
+    }
+  })
+  return Array.from(yearSet).sort((a, b) => b - a)
+})
+
+const selectedDateEntries = computed(() => {
+  if (!selectedHeatmapDate.value) return []
+  return allEntries.value.filter(
+    (entry) => parseOccurredDate(entry.occurred_at).dateKey === selectedHeatmapDate.value
+  )
+})
+
+const openAlmanacForYear = (year: number) => {
+  almanacYear.value = year
+  isAlmanacOpen.value = true
+}
 
 const handleOpenEdit = () => {
   if (!isAdmin.value) {
@@ -53,17 +88,10 @@ watch(
     if (newP) {
       localProfile.value = {
         ...localProfile.value,
-        name: newP.name || localProfile.value.name,
-        title: newP.title || localProfile.value.title,
-        bio: newP.bio || localProfile.value.bio,
-        location: newP.location || localProfile.value.location,
-        avatar_url: newP.avatar_url || localProfile.value.avatar_url,
-        avatar_key: newP.avatar_key || localProfile.value.avatar_key,
-        motto: newP.motto || localProfile.value.motto,
-        email: newP.email || newP.social_links?.email || localProfile.value.email,
-        github: newP.github || newP.social_links?.github || localProfile.value.github,
-        current_city: newP.current_city || localProfile.value.current_city,
-        edc_gear: newP.edc_gear || localProfile.value.edc_gear,
+        ...newP,
+        email: newP.email ?? newP.social_links?.email ?? localProfile.value.email,
+        github: newP.github ?? newP.social_links?.github ?? localProfile.value.github,
+        edc_gear: newP.edc_gear ?? localProfile.value.edc_gear,
       }
     }
   },
@@ -97,7 +125,7 @@ const githubUsername = computed(() => {
   return match ? match[1] : ''
 })
 
-// 城市提取 (纯真实数据驱动，无假城市兜底 RC-52)
+// 城市提取
 const cityDisplay = computed(() => {
   return (
     localProfile.value.current_city ||
@@ -107,7 +135,13 @@ const cityDisplay = computed(() => {
   )
 })
 
-// 全局档案更新事件：具名 handler ＋ 卸载时清理，避免反复进出本页面积累监听器 (FE-17)
+// 印章首字提取（未上传头像时显示雅致方印，而非巨幅空白占位框）
+const sealChar = computed(() => {
+  const raw = (localProfile.value.name || '').trim()
+  return raw ? raw.charAt(0) : '散'
+})
+
+// 全局档案更新事件：具名 handler ＋ 卸载时清理
 const handleProfileUpdatedEvent = (e: Event) => {
   const detail = (e as CustomEvent<CuratorProfile>).detail
   if (detail) localProfile.value = detail
@@ -123,245 +157,243 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left space-y-16 sm:space-y-24">
+  <div class="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left space-y-12">
     
-    <!-- 标头 Hero：出版物级刊首题记与主理人导言 -->
-    <header class="space-y-8 border-b border-[var(--border-subtle)] pb-12 sm:pb-16">
-      
-      <!-- 刊首编目元信息 -->
-      <div class="flex flex-wrap items-center justify-between gap-4 text-xs font-mono-archive text-[var(--ink-muted)]">
-        <div class="flex items-center gap-2 tracking-widest uppercase">
-          <span class="inline-block w-2 h-2 rounded-full bg-[var(--accent-warm)]"></span>
-          <span>编目 001 · 主理人档案</span>
+    <!-- 顶部个人抬头：小巧印章/头像 + 个人状态 + 年鉴与编辑入口 -->
+    <header class="pb-10 border-b border-[var(--border-subtle)] flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div class="flex items-start sm:items-center gap-4 sm:gap-5">
+        <!-- 紧凑头像或朱砂方印 -->
+        <button
+          v-if="localProfile.avatar_url"
+          @click="isLightboxOpen = true"
+          class="w-14 h-14 sm:w-16 sm:h-16 rounded-xs overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-subtle)] shrink-0 cursor-zoom-in group"
+          title="点击查看头像大图"
+        >
+          <img
+            :src="localProfile.avatar_url"
+            :alt="localProfile.name || '主理人'"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        </button>
+        <div
+          v-else
+          class="w-12 h-12 sm:w-14 sm:h-14 rounded-xs border-2 border-[#b94a3b]/80 bg-[#b94a3b]/10 text-[#b94a3b] flex items-center justify-center font-serif-editorial text-xl sm:text-2xl font-medium shrink-0 select-none"
+        >
+          {{ sealChar }}
         </div>
-        
-        <div class="flex items-center gap-4">
-          <span v-if="cityDisplay">坐标：{{ cityDisplay }}</span>
-          <span v-if="cityDisplay && isAdmin">·</span>
+
+        <div class="space-y-1.5 min-w-0">
+          <div class="flex flex-wrap items-baseline gap-3">
+            <h1 class="type-page-heading text-[var(--ink-primary)]">
+              {{ localProfile.name || '主理人' }}
+            </h1>
+            <span class="type-mono-meta tracking-widest text-[var(--ink-muted)]">
+              {{ localProfile.title || '岁月总览 · 生活刻度 · 随身器物' }}
+            </span>
+          </div>
+
+          <!-- 坐标、一句话近况与外链微标 -->
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono-archive text-[var(--ink-muted)]">
+            <span v-if="cityDisplay" class="inline-flex items-center gap-1 text-[var(--ink-secondary)]">
+              <MapPin class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+              <span>{{ cityDisplay }}</span>
+            </span>
+
+            <span v-if="localProfile.motto" class="font-serif-editorial italic text-[var(--ink-secondary)]">
+              “{{ localProfile.motto }}”
+            </span>
+
+            <a
+              v-if="localProfile.email"
+              :href="`mailto:${localProfile.email}`"
+              class="inline-flex items-center gap-1 hover:text-[var(--ink-primary)] hover-underline"
+            >
+              <Mail class="w-3 h-3" />
+              <span>{{ localProfile.email }}</span>
+            </a>
+
+            <a
+              v-if="localProfile.github"
+              :href="localProfile.github"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-0.5 hover:text-[var(--ink-primary)] hover-underline"
+            >
+              <Github class="w-3 h-3" />
+              <span>{{ githubUsername ? `@${githubUsername}` : 'GitHub' }}</span>
+              <ArrowUpRight class="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧操作按钮组 -->
+      <div class="flex flex-wrap items-center gap-3 shrink-0">
+        <button
+          @click="openAlmanacForYear(almanacYear)"
+          class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] text-xs font-mono-archive hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+        >
+          <BookOpen class="w-3.5 h-3.5" />
+          <span>{{ almanacYear }} 年度年鉴</span>
+        </button>
+
+        <button
+          @click="handleOpenEdit"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+        >
+          <Edit3 class="w-3.5 h-3.5" />
+          <span>{{ isAdmin ? '编辑个人资料' : '编辑资料 (需登录)' }}</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 第一板块：生活刻度 · 编年时间热力图与年度卷宗 -->
+    <section class="space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2.5">
+            <h2 class="font-serif-editorial text-xl sm:text-2xl font-normal text-[var(--ink-primary)]">
+              生活刻度 · 时间热力图
+            </h2>
+            <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
+              （累计在册 {{ allEntries.length }} 篇记录）
+            </span>
+          </div>
+          <p class="font-mono-archive text-xs text-[var(--ink-muted)]">
+            点击任意日期方格可速览当日记录，或选择右侧年份卷翻阅年度总结画报
+          </p>
+        </div>
+
+        <!-- 年份年鉴快捷切换签 -->
+        <div class="flex flex-wrap items-center gap-1.5 font-mono-archive text-xs">
+          <span class="text-[var(--ink-muted)] mr-1">年度卷宗：</span>
           <button
-            v-if="isAdmin"
-            @click="handleOpenEdit"
-            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-            title="自定义头像、简介与设备清单"
+            v-for="year in availableAlmanacYears"
+            :key="year"
+            @click="openAlmanacForYear(year)"
+            class="px-2.5 py-1 rounded-xs border transition-colors cursor-pointer"
+            :class="
+              almanacYear === year
+                ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
+                : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
+            "
           >
-            <Edit3 class="w-3.5 h-3.5" />
-            <span>编辑主理人档案与器物</span>
+            {{ year }} 卷
           </button>
         </div>
       </div>
 
-      <!-- 刊名主标题与副标 -->
-      <div class="space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6">
-          <h1 class="font-serif-editorial text-4xl sm:text-6xl font-normal tracking-tight text-[var(--ink-primary)]">
-            {{ localProfile.name }}
-          </h1>
-          <span class="font-mono-archive text-sm sm:text-base tracking-widest text-[var(--ink-muted)]">
-            主理人 · 散页生活档案
-          </span>
-        </div>
+      <div class="p-5 sm:p-6 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-5">
+        <LifeActivityMap
+          :entries="allEntries"
+          :selectedDate="selectedHeatmapDate"
+          @selectDate="selectedHeatmapDate = $event"
+        />
 
-        <p class="font-serif-editorial text-lg sm:text-xl text-[var(--ink-secondary)] max-w-3xl leading-relaxed">
-          {{ localProfile.title }}
-        </p>
-      </div>
-
-      <!-- 大幅金句信条横幅 (Manifesto Banner) -->
-      <div class="pt-4">
-        <blockquote class="p-6 sm:p-8 rounded-xs bg-[var(--bg-subtle)]/50 border-l-3 border-[var(--accent-warm)] relative overflow-hidden">
-          <div class="font-serif-editorial text-xl sm:text-2xl text-[var(--ink-primary)] italic leading-relaxed">
-            “{{ localProfile.motto || '生活大于项目，真实大于表演。' }}”
-          </div>
-          <div class="mt-3 font-mono-archive text-xs text-[var(--ink-muted)] uppercase tracking-wider flex items-center gap-2">
-            <span>— 主理人生活信条</span>
-          </div>
-        </blockquote>
-      </div>
-
-    </header>
-
-    <!-- 核心板块 1：胶片装裱肖像 + 极简身份档案卡片 -->
-    <section class="grid grid-cols-1 md:grid-cols-12 gap-8 sm:gap-12 items-start">
-      
-      <!-- 左栏 (5列)：暗房装裱画框与快速触达 -->
-      <div class="md:col-span-5 space-y-6">
-        
-        <!-- 拟物暗房装裱底片画框 -->
+        <!-- 点击具体日期后展开当日手记速览抽屉 -->
         <div
-          class="bg-[var(--bg-subtle)]/70 p-3 sm:p-4 rounded-xs border border-[var(--border-subtle)] shadow-[0_4px_20px_rgba(0,0,0,0.03)] cursor-zoom-in group transition-transform duration-300"
-          @click="isLightboxOpen = true"
-          title="点击在暗房灯箱中查看肖像"
+          v-if="selectedHeatmapDate"
+          class="pt-4 border-t border-[var(--border-subtle)] space-y-3 animate-in fade-in duration-200"
         >
-          <!-- 照片本体 -->
-          <div class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] aspect-square border border-[var(--border-subtle)]/60">
-            <img
-              v-if="localProfile.avatar_url"
-              :src="localProfile.avatar_url"
-              :alt="localProfile.name"
-              class="w-full h-full object-cover group-hover:scale-[1.025] transition-transform duration-700 ease-out"
-            />
-            <div
-              v-else
-              class="w-full h-full flex flex-col items-center justify-center bg-[var(--bg-subtle)] text-[var(--ink-muted)] space-y-2 select-none"
+          <div class="flex items-center justify-between text-xs font-mono-archive">
+            <div class="flex items-center gap-2 text-[var(--ink-primary)]">
+              <Calendar class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+              <span>{{ selectedHeatmapDate }} 当日记录 ({{ selectedDateEntries.length }} 条)</span>
+            </div>
+            <button
+              @click="selectedHeatmapDate = ''"
+              class="inline-flex items-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
             >
-              <User class="w-12 h-12 stroke-1" />
-              <span class="text-[11px] font-mono-archive tracking-wider">暂未上传肖像</span>
-            </div>
-            
-            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-300 pointer-events-none" />
-
-            <!-- 悬浮灯箱提示徽标 -->
-            <div class="absolute bottom-3 right-3 px-2 py-1 bg-black/75 backdrop-blur-xs text-white text-[10px] font-mono-archive rounded-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 shadow-sm">
-              <Maximize2 class="w-3 h-3" />
-              <span>暗房灯箱</span>
-            </div>
+              <X class="w-3.5 h-3.5" />
+              <span>关闭速览</span>
+            </button>
           </div>
 
-          <!-- 胶片装裱边框底款参数 -->
-          <div class="pt-3 px-1 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
-            <span class="tracking-widest">EXP. 01 · 35mm 肖像</span>
-            <span v-if="cityDisplay" class="text-[var(--ink-secondary)]">{{ cityDisplay }} · 档案收录</span>
+          <div
+            v-if="selectedDateEntries.length === 0"
+            class="text-xs font-serif-editorial text-[var(--ink-muted)] py-2"
+          >
+            该日未留下公开或私密手记。
+          </div>
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              v-for="item in selectedDateEntries"
+              :key="item.id"
+              @click="emit('selectEntry', item)"
+              class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] hover:border-[var(--ink-primary)] text-left transition-colors cursor-pointer space-y-1 group"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] truncate">
+                  {{ item.title }}
+                </span>
+                <span class="font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0">
+                  {{ parseOccurredDate(item.occurred_at).time }}
+                </span>
+              </div>
+              <p v-if="item.content" class="font-serif-editorial text-xs text-[var(--ink-secondary)] line-clamp-1">
+                {{ item.content }}
+              </p>
+            </button>
           </div>
         </div>
-
-        <!-- 身份档案索引卡片 (Index Card) -->
-        <div class="p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-4 font-mono-archive text-xs">
-          
-          <div class="border-b border-[var(--border-subtle)] pb-3">
-            <span class="text-[10px] tracking-wider text-[var(--ink-muted)] block">身份档案编目</span>
-            <div class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium pt-0.5">
-              {{ localProfile.name || '未命名主理人' }}
-            </div>
-          </div>
-
-          <div class="space-y-2.5 text-[var(--ink-secondary)]">
-            <div v-if="localProfile.location" class="flex items-center gap-2">
-              <MapPin class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0" />
-              <span>{{ localProfile.location }}</span>
-            </div>
-            
-            <div v-if="localProfile.email" class="flex items-center gap-2">
-              <Mail class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0" />
-              <a :href="`mailto:${localProfile.email}`" class="hover-underline truncate" :title="localProfile.email">
-                {{ localProfile.email }}
-              </a>
-            </div>
-
-            <div v-if="localProfile.github" class="flex items-center gap-2">
-              <Github class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0" />
-              <a
-                :href="localProfile.github"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="hover-underline inline-flex items-center gap-1 text-[var(--ink-primary)]"
-              >
-                <span>GitHub<template v-if="githubUsername"> @{{ githubUsername }}</template></span>
-                <ArrowUpRight class="w-3 h-3" />
-              </a>
-            </div>
-          </div>
-
-          <div class="pt-2 border-t border-[var(--border-subtle)]/60 text-[11px] text-[var(--ink-muted)] flex justify-between">
-            <span>档案状态：常态更新中</span>
-            <span>2024–PRESENT</span>
-          </div>
-
-        </div>
-
       </div>
-
-      <!-- 右栏 (7列)：自白书与创刊宣言 -->
-      <div class="md:col-span-7 space-y-10">
-        
-        <!-- 核心自白 -->
-        <section class="space-y-4">
-          <div class="flex items-center gap-2 font-mono-archive text-xs text-[var(--ink-muted)]">
-            <span class="text-[var(--accent-warm)] font-medium">01</span>
-            <h3 class="tracking-wider">主理人自白</h3>
-          </div>
-          
-          <p v-if="localProfile.bio" class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] leading-relaxed whitespace-pre-line">
-            {{ localProfile.bio }}
-          </p>
-          <p v-else class="font-serif-editorial text-base sm:text-lg text-[var(--ink-muted)] italic leading-relaxed">
-            主理人暂未填写个人自白，点击上方「编辑主理人档案与器物」可补充属于你的生活印记与思考。
-          </p>
-        </section>
-
-      </div>
-
     </section>
 
-    <!-- 核心板块 3：随身与桌面器物生活图鉴 (The Gear, Desk & EDC Catalog) -->
-    <section class="space-y-8 pt-8 border-t border-[var(--border-subtle)]">
-      
-      <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)]">
-              随身与桌面器物图鉴
-            </span>
-            <span class="font-mono-archive text-xs tracking-widest text-[var(--accent-warm)]">
-              · 随身与桌面图鉴
+    <!-- 随身与桌面器物展示 -->
+    <section
+      v-if="(localProfile.edc_gear || []).length > 0"
+      class="space-y-6 pt-8 border-t border-[var(--border-subtle)]"
+    >
+      <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2.5">
+            <h2 class="font-serif-editorial text-xl sm:text-2xl font-normal text-[var(--ink-primary)]">
+              随身与桌面器物
+            </h2>
+            <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
+              （已收录 {{ (localProfile.edc_gear || []).length }} 件器物）
             </span>
           </div>
-          <h2 class="font-serif-editorial text-2xl sm:text-3xl font-normal text-[var(--ink-primary)] mt-1">
-            长久陪伴日常的手艺工具与装备
-          </h2>
         </div>
 
-        <div class="font-mono-archive text-xs text-[var(--ink-muted)]">
-          已编目收录 <strong class="text-[var(--ink-primary)]">{{ (localProfile.edc_gear || []).length }}</strong> 件器物
+        <div
+          v-if="categories.length > 1"
+          class="flex flex-wrap items-center gap-1.5 text-xs font-mono-archive"
+        >
+          <button
+            @click="selectedCategory = 'all'"
+            class="px-2.5 py-1 rounded-xs border transition-all cursor-pointer"
+            :class="
+              selectedCategory === 'all'
+                ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium'
+                : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
+            "
+          >
+            全部 ({{ (localProfile.edc_gear || []).length }})
+          </button>
+
+          <button
+            v-for="cat in categories"
+            :key="cat"
+            @click="selectedCategory = cat"
+            class="px-2.5 py-1 rounded-xs border transition-all cursor-pointer"
+            :class="
+              selectedCategory === cat
+                ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium'
+                : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
+            "
+          >
+            {{ cat }} ({{ (localProfile.edc_gear || []).filter(g => g.category === cat).length }})
+          </button>
         </div>
       </div>
 
-      <!-- 器物类别切换栏 (胶囊式筛选标签) -->
-      <div
-        v-if="categories.length > 1"
-        class="flex flex-wrap items-center gap-2 text-xs font-mono-archive border-b border-[var(--border-subtle)] pb-4"
-      >
-        <button
-          @click="selectedCategory = 'all'"
-          class="px-3 py-1.5 rounded-xs border transition-all cursor-pointer"
-          :class="
-            selectedCategory === 'all'
-              ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-xs'
-              : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'
-          "
-        >
-          全部器物 ({{ (localProfile.edc_gear || []).length }})
-        </button>
-
-        <button
-          v-for="cat in categories"
-          :key="cat"
-          @click="selectedCategory = cat"
-          class="px-3 py-1.5 rounded-xs border transition-all cursor-pointer"
-          :class="
-            selectedCategory === cat
-              ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-xs'
-              : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'
-          "
-        >
-          {{ cat }} ({{ (localProfile.edc_gear || []).filter(g => g.category === cat).length }})
-        </button>
-      </div>
-
-      <!-- 纸本器物图鉴卡片网格 (Editorial Index Card Layout) -->
-      <div
-        v-if="filteredGear.length === 0"
-        class="py-16 text-center space-y-2 font-serif-editorial text-[var(--ink-muted)] border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 rounded-xs"
-      >
-        <p class="text-base text-[var(--ink-secondary)]">暂无器物收录</p>
-        <p class="font-mono-archive text-xs">点击上方「编辑主理人档案」可登记属于你的随行器材与工坊装备</p>
-      </div>
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <article
           v-for="(gear, idx) in filteredGear"
           :key="gear.id || gear.name"
-          class="p-6 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 hover:border-[var(--border-divider)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-all space-y-3.5 relative group"
+          class="p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/35 hover:border-[var(--border-divider)] transition-all space-y-3 relative group"
         >
-          <!-- 卡片顶栏：编号 + 类别 + 状态徽标 -->
           <div class="flex items-center justify-between text-[11px] font-mono-archive">
             <div class="flex items-center gap-2">
               <span class="text-[var(--ink-muted)]">NO. {{ String(idx + 1).padStart(2, '0') }}</span>
@@ -384,9 +416,8 @@ onUnmounted(() => {
             </span>
           </div>
 
-          <!-- 设备名称与规格 -->
           <div class="space-y-1">
-            <h3 class="font-serif-editorial text-xl font-medium text-[var(--ink-primary)] tracking-tight">
+            <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)] tracking-tight">
               {{ gear.name }}
             </h3>
             <p v-if="gear.spec" class="font-mono-archive text-xs text-[var(--ink-muted)] leading-relaxed">
@@ -394,69 +425,16 @@ onUnmounted(() => {
             </p>
           </div>
 
-          <!-- 主理人注记 (Field Note) -->
           <div v-if="gear.note" class="pt-2 border-t border-[var(--border-subtle)]/60">
-            <p class="font-serif-editorial text-sm text-[var(--ink-secondary)] italic leading-relaxed">
+            <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] italic leading-relaxed">
               “{{ gear.note }}”
             </p>
           </div>
         </article>
       </div>
-
     </section>
 
-    <!-- 核心板块 4：底款与来信通道 (Colophon & Direct Correspondence) -->
-    <footer class="pt-12 border-t border-[var(--border-subtle)] space-y-8">
-      
-      <div class="p-8 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="space-y-2">
-          <div class="font-mono-archive text-xs tracking-widest text-[var(--accent-warm)]">
-            来信通道 · 联络主理人
-          </div>
-          <h3 class="font-serif-editorial text-2xl font-normal text-[var(--ink-primary)]">
-            写一封信给主理人
-          </h3>
-          <p class="font-serif-editorial text-sm text-[var(--ink-secondary)] max-w-xl">
-            若你对这里的某篇生活散页、某段旅途光影或某个瞬间有所共鸣，欢迎来信交流。
-          </p>
-        </div>
-
-        <div v-if="localProfile.email || localProfile.github" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 font-mono-archive text-xs shrink-0">
-          <a
-            v-if="localProfile.email"
-            :href="`mailto:${localProfile.email}`"
-            class="px-5 py-2.5 rounded-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity text-center flex items-center justify-center gap-1.5"
-          >
-            <Mail class="w-3.5 h-3.5" />
-            <span>发送邮件 (MAIL)</span>
-          </a>
-
-          <a
-            v-if="localProfile.github"
-            :href="localProfile.github"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="px-4 py-2.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors text-center flex items-center justify-center gap-1.5"
-          >
-            <Github class="w-3.5 h-3.5" />
-            <span>GitHub<template v-if="githubUsername"> @{{ githubUsername }}</template></span>
-            <ArrowUpRight class="w-3 h-3" />
-          </a>
-        </div>
-        <div v-else class="text-xs font-mono-archive text-[var(--ink-muted)]">
-          主理人暂未公开联络方式，可点击上方「编辑主理人档案与器物」补充邮箱或社交主页
-        </div>
-      </div>
-
-      <!-- 版权与馆藏签名底款 (Colophon) -->
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono-archive text-[var(--ink-muted)] pt-4">
-        <span>《散页》· 时光手账与生活档案<template v-if="localProfile.location"> · {{ localProfile.location }}</template></span>
-        <span>出版底款 · 严谨编目 · 2024–{{ currentYear }}</span>
-      </div>
-
-    </footer>
-
-    <!-- 编辑资料弹窗 (保持双向通信与保存能力) -->
+    <!-- 编辑资料与器物弹窗 -->
     <ProfileEditModal
       :isOpen="isEditOpen"
       :profile="localProfile"
@@ -464,15 +442,22 @@ onUnmounted(() => {
       @updated="handleProfileUpdated"
     />
 
-    <!-- 暗房肖像大图灯箱 -->
+    <!-- 头像大图灯箱 -->
     <EditorialLightbox
       :isOpen="isLightboxOpen"
       :imageUrl="localProfile.avatar_url || ''"
-      :title="`${localProfile.name} · 主理人肖像`"
-      :meta="'35mm PORTRAIT ARCHIVE'"
+      :title="`${localProfile.name || '主理人'} · 肖像`"
+      :meta="'PORTRAIT ARCHIVE'"
       :location="localProfile.location"
-      :date="'2026 档案收录'"
+      :date="`${currentYear} 档案收录`"
       @close="isLightboxOpen = false"
+    />
+
+    <!-- 年度生活年鉴画报弹窗 -->
+    <AlmanacModal
+      :isOpen="isAlmanacOpen"
+      :initialYear="almanacYear"
+      @close="isAlmanacOpen = false"
     />
 
   </div>

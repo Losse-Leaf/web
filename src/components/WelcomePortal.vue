@@ -68,7 +68,7 @@ const loginError = ref('')
 // 当 status.initialized === false 时，无条件清空失效的本地残留 Token 并独占渲染阶段一「唯一首次装帧两步向导」
 const isBootstrapOnlyStage = computed(() => !status.value.initialized)
 
-// 阶段一：首次装帧两步闭环向导状态 (Step 1: 双次设密 -> Step 2: 散页风配对码与设备激活)
+// 阶段一：首次装帧两步闭环向导状态 (Step 1: 双次设密 -> Step 2: 散页风二维码/配对深链与设备激活)
 const bootstrapStep = ref<1 | 2>(1)
 const bootstrapForm = ref({
   curator_name: '',
@@ -101,9 +101,14 @@ const applySystemStatus = (s: SystemStatus) => {
   }
 }
 
-const onBootstrapCitySelect = (city: { code: string; name: string }) => {
-  bootstrapForm.value.city_code = city.code
-  bootstrapForm.value.location = city.name
+const onBootstrapCitySelect = (city: { code: string; name: string } | null) => {
+  if (!city || (!city.code && !city.name)) {
+    bootstrapForm.value.city_code = ''
+    bootstrapForm.value.location = ''
+    return
+  }
+  bootstrapForm.value.city_code = city.code || ''
+  bootstrapForm.value.location = city.name || ''
 }
 
 // 停止配对轮询与倒计时
@@ -157,7 +162,7 @@ const startBootstrapStatusPolling = (ticket: string) => {
   }, 2000)
 }
 
-// Step 1 提交：校验双次密钥一致并上报 window.location.origin 获取散页纸墨风配对码 (RC-59)
+// Step 1 提交：校验双次密钥一致并上报 window.location.origin 获取散页纸墨风配对凭据 (RC-59)
 const handleBootstrapStep1Submit = async () => {
   const name = bootstrapForm.value.curator_name.trim()
   const pass = bootstrapForm.value.master_passcode.trim()
@@ -193,7 +198,7 @@ const handleBootstrapStep1Submit = async () => {
       hub_url: window.location.origin,
     })
 
-    // 后端返回首台设备配对工单 (ticket / pin_code)，进入 Step 2 等待首台设备绑定激活
+    // 后端返回首台设备配对工单 (ticket / qr_payload)，进入 Step 2 等待首台设备绑定激活
     if (res.ticket) {
       bootstrapTicket.value = res
       bootstrapStep.value = 2
@@ -217,7 +222,6 @@ const handleQuickConfirmCurrentBrowser = async () => {
   try {
     const res = await confirmPairingTicket({
       ticket: bootstrapTicket.value.ticket,
-      pin_code: bootstrapTicket.value.pin_code,
       platform: 'web',
       device_name: detectBrowserDeviceName(),
     })
@@ -313,7 +317,7 @@ const bootstrapGuides = [
   },
   {
     num: '02',
-    title: '自动上报当前域名/IP 生成散页风配对码',
+    title: '自动上报当前域名/IP 生成散页风配对凭据',
     desc: '由后端原生渲染 #181716 深暖墨黑与 #F9F8F5 哑光棉纸配对二维码。',
   },
   {
@@ -387,7 +391,7 @@ onUnmounted(() => {
         </span>
         <span class="text-[var(--border-divider)]">/</span>
         <span class="font-serif-editorial text-xs text-[var(--ink-secondary)]">
-          时光手账与生活档案
+          个人生活志
         </span>
         <span class="hidden sm:inline text-[var(--border-divider)]">/</span>
         <span class="hidden sm:inline uppercase tracking-widest text-[11px]">
@@ -441,7 +445,7 @@ onUnmounted(() => {
                 </div>
               </div>
               <div class="font-serif-editorial text-xs tracking-wider text-[var(--ink-muted)]">
-                时光手账与生活档案
+                个人生活志 · 日常 · 资产 · 心愿 · 行迹 · 造物
               </div>
             </div>
 
@@ -566,7 +570,7 @@ onUnmounted(() => {
                     class="w-full py-3 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Sparkles class="w-3.5 h-3.5" />
-                    <span>{{ isBootstrapping ? '正在生成首台设备配对码...' : '下一步 · 生成首台设备配对码 →' }}</span>
+                    <span>{{ isBootstrapping ? '正在生成首台设备配对凭据...' : '下一步 · 生成首台设备配对凭据 →' }}</span>
                   </button>
                 </div>
               </div>
@@ -587,7 +591,7 @@ onUnmounted(() => {
                   </span>
                 </div>
 
-                <!-- 散页纸墨风二维码暗房装裱框 + 6 位匹配码 -->
+                <!-- 散页纸墨风二维码暗房装裱框 + 配对深链 -->
                 <div class="p-4 sm:p-5 bg-[var(--bg-archive)]/80 border border-[var(--border-subtle)] rounded-xs flex flex-col sm:flex-row items-center gap-5">
                   <!-- 散页纸墨风二维码装裱容器 (.film-frame + 四角复古裁切基准线 + #F9F8F5 棉纸内衬 RC-61) -->
                   <div class="film-frame p-4 rounded-xs relative inline-flex flex-col items-center shrink-0">
@@ -607,7 +611,7 @@ onUnmounted(() => {
                         v-else
                         class="w-36 h-36 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-2"
                       >
-                        使用右侧 6 位匹配码完成握手
+                        使用移动端扫码或复制配对深链
                       </div>
 
                       <!-- 过期遮罩 -->
@@ -615,7 +619,7 @@ onUnmounted(() => {
                         v-if="pairCountdown <= 0"
                         class="absolute inset-0 bg-[#F9F8F5]/95 flex flex-col items-center justify-center p-3 text-center space-y-2"
                       >
-                        <span class="text-[11px] font-mono-archive text-[#57544e]">配对码已过期</span>
+                        <span class="text-[11px] font-mono-archive text-[#57544e]">配对凭据已过期</span>
                         <button
                           @click="handleBootstrapStep1Submit"
                           class="px-2.5 py-1 bg-[#181716] text-[#F9F8F5] text-[10px] font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1"
@@ -633,15 +637,15 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <!-- 右侧：6位匹配码与实时监听状态 -->
+                  <!-- 右侧：首台设备扫码/链接配对与实时监听状态 -->
                   <div class="flex-1 space-y-3 text-center sm:text-left">
                     <div class="space-y-1">
-                      <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                        首台设备 6 位匹配码
+                      <div class="text-[11px] font-mono-archive text-[var(--accent-warm)] tracking-widest uppercase">
+                        INITIAL DEVICE PAIRING · 首台设备授信
                       </div>
-                      <div class="font-mono-archive text-3xl sm:text-4xl tracking-widest font-semibold text-[var(--ink-primary)] select-all">
-                        {{ bootstrapTicket?.pin_code || '------' }}
-                      </div>
+                      <h4 class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
+                        扫码极速接入 或 复制配对深链
+                      </h4>
                     </div>
 
                     <div class="flex items-center justify-center sm:justify-start gap-2 text-xs font-mono-archive text-[var(--accent-moss)]">
@@ -650,20 +654,23 @@ onUnmounted(() => {
                     </div>
 
                     <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                      请使用移动端或 macOS 客户端扫描二维码 / 输入 6 位匹配码完成首台设备钤印；接入后本页将自动激活并进入展厅。
+                      请使用移动端扫描左侧纸墨二维码，或复制配对深链至 macOS 客户端一键完成设备钤印；接入后本页将自动激活并进入展厅。
                     </p>
 
                     <div
                       v-if="bootstrapTicket?.qr_payload"
-                      class="pt-1 flex items-center justify-center sm:justify-start gap-2 text-[11px] font-mono-archive"
+                      class="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2 text-[11px] font-mono-archive"
                     >
                       <button
                         @click="copyBootstrapPayload"
-                        class="px-2 py-1 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer inline-flex items-center gap-1 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors"
+                        class="px-3 py-1.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs cursor-pointer inline-flex items-center gap-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors"
                       >
-                        <component :is="pairCopied ? Check : Copy" class="w-3 h-3" />
+                        <component :is="pairCopied ? Check : Copy" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
                         <span>{{ pairCopied ? '已复制配对深链' : '复制配对深链' }}</span>
                       </button>
+                      <span v-if="bootstrapTicket?.hub_url" class="text-[10px] text-[var(--ink-muted)] truncate max-w-[200px]">
+                        {{ bootstrapTicket.hub_url }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -708,7 +715,7 @@ onUnmounted(() => {
              ===================================================================== -->
         <div
           v-else
-          class="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center"
+          class="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center book-spine-crease relative"
         >
           <!-- 左页：典藏装帧手记与全馆编目 -->
           <div class="lg:col-span-6 space-y-8 text-left">
@@ -726,13 +733,13 @@ onUnmounted(() => {
                 <h1 class="font-serif-editorial text-5xl sm:text-7xl font-normal tracking-tight text-[var(--ink-primary)]">
                   《 散 页 》
                 </h1>
-                <div class="inline-flex items-center justify-center px-2 py-1 border border-[var(--accent-warm)] text-[var(--accent-warm)] text-xs font-serif-editorial rounded-xs rotate-[-3deg] shadow-2xs">
+                <div class="vermilion-seal px-2 py-0.5 text-xs">
                   散页 藏
                 </div>
               </div>
 
               <div class="font-serif-editorial text-xs tracking-wider text-[var(--ink-muted)]">
-                时光手账与生活档案 · 记录真实可感的日子
+                个人生活志 · 日常 · 资产 · 心愿 · 行迹 · 造物
               </div>
             </div>
 
@@ -741,25 +748,32 @@ onUnmounted(() => {
             </blockquote>
 
             <div class="space-y-3 pt-2">
-              <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                档案馆三大篇章
+              <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider flex items-center justify-between">
+                <span>档案馆三大篇章</span>
+                <span class="opacity-70">VOL. 01 · 编目手记</span>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div
                   v-for="ch in archiveChapters"
                   :key="ch.num"
-                  class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 space-y-1.5"
+                  class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 hover:bg-[var(--bg-subtle)]/60 transition-colors space-y-2 group"
                 >
                   <div class="flex items-center justify-between text-[10px] font-mono-archive">
                     <span class="text-[var(--accent-warm)] font-medium">{{ ch.num }}</span>
-                    <component :is="ch.icon" class="w-3 h-3 text-[var(--ink-muted)]" />
+                    <component :is="ch.icon" class="w-3.5 h-3.5 text-[var(--ink-muted)] group-hover:text-[var(--accent-warm)] transition-colors" />
                   </div>
                   <div class="font-serif-editorial text-xs font-medium text-[var(--ink-primary)]">
                     {{ ch.title }}
                   </div>
-                  <p class="font-serif-editorial text-[11px] text-[var(--ink-muted)] leading-tight">
+                  <p class="font-serif-editorial text-[11px] text-[var(--ink-muted)] leading-relaxed">
                     {{ ch.desc }}
                   </p>
+                  <!-- 微缩装帧视窗条 -->
+                  <div class="pt-1">
+                    <div v-if="ch.num === '01'" class="h-0.5 w-full bg-gradient-to-r from-[var(--accent-warm)]/60 to-transparent rounded-full"></div>
+                    <div v-else-if="ch.num === '02'" class="h-0.5 w-full bg-gradient-to-r from-emerald-600/60 to-transparent rounded-full"></div>
+                    <div v-else class="h-0.5 w-full bg-gradient-to-r from-[var(--accent-indigo)]/60 to-transparent rounded-full"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -917,7 +931,7 @@ onUnmounted(() => {
     >
       <div class="flex items-center gap-2">
         <ShieldCheck class="w-3.5 h-3.5 text-[var(--accent-moss)]" />
-        <span>《散页》· 时光手账与生活档案 · 本地优先与数据主权</span>
+        <span>《散页》· 个人生活志 · 本地优先与数据主权</span>
       </div>
 
       <div class="flex items-center gap-4">

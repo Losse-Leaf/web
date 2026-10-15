@@ -72,6 +72,7 @@ const transactionsList = ref<Transaction[]>([])
 const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
 const selectedCategoryFilter = ref<string>('')
+const activeSubTab = ref<'ledger' | 'gear'>('ledger')
 
 // 信贷渠道与资产大盘 (RC-53, FE-15, RG-20)
 const isCreditModalOpen = ref(false)
@@ -649,23 +650,23 @@ const spectrumItems = computed(() => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
+  <div class="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left space-y-10">
     <!-- 标头与操作栏 -->
-    <header class="pb-10 border-b border-[var(--border-subtle)] mb-10 space-y-4">
+    <header class="pb-10 border-b border-[var(--border-subtle)] space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-baseline gap-3">
+        <div class="flex flex-wrap items-baseline gap-3">
           <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
             资产
           </h1>
           <span class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
-            净资产大盘 · 固定设备库 · 信贷与收支台账
+            净资产大盘 · 收支台账 · 固定设备库
           </span>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2.5">
           <button
             @click="openCategoryManager('expense')"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
             title="管理自定义收支分类、设备分类与支付渠道"
           >
             <SlidersHorizontal class="w-3.5 h-3.5" />
@@ -673,25 +674,8 @@ const spectrumItems = computed(() => {
           </button>
 
           <button
-            @click="openAddGearModal"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-primary)]"
-          >
-            <Laptop class="w-3.5 h-3.5" />
-            <span>＋ 录入设备</span>
-          </button>
-
-          <button
-            @click="exportTransactionsCSV(transactionsList)"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-            title="导出当前月份账目 CSV 表格"
-          >
-            <Download class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">导出 CSV</span>
-          </button>
-
-          <button
             @click="emit('openAdd')"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
           >
             <Plus class="w-3.5 h-3.5" />
             <span>记一笔</span>
@@ -700,15 +684,15 @@ const spectrumItems = computed(() => {
       </div>
     </header>
 
-    <!-- 1. 个人资产负债总览表 (Architectural Balance Sheet + Integrated Credit Ledger) -->
-    <section class="mb-14 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 overflow-hidden">
+    <!-- 1. 个人资产负债总览表 (Balance Sheet + Integrated Credit Ledger) -->
+    <section class="rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 overflow-hidden">
       <!-- 四列核心资产指标网格 -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
         <!-- 01 个人净资产 -->
         <div class="p-5 sm:p-6 space-y-2">
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span>01 · 个人净资产</span>
-            <span class="text-[10px]">NET WORTH</span>
+            <span class="text-[10px]">实时核算</span>
           </div>
           <div class="font-serif-editorial text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--ink-primary)]">
             {{ (assetsOverview?.net_worth ?? estimatedNetWorth) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.net_worth ?? estimatedNetWorth)) }}
@@ -719,12 +703,16 @@ const spectrumItems = computed(() => {
         </div>
 
         <!-- 02 流动资金池 -->
-        <div class="p-5 sm:p-6 space-y-2">
+        <div
+          @click="!isEditingLiquidBalance && (activeSubTab = 'ledger')"
+          class="p-5 sm:p-6 space-y-2 transition-colors cursor-pointer"
+          :class="activeSubTab === 'ledger' ? 'bg-[var(--bg-archive)]/60' : 'hover:bg-[var(--bg-subtle)]/40'"
+        >
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span>02 · 流动资金池</span>
             <button
               v-if="!isEditingLiquidBalance"
-              @click="openEditLiquidBalance"
+              @click.stop="openEditLiquidBalance"
               type="button"
               class="text-[10px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-2 cursor-pointer transition-colors"
             >
@@ -736,7 +724,7 @@ const spectrumItems = computed(() => {
             {{ (assetsOverview?.liquid_balance ?? 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.liquid_balance ?? (summary?.balance || 0))) }}
           </div>
 
-          <div v-else class="flex items-center gap-1.5 pt-0.5 font-mono-archive">
+          <div v-else @click.stop class="flex items-center gap-1.5 pt-0.5 font-mono-archive">
             <span class="text-xs text-[var(--ink-muted)]">¥</span>
             <input
               v-model="liquidBalanceInput"
@@ -773,7 +761,11 @@ const spectrumItems = computed(() => {
         </div>
 
         <!-- 03 固定资产沉淀 -->
-        <div class="p-5 sm:p-6 space-y-2">
+        <div
+          @click="activeSubTab = 'gear'"
+          class="p-5 sm:p-6 space-y-2 transition-colors cursor-pointer"
+          :class="activeSubTab === 'gear' ? 'bg-[var(--bg-archive)]/60' : 'hover:bg-[var(--bg-subtle)]/40'"
+        >
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span>03 · 固定资产沉淀</span>
             <span>{{ assetsOverview?.gear_summary?.active_count ?? activeGearCount }} 件在役</span>
@@ -786,7 +778,7 @@ const spectrumItems = computed(() => {
               累计二手回血 +¥{{ formatMoney(assetsOverview?.gear_summary?.sold_recovered_value || 0) }}
             </template>
             <template v-else>
-              在用随身与桌面生产力器物
+              点击管理在用生产力设备
             </template>
           </p>
         </div>
@@ -913,95 +905,336 @@ const spectrumItems = computed(() => {
       </div>
     </section>
 
-    <!-- 2. 随身与桌面固定资产设备库 (Editorial Index Card Layout) -->
-    <section class="pb-12 mb-14 border-b border-[var(--border-subtle)] space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2 text-xs font-mono-archive text-[var(--ink-muted)]">
-            <span>FIXED ASSETS &amp; GEAR CATALOG</span>
-            <span>·</span>
-            <span>在役 {{ assetsOverview?.gear_summary?.active_count ?? activeGearCount }} 件 / 已转售 {{ assetsOverview?.gear_summary?.sold_count ?? 0 }} 件</span>
-          </div>
-          <h2 class="font-serif-editorial text-2xl font-normal text-[var(--ink-primary)]">
-            随身与桌面固定资产库
-          </h2>
+    <!-- 2. 二级子视图切换栏：月度收支台账 ⟷ 固定资产设备库 -->
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+      <div class="flex items-center gap-6 text-sm font-serif-editorial">
+        <button
+          type="button"
+          @click="activeSubTab = 'ledger'"
+          class="pb-1.5 transition-colors cursor-pointer flex items-center gap-2"
+          :class="
+            activeSubTab === 'ledger'
+              ? 'text-[var(--ink-primary)] font-medium border-b-2 border-[var(--ink-primary)]'
+              : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+          "
+        >
+          <span>月度收支台账</span>
+          <span class="font-mono-archive text-xs text-[var(--ink-muted)]">({{ transactionsList.length }})</span>
+        </button>
+
+        <button
+          type="button"
+          @click="activeSubTab = 'gear'"
+          class="pb-1.5 transition-colors cursor-pointer flex items-center gap-2"
+          :class="
+            activeSubTab === 'gear'
+              ? 'text-[var(--ink-primary)] font-medium border-b-2 border-[var(--ink-primary)]'
+              : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+          "
+        >
+          <span>固定资产设备库</span>
+          <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
+            (在役 {{ assetsOverview?.gear_summary?.active_count ?? activeGearCount }})
+          </span>
+        </button>
+      </div>
+
+      <!-- 右侧联动操作区：台账视图显示月份切换与导出，设备视图显示筛选与录入 -->
+      <div v-if="activeSubTab === 'ledger'" class="flex flex-wrap items-center gap-3 font-mono-archive text-xs">
+        <div class="inline-flex items-center gap-1 border border-[var(--border-subtle)] rounded-xs px-2 py-1 bg-[var(--bg-subtle)]/30">
+          <button
+            @click="prevMonth"
+            class="p-0.5 hover:text-[var(--ink-primary)] text-[var(--ink-muted)] cursor-pointer"
+            title="上个月"
+          >
+            <ChevronLeft class="w-3.5 h-3.5" />
+          </button>
+          <span class="px-2 text-[var(--ink-primary)] font-medium">
+            {{ year }} 年 {{ month }} 月
+          </span>
+          <button
+            @click="nextMonth"
+            class="p-0.5 hover:text-[var(--ink-primary)] text-[var(--ink-muted)] cursor-pointer"
+            title="下个月"
+          >
+            <ChevronRight class="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2.5 text-xs font-mono-archive">
-          <div class="inline-flex items-center rounded-xs border border-[var(--border-subtle)] p-0.5 bg-[var(--bg-subtle)]/40">
-            <button
-              type="button"
-              @click="gearFilter = 'active'"
-              class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
-              :class="gearFilter === 'active' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
-            >
-              在役 ({{ allGearItems.filter((g) => g.status !== 'sold').length }})
-            </button>
-            <button
-              type="button"
-              @click="gearFilter = 'sold'"
-              class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
-              :class="gearFilter === 'sold' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
-            >
-              已转售 ({{ allGearItems.filter((g) => g.status === 'sold').length }})
-            </button>
-            <button
-              type="button"
-              @click="gearFilter = 'all'"
-              class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
-              :class="gearFilter === 'all' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
-            >
-              全部
-            </button>
-          </div>
+        <button
+          @click="exportTransactionsCSV(transactionsList)"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+          title="导出当前月份账目 CSV 表格"
+        >
+          <Download class="w-3.5 h-3.5" />
+          <span>导出 CSV</span>
+        </button>
+      </div>
 
+      <div v-else class="flex flex-wrap items-center gap-2.5 text-xs font-mono-archive">
+        <div class="inline-flex items-center rounded-xs border border-[var(--border-subtle)] p-0.5 bg-[var(--bg-subtle)]/40">
           <button
             type="button"
-            @click="openAddGearModal"
-            class="px-3.5 py-1.5 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+            @click="gearFilter = 'active'"
+            class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
+            :class="gearFilter === 'active' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
           >
-            ＋ 录入新设备
+            在役 ({{ allGearItems.filter((g) => g.status !== 'sold').length }})
           </button>
+          <button
+            type="button"
+            @click="gearFilter = 'sold'"
+            class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
+            :class="gearFilter === 'sold' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+          >
+            已转售 ({{ allGearItems.filter((g) => g.status === 'sold').length }})
+          </button>
+          <button
+            type="button"
+            @click="gearFilter = 'all'"
+            class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
+            :class="gearFilter === 'all' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+          >
+            全部
+          </button>
+        </div>
+
+        <button
+          type="button"
+          @click="openAddGearModal"
+          class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+        >
+          <Laptop class="w-3.5 h-3.5" />
+          <span>录入新设备</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 视图 A：月度收支概览与流水台账（默认主视图） -->
+    <section v-if="activeSubTab === 'ledger'" class="space-y-8">
+      <!-- 框体化月度核心收支三联表 + 支出光谱分布 -->
+      <div class="rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/20 overflow-hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)] font-serif-editorial">
+          <div class="p-5 sm:p-6 space-y-1">
+            <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">
+              {{ month }} 月支出合计
+            </span>
+            <div class="text-2xl sm:text-3xl font-medium tracking-tight text-[var(--ink-primary)]">
+              ¥{{ formatMoney(summary?.total_expense || 0) }}
+            </div>
+          </div>
+
+          <div class="p-5 sm:p-6 space-y-1">
+            <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">
+              {{ month }} 月收入合计
+            </span>
+            <div class="text-2xl sm:text-3xl font-medium tracking-tight text-[var(--accent-moss)]">
+              ¥{{ formatMoney(summary?.total_income || 0) }}
+            </div>
+          </div>
+
+          <div class="p-5 sm:p-6 space-y-1">
+            <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">
+              当月净结余
+            </span>
+            <div
+              class="text-2xl sm:text-3xl font-medium tracking-tight"
+              :class="(summary?.balance || 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'"
+            >
+              {{ (summary?.balance || 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(summary?.balance || 0)) }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 支出光谱细线条（内嵌于月度总览框底部） -->
+        <div
+          v-if="summary && summary.total_expense > 0 && spectrumItems.length > 0"
+          class="p-5 sm:p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-archive)]/50 space-y-3.5"
+        >
+          <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
+            <span class="tracking-wider">支出类目分布（点击类目可筛选下方流水）</span>
+            <span>{{ spectrumItems.length }} 个支出类目</span>
+          </div>
+
+          <div class="h-2 w-full rounded-full bg-[var(--bg-subtle)] overflow-hidden flex">
+            <div
+              v-for="item in spectrumItems"
+              :key="item.category"
+              :style="{ width: `${item.percentage}%`, backgroundColor: item.color }"
+              class="h-full transition-all duration-300 relative group cursor-pointer"
+              :title="`${item.category}: ¥${formatMoney(item.amount)} (${item.percentage}%)`"
+            ></div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-mono-archive">
+            <button
+              v-for="item in spectrumItems"
+              :key="item.category"
+              @click="toggleCategoryFilter(item.category)"
+              class="flex items-center gap-2 py-0.5 px-1.5 rounded-xs transition-colors cursor-pointer border"
+              :class="selectedCategoryFilter === item.category
+                ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold'
+                : 'border-transparent text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
+            >
+              <span class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: item.color }"></span>
+              <span>{{ item.category }}</span>
+              <span class="text-[var(--ink-muted)]">{{ item.percentage }}%</span>
+              <span class="font-mono-archive text-[var(--ink-primary)]">¥{{ formatMoney(item.amount) }}</span>
+            </button>
+
+            <button
+              v-if="selectedCategoryFilter"
+              @click="selectedCategoryFilter = ''"
+              class="text-[11px] text-[var(--accent-warm)] hover-underline cursor-pointer ml-auto"
+            >
+              清空类目筛选（显示全部）
+            </button>
+          </div>
         </div>
       </div>
 
+      <!-- 记账列表 (按日汇聚) -->
+      <div
+        v-if="dayGroups.length === 0"
+        class="py-14 px-6 rounded-xs border border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)]/15 text-center space-y-4"
+      >
+        <div class="w-10 h-10 rounded-full border border-[var(--border-subtle)] flex items-center justify-center mx-auto text-[var(--ink-muted)]">
+          <Wallet class="w-4 h-4" />
+        </div>
+        <div class="space-y-1 font-serif-editorial">
+          <h3 class="text-base text-[var(--ink-primary)]">{{ year }} 年 {{ month }} 月尚无收支流水</h3>
+          <p class="text-xs text-[var(--ink-muted)]">
+            从一顿具体的餐食、一件器物或一笔回血开始，记录真实的资产变动。
+          </p>
+        </div>
+        <button
+          @click="emit('openAdd')"
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          <span>添加本月第一笔账目</span>
+        </button>
+      </div>
+
+      <div v-else class="space-y-8">
+        <section
+          v-for="group in dayGroups"
+          :key="group.dateStr"
+          class="space-y-2"
+        >
+          <!-- 复式账簿日表头：双细线与日合计 -->
+          <div class="flex items-baseline justify-between border-b-2 border-double border-[var(--border-divider)] pb-1.5 text-xs font-mono-archive text-[var(--ink-muted)]">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-warm)]"></span>
+              <span class="text-sm font-serif-editorial text-[var(--ink-primary)] font-medium tracking-wide">
+                {{ group.displayDay }}
+              </span>
+            </div>
+            <span v-if="group.dayTotalExpense > 0" class="tracking-wide">
+              支出小计：<span class="text-[var(--ink-primary)] font-medium tabular-nums">-¥{{ formatMoney(group.dayTotalExpense) }}</span>
+            </span>
+          </div>
+
+          <div class="divide-y divide-[var(--border-subtle)]/50">
+            <div
+              v-for="tx in group.items"
+              :key="tx.id"
+              class="py-2.5 flex items-center justify-between group hover:bg-[var(--bg-subtle)]/40 px-2 rounded-xs transition-colors"
+            >
+              <div class="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
+                <span class="text-[10px] font-mono-archive tracking-wider text-[var(--ink-muted)] border border-[var(--border-subtle)] bg-[var(--bg-archive)] px-1.5 py-0.5 rounded-xs shrink-0 select-none">
+                  {{ tx.category }}
+                </span>
+                <span class="font-serif-editorial text-sm sm:text-base text-[var(--ink-primary)] truncate">
+                  {{ tx.title }}
+                </span>
+                <span
+                  v-if="tx.is_installment"
+                  class="text-[10px] font-mono-archive tracking-wider text-[var(--accent-warm)] border border-[var(--accent-warm)]/40 px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/5 shrink-0 select-none"
+                >
+                  分期
+                </span>
+                <span v-if="tx.payment_method" class="text-[10px] font-mono-archive text-[var(--ink-muted)] hidden lg:inline shrink-0">
+                  [{{ tx.payment_method }}]
+                </span>
+                <span v-if="tx.note" class="text-xs font-serif-editorial text-[var(--ink-muted)] truncate hidden md:inline">
+                  — {{ tx.note }}
+                </span>
+                <!-- 日式账簿点导引线 -->
+                <div class="dot-leader hidden sm:block"></div>
+              </div>
+
+              <div class="flex items-center gap-3 font-mono-archive text-sm shrink-0">
+                <span
+                  class="tabular-nums font-medium"
+                  :class="tx.type === 'expense' ? 'text-[var(--ink-primary)]' : 'text-[var(--accent-moss)]'"
+                >
+                  {{ tx.type === 'expense' ? '-' : '+' }}¥{{ formatMoney(tx.amount) }}
+                </span>
+
+                <div class="flex sm:hidden sm:group-hover:flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
+                  <button
+                    @click="startEdit(tx)"
+                    class="p-1 hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
+                    title="修改账目"
+                  >
+                    <Edit2 class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    @click="removeTx(tx.id)"
+                    class="p-1 hover:text-red-700 cursor-pointer transition-colors"
+                    title="删除账目"
+                  >
+                    <Trash2 class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- 视图 B：随身与桌面固定资产设备库（固定双列网格，告别单件全屏拉伸） -->
+    <section v-else class="space-y-6">
       <div
         v-if="filteredGearItems.length === 0"
-        class="p-10 rounded-xs border border-dashed border-[var(--border-subtle)] text-center space-y-2"
+        class="p-12 rounded-xs border border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)]/15 text-center space-y-3"
       >
         <p class="font-serif-editorial text-base text-[var(--ink-secondary)]">
           {{ gearFilter === 'sold' ? '尚无转售回血的设备记录' : '固定资产设备库暂无在役单品' }}
         </p>
         <p class="font-mono-archive text-xs text-[var(--ink-muted)]">
-          点击右上角「＋ 录入设备」，或在达成心愿归册时勾选「沉淀至固定资产库」即可收录在役设备。
+          点击右上角「录入新设备」，或在达成心愿归册时勾选「沉淀至固定资产库」即可收录在役设备。
         </p>
       </div>
 
       <div
         v-else
-        class="grid grid-cols-1 gap-5"
-        :class="filteredGearItems.length > 1 ? 'md:grid-cols-2' : 'md:grid-cols-1'"
+        class="grid grid-cols-1 md:grid-cols-2 gap-5"
       >
         <article
           v-for="(gear, idx) in filteredGearItems"
           :key="gear.id || gear.name"
           class="p-5 sm:p-6 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 hover:border-[var(--border-divider)] transition-all flex flex-col justify-between gap-4 group"
         >
-          <!-- 卡片顶栏：编号 + 类目 + 状态与动作按钮（不折行） -->
+          <!-- 卡片顶栏：编号 + 类目 + 状态与动作按钮 -->
           <div class="flex items-center justify-between gap-3 text-[11px] font-mono-archive">
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-[var(--ink-muted)] shrink-0">NO. {{ String(idx + 1).padStart(2, '0') }}</span>
               <span class="text-[var(--border-divider)] shrink-0">/</span>
               <span class="text-[var(--ink-secondary)] truncate">{{ gear.category || '固定资产' }}</span>
               <span
-                class="px-1.5 py-0.5 rounded-xs text-[10px] shrink-0 border"
-                :class="
-                  gear.status === 'sold'
-                    ? 'bg-amber-900/10 text-[var(--accent-warm)] border-[var(--accent-warm)]/30'
-                    : 'bg-emerald-900/10 text-[var(--accent-moss)] border-[var(--accent-moss)]/30'
-                "
+                v-if="gear.status === 'sold'"
+                class="vermilion-seal px-1.5 py-0.2 text-[10px] shrink-0 font-mono-archive"
               >
-                {{ gear.status === 'sold' ? '已转售回血' : '在役自用' }}
+                已回血
+              </span>
+              <span
+                v-else
+                class="px-1.5 py-0.5 rounded-xs text-[10px] shrink-0 border bg-emerald-900/10 text-[var(--accent-moss)] border-[var(--accent-moss)]/30 font-mono-archive"
+              >
+                在役自用
               </span>
             </div>
 
@@ -1083,195 +1316,6 @@ const spectrumItems = computed(() => {
             </div>
           </div>
         </article>
-      </div>
-    </section>
-
-    <!-- 3. 月度收支概览与流水台账 -->
-    <section class="space-y-10">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3 font-mono-archive text-sm">
-          <button
-            @click="prevMonth"
-            class="p-1 hover:text-[var(--ink-primary)] text-[var(--ink-muted)] cursor-pointer"
-            title="上个月"
-          >
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <span class="text-lg text-[var(--ink-primary)] font-serif-editorial font-medium">
-            {{ year }} 年 {{ month }} 月 · 收支台账
-          </span>
-          <button
-            @click="nextMonth"
-            class="p-1 hover:text-[var(--ink-primary)] text-[var(--ink-muted)] cursor-pointer"
-            title="下个月"
-          >
-            <ChevronRight class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <!-- 月度核心收支概览 -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 pb-10 border-b border-[var(--border-subtle)] font-serif-editorial">
-        <div class="space-y-1">
-          <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">本月支出</span>
-          <div class="text-3xl font-medium tracking-tight text-[var(--ink-primary)]">
-            ¥{{ formatMoney(summary?.total_expense || 0) }}
-          </div>
-        </div>
-
-        <div class="space-y-1">
-          <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">本月收入</span>
-          <div class="text-3xl font-medium tracking-tight text-[var(--accent-moss)]">
-            ¥{{ formatMoney(summary?.total_income || 0) }}
-          </div>
-        </div>
-
-        <div class="space-y-1">
-          <span class="font-mono-archive text-xs tracking-wider text-[var(--ink-muted)] block">当月结余</span>
-          <div
-            class="text-3xl font-medium tracking-tight"
-            :class="(summary?.balance || 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'"
-          >
-            {{ (summary?.balance || 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(summary?.balance || 0)) }}
-          </div>
-        </div>
-      </div>
-
-      <!-- 支出光谱细线条 -->
-      <div
-        v-if="summary && summary.total_expense > 0 && spectrumItems.length > 0"
-        class="pb-10 border-b border-[var(--border-subtle)] space-y-4"
-      >
-        <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-          <span class="tracking-wider">支出光谱分布</span>
-          <span>{{ spectrumItems.length }} 个支出类目</span>
-        </div>
-
-        <div class="h-2 w-full rounded-full bg-[var(--bg-subtle)] overflow-hidden flex">
-          <div
-            v-for="item in spectrumItems"
-            :key="item.category"
-            :style="{ width: `${item.percentage}%`, backgroundColor: item.color }"
-            class="h-full transition-all duration-300 relative group cursor-pointer"
-            :title="`${item.category}: ¥${formatMoney(item.amount)} (${item.percentage}%)`"
-          ></div>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono-archive">
-          <button
-            v-for="item in spectrumItems"
-            :key="item.category"
-            @click="toggleCategoryFilter(item.category)"
-            class="flex items-center gap-2 py-0.5 px-1.5 rounded-xs transition-colors cursor-pointer border"
-            :class="selectedCategoryFilter === item.category
-              ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold'
-              : 'border-transparent text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
-            :title="selectedCategoryFilter === item.category ? '点击取消类目过滤' : `点击仅看【${item.category}】流水`"
-          >
-            <span class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: item.color }"></span>
-            <span>{{ item.category }}</span>
-            <span class="text-[var(--ink-muted)]">{{ item.percentage }}%</span>
-            <span class="font-mono-archive text-[var(--ink-primary)]">¥{{ formatMoney(item.amount) }}</span>
-          </button>
-
-          <button
-            v-if="selectedCategoryFilter"
-            @click="selectedCategoryFilter = ''"
-            class="text-[11px] text-[var(--accent-warm)] hover-underline cursor-pointer ml-auto"
-          >
-            清空类目筛选（显示全部）
-          </button>
-        </div>
-      </div>
-
-      <!-- 记账列表 (按日汇聚) -->
-      <div v-if="dayGroups.length === 0" class="py-16 text-center space-y-4">
-        <div class="w-12 h-12 rounded-full border border-[var(--border-subtle)] flex items-center justify-center mx-auto text-[var(--ink-muted)]">
-          <Wallet class="w-5 h-5" />
-        </div>
-        <div class="space-y-1 font-serif-editorial">
-          <h3 class="text-lg text-[var(--ink-primary)]">这个月还没有收支流水</h3>
-          <p class="text-xs text-[var(--ink-muted)]">
-            从一顿具体的饭、一件器材或一笔回血开始，记录真实的资产变动。
-          </p>
-        </div>
-        <button
-          @click="emit('openAdd')"
-          class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          <span>添加第一笔账目</span>
-        </button>
-      </div>
-
-      <div v-else class="space-y-12">
-        <section
-          v-for="group in dayGroups"
-          :key="group.dateStr"
-          class="space-y-4"
-        >
-          <div class="flex items-baseline justify-between border-b border-[var(--border-subtle)] pb-2 text-xs font-mono-archive text-[var(--ink-muted)]">
-            <span class="text-sm font-serif-editorial text-[var(--ink-primary)] font-medium">
-              {{ group.displayDay }}
-            </span>
-            <span v-if="group.dayTotalExpense > 0">
-              日支出：-¥{{ formatMoney(group.dayTotalExpense) }}
-            </span>
-          </div>
-
-          <div class="divide-y divide-[var(--border-subtle)]/60">
-            <div
-              v-for="tx in group.items"
-              :key="tx.id"
-              class="py-3.5 flex items-center justify-between group hover:bg-[var(--bg-subtle)]/40 px-2 rounded-xs transition-colors"
-            >
-              <div class="space-y-0.5">
-                <div class="flex items-center gap-2.5 flex-wrap">
-                  <span class="font-serif-editorial text-base text-[var(--ink-primary)]">
-                    {{ tx.title }}
-                  </span>
-                  <span class="text-[10px] font-mono-archive tracking-wider text-[var(--ink-muted)] border border-[var(--border-subtle)] px-1.5 py-0.2 rounded-xs">
-                    {{ tx.category }}
-                  </span>
-                  <span
-                    v-if="tx.is_installment"
-                    class="text-[10px] font-mono-archive tracking-wider text-[var(--accent-warm)] border border-[var(--accent-warm)]/40 px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/5"
-                  >
-                    {{ tx.installment_channel_code === 'huabei' ? '花呗' : tx.installment_channel_code === 'baitiao' ? '白条' : '分期' }}{{ tx.installment_months ? ' ' + tx.installment_months + '期' : '' }} ({{ tx.repayment_day || 10 }}日)
-                  </span>
-                </div>
-                <p v-if="tx.note" class="text-xs font-serif-editorial text-[var(--ink-muted)]">
-                  {{ tx.note }}
-                </p>
-              </div>
-
-              <div class="flex items-center gap-4 font-mono-archive text-sm">
-                <span
-                  :class="tx.type === 'expense' ? 'text-[var(--ink-primary)] font-medium' : 'text-[var(--accent-moss)] font-medium'"
-                >
-                  {{ tx.type === 'expense' ? '-' : '+' }}¥{{ formatMoney(tx.amount) }}
-                </span>
-
-                <div class="flex sm:hidden sm:group-hover:flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
-                  <button
-                    @click="startEdit(tx)"
-                    class="p-1 hover:text-[var(--ink-primary)] cursor-pointer"
-                    title="修改"
-                  >
-                    <Edit2 class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    @click="removeTx(tx.id)"
-                    class="p-1 hover:text-red-700 cursor-pointer"
-                    title="删除"
-                  >
-                    <Trash2 class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
     </section>
 

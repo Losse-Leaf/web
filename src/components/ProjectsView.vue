@@ -182,7 +182,7 @@ const isGitHubUrl = (url?: string) => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
+  <div class="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
     
     <!-- 标头 -->
     <header class="pb-10 border-b border-[var(--border-subtle)] mb-8 space-y-3">
@@ -274,31 +274,32 @@ const isGitHubUrl = (url?: string) => {
       </div>
     </div>
 
-    <!-- 项目故事清单 (Editorial Stories) -->
-    <div v-else class="divide-y divide-[var(--border-subtle)] space-y-16">
+    <!-- 项目故事清单 (Editorial Stories / Project Dossiers) -->
+    <div v-else class="space-y-10">
       
       <article
         v-for="(proj, idx) in filteredProjects"
         :key="proj.id"
-        class="pt-14 first:pt-0 space-y-6"
+        class="p-6 sm:p-8 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/20 hover:bg-[var(--bg-subtle)]/35 hover:border-[var(--border-divider)] transition-all space-y-6 shadow-2xs text-left"
       >
-        <!-- 序号、状态与操作 -->
-        <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-          <div class="flex items-center gap-2">
-            <span class="text-[var(--ink-primary)] font-semibold">
-              {{ String(idx + 1).padStart(2, '0') }}.
+        <!-- 卷宗编号、类别、状态与操作 -->
+        <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/60 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="px-2 py-0.5 rounded-xs bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-semibold tracking-wider text-[11px]">
+              卷宗 NO. {{ String(idx + 1).padStart(2, '0') }}
             </span>
-            <span class="tracking-wider">{{ proj.category }}</span>
+            <span class="text-[var(--border-divider)]">/</span>
+            <span class="tracking-wider text-[var(--ink-secondary)] font-medium">{{ proj.category }}</span>
           </div>
 
           <div class="flex items-center gap-3">
-            <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[10px]">
+            <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[10px] bg-[var(--bg-archive)] font-mono-archive">
               {{ proj.status === 'Archived' ? '已封存' : proj.status === 'Maintained' ? '长期维护' : '进行中' }}
             </span>
             <template v-if="isAdmin">
               <button
                 @click="emit('openAddProjectEntry', proj.id)"
-                class="inline-flex items-center gap-1 px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[10px]"
+                class="inline-flex items-center gap-1 px-2.5 py-1 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs transition-colors cursor-pointer text-[11px]"
                 title="为此项目撰写新的造物手记或阶段进展"
               >
                 <Plus class="w-3 h-3" />
@@ -323,37 +324,37 @@ const isGitHubUrl = (url?: string) => {
         </div>
 
         <!-- 标题与副标 -->
-        <div>
-          <h2 class="text-2xl sm:text-3xl font-serif-editorial font-medium text-[var(--ink-primary)]">
+        <div class="space-y-1">
+          <h2 class="type-section-heading text-[var(--ink-primary)]">
             {{ proj.title }}
           </h2>
-          <p v-if="proj.subtitle" class="text-sm font-mono-archive text-[var(--ink-muted)] mt-1">
+          <p v-if="proj.subtitle" class="text-xs sm:text-sm font-mono-archive text-[var(--ink-muted)]">
             {{ proj.subtitle }}
           </p>
         </div>
 
         <!-- 人生经历叙事 (Story: 为什么开始、怎么做、遇到了什么) -->
-        <div class="space-y-3 font-serif-editorial text-base sm:text-lg text-[var(--ink-secondary)] leading-relaxed max-w-2xl">
+        <div class="space-y-3 font-serif-editorial text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed max-w-3xl prose-editorial">
           <p v-if="proj.description" class="text-[var(--ink-primary)] font-medium">
             {{ proj.description }}
           </p>
-          <p v-if="proj.story" class="text-[var(--ink-secondary)] italic text-sm sm:text-base border-l-2 border-[var(--border-subtle)] pl-4 py-1">
+          <p v-if="proj.story" class="text-[var(--ink-secondary)] italic border-l-2 border-[var(--accent-warm)]/60 pl-4 py-1.5 bg-[var(--bg-subtle)]/40 rounded-r-xs">
             “{{ proj.story }}”
           </p>
         </div>
 
         <!-- 外部链接 -->
-        <div v-if="proj.github_url" class="pt-2 flex flex-wrap items-center justify-end gap-4 text-xs font-mono-archive">
+        <div v-if="proj.github_url" class="pt-1 flex flex-wrap items-center justify-end gap-4 text-xs font-mono-archive">
           <a
             :href="proj.github_url"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 text-[var(--ink-primary)] hover-underline pb-0.5"
+            class="inline-flex items-center gap-1.5 px-3 py-1 bg-[var(--bg-archive)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] transition-colors"
           >
             <Github v-if="isGitHubUrl(proj.github_url)" class="w-3.5 h-3.5" />
             <Globe v-else class="w-3.5 h-3.5" />
             <span>{{ isGitHubUrl(proj.github_url) ? '查看 GitHub 源码' : '访问项目主页' }}</span>
-            <ArrowUpRight class="w-3 h-3" />
+            <ArrowUpRight class="w-3 h-3 opacity-60" />
           </a>
         </div>
 

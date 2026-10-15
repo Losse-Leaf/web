@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ChevronDown, Check } from 'lucide-vue-next'
+import { audio } from '../utils/audio'
 
 export interface PaperSelectOption {
   value: string | number | null
@@ -15,11 +16,13 @@ const props = withDefaults(
     options: PaperSelectOption[]
     placeholder?: string
     size?: 'xs' | 'sm' | 'md'
+    font?: 'mono' | 'serif'
     disabled?: boolean
   }>(),
   {
     placeholder: '请选择...',
     size: 'md',
+    font: 'mono',
     disabled: false,
   }
 )
@@ -35,7 +38,7 @@ const menuRef = ref<HTMLElement | null>(null)
 const dropdownStyle = ref<Record<string, string>>({})
 
 const selectedOption = computed(() => {
-  return props.options.find((o) => o.value === props.modelValue) || null
+  return props.options.find((o) => o.value == props.modelValue) || null
 })
 
 const displayLabel = computed(() => {
@@ -54,6 +57,10 @@ const sizeClasses = computed(() => {
     default:
       return 'px-3 py-2 text-xs'
   }
+})
+
+const fontClass = computed(() => {
+  return props.font === 'serif' ? 'font-serif-editorial' : 'font-mono-archive'
 })
 
 const updatePosition = () => {
@@ -79,12 +86,14 @@ const toggleDropdown = async () => {
   if (props.disabled) return
   isOpen.value = !isOpen.value
   if (isOpen.value) {
+    audio.playTink()
     await nextTick()
     updatePosition()
   }
 }
 
 const selectOption = (opt: PaperSelectOption) => {
+  audio.playTink()
   emit('update:modelValue', opt.value)
   emit('change', opt.value)
   isOpen.value = false
@@ -131,7 +140,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative inline-block w-full text-left font-mono-archive">
+  <div class="relative inline-block w-full text-left" :class="fontClass">
     <!-- 纸本触发器按钮 (彻底替代系统原生 select) -->
     <button
       ref="triggerRef"
@@ -165,7 +174,8 @@ onBeforeUnmount(() => {
         v-if="isOpen"
         ref="menuRef"
         :style="dropdownStyle"
-        class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-[0_10px_30px_rgba(0,0,0,0.14)] max-h-60 overflow-y-auto divide-y divide-[var(--border-subtle)]/40 font-mono-archive text-xs animate-in fade-in duration-120"
+        class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-[0_10px_30px_rgba(0,0,0,0.14)] max-h-60 overflow-y-auto divide-y divide-[var(--border-subtle)]/40 text-xs animate-in fade-in duration-120"
+        :class="fontClass"
       >
         <div
           v-if="options.length === 0"
@@ -180,7 +190,7 @@ onBeforeUnmount(() => {
           @click="selectOption(opt)"
           class="w-full px-3 py-2 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer"
           :class="
-            opt.value === modelValue
+            opt.value == modelValue
               ? 'bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-medium'
               : 'text-[var(--ink-secondary)] hover:bg-[var(--bg-subtle)]/60 hover:text-[var(--ink-primary)]'
           "
@@ -199,7 +209,7 @@ onBeforeUnmount(() => {
               {{ opt.badge }}
             </span>
             <Check
-              v-if="opt.value === modelValue"
+              v-if="opt.value == modelValue"
               class="w-3.5 h-3.5 text-[var(--accent-warm)] shrink-0"
             />
           </div>

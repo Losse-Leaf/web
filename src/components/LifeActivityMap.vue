@@ -117,16 +117,13 @@ const calendarWeeks = computed(() => {
       if (level === 0) {
         baseClass = 'bg-[var(--activity-empty)] hover:bg-[var(--border-divider)] cursor-default'
       } else if (level === 1) {
-        baseClass = 'bg-[var(--activity-l1)] hover:opacity-85 cursor-pointer shadow-xs'
+        baseClass = 'bg-[var(--activity-l1)] cursor-pointer shadow-xs'
       } else if (level === 2) {
-        baseClass = 'bg-[var(--activity-l2)] hover:opacity-85 cursor-pointer shadow-xs'
+        baseClass = 'bg-[var(--activity-l2)] cursor-pointer shadow-xs'
       } else if (level === 3) {
-        baseClass = 'bg-[var(--activity-l3)] hover:opacity-85 cursor-pointer shadow-xs'
+        baseClass = 'bg-[var(--activity-l3)] cursor-pointer shadow-xs'
       } else if (level >= 4) {
-        baseClass = 'bg-[var(--activity-l4)] hover:opacity-85 cursor-pointer shadow-xs'
-      }
-      if (isToday) {
-        baseClass += ' ring-1.5 ring-[var(--ink-primary)] ring-offset-1 z-10'
+        baseClass = 'bg-[var(--activity-l4)] cursor-pointer shadow-xs'
       }
     }
 
@@ -284,6 +281,7 @@ const onGridMouseLeave = () => {
 const onGridClick = (event: MouseEvent) => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('button[data-date]')
   if (!target) return
+  target.blur()
   const date = target.dataset.date
   if (!date) return
   const cell = cellByDateMap.value.get(date)
@@ -369,7 +367,7 @@ onMounted(() => {
 
           <!-- 53 周方格矩阵 (每列 7 天：周日到周六，容器级事件委托与预计算类名) -->
           <div
-            class="flex gap-[3px]"
+            class="flex gap-[3px] py-1.5 px-1"
             @mouseover="onGridMouseOver"
             @mouseleave="onGridMouseLeave"
             @click="onGridClick"
@@ -383,11 +381,12 @@ onMounted(() => {
                 v-for="(day, dIdx) in week"
                 :key="dIdx"
                 :data-date="day.date"
-                :disabled="day.isFuture || day.count === 0"
-                class="w-[11px] h-[11px] rounded-[1.5px] transition-all duration-100 relative focus:outline-none"
+                :disabled="day.isFuture"
+                class="w-[11px] h-[11px] rounded-[1.5px] transition-transform duration-150 ease-out relative outline-none focus:outline-none focus:ring-0 active:outline-none select-none"
                 :class="[
                   day.baseClass,
-                  selectedDate === day.date ? 'ring-2 ring-[var(--accent-warm)] ring-offset-1 scale-125 z-20' : ''
+                  !day.isFuture ? (day.count > 0 ? 'cursor-pointer hover:scale-135 hover:z-20' : 'hover:scale-115 hover:z-10') : '',
+                  selectedDate === day.date ? '!scale-150 z-30 shadow-xs' : ''
                 ]"
                 :aria-label="!day.isFuture ? `${day.date} (${day.dayOfWeekStr}): ${day.count} 条记录` : ''"
               />

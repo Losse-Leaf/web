@@ -13,6 +13,7 @@ import {
 import { useCategories } from '../composables/useCategories'
 import { askConfirm } from '../composables/useConfirm'
 import { getBeijingDateString } from '../utils/format'
+import { matchCityFromLocation } from '../utils/cities'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 
@@ -67,6 +68,9 @@ watch(
     if (open) {
       loadCategories()
       form.value = cloneProfile(props.profile)
+      if (!form.value.location && form.value.current_city) {
+        form.value.location = form.value.current_city
+      }
       avatarKey.value = props.profile.avatar_key || ''
       avatarUploadError.value = ''
       saveError.value = ''
@@ -74,6 +78,17 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => form.value.location,
+  (loc) => {
+    const trimmed = (loc || '').trim()
+    const matched = matchCityFromLocation(trimmed)
+    form.value.current_city = trimmed
+      ? (matched?.name || trimmed.split('·')[1]?.trim() || trimmed)
+      : ''
+  }
 )
 
 const triggerSelectAvatar = () => {
@@ -136,10 +151,12 @@ const handleSave = async () => {
   if (!form.value.motto?.trim()) {
     form.value.motto = DEFAULT_PROFILE.motto
   }
-  if (!form.value.location?.trim()) {
-    form.value.location = ''
-  }
-  form.value.current_city = form.value.location ? (form.value.location.split('·')[1]?.trim() || form.value.location.trim()) : ''
+  const loc = (form.value.location || '').trim()
+  const matchedCity = matchCityFromLocation(loc)
+  form.value.location = loc
+  form.value.current_city = loc
+    ? (matchedCity?.name || loc.split('·')[1]?.trim() || loc)
+    : ''
 
   // 2. 向后端更新持久化主理人基本资料，不携带 edc_gear 以杜绝双写互踩 (RC-132)
   try {
@@ -508,40 +525,30 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 手艺定位与生活信条 -->
+        <!-- 签名与一句话近况 -->
         <div class="space-y-3">
           <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
-            03 手艺定位与生活信条
+            03 副标与一句话近况（选填）
           </div>
 
           <div class="space-y-1">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">角色签名与手艺标签</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题 / 状态标签</label>
             <input
               v-model="form.title"
               type="text"
-              placeholder="例如: 独立创作者 · 摄影与阅读爱好者 · 城市漫游者"
+              placeholder="例如: 岁月总览 · 生活刻度 · 随身器物"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
 
           <div class="space-y-1">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">主理人生活信条</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">一句话近况 / 题记</label>
             <input
               v-model="form.motto"
               type="text"
-              placeholder="例如: 生活大于项目，真实大于表演。"
+              placeholder="例如: 记录真实可感的日子。"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
-          </div>
-
-          <div class="space-y-1">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">主理人自白手记</label>
-            <textarea
-              v-model="form.bio"
-              rows="5"
-              placeholder="写下一段关于你、关于生活哲学的真诚自白..."
-              class="w-full px-3 py-2 text-sm font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
-            ></textarea>
           </div>
         </div>
 

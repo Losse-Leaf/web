@@ -139,9 +139,26 @@ export interface TransactionSummary {
 export interface StorageStatus {
   provider: string
   configured: boolean
+  account_id?: string
   bucket?: string
   public_domain?: string
   endpoint?: string
+  access_key_id?: string
+  has_secret_key?: boolean
+  presign_expire_seconds?: number
+  presign_expire_minutes?: number
+  local_file_count?: number
+  local_total_bytes?: number
+}
+
+export interface StorageConfigPayload {
+  account_id?: string
+  access_key_id: string
+  secret_access_key?: string
+  bucket_name: string
+  endpoint?: string
+  public_domain?: string
+  presign_expire_seconds?: number
 }
 
 export interface GlobalStats {
@@ -230,7 +247,6 @@ export interface TrustedDevice {
 
 export interface PairingTicketResult {
   ticket: string
-  pin_code: string
   hub_url?: string
   expires_at: string
   expires_in_seconds: number
@@ -257,7 +273,6 @@ export interface BootstrapResult {
   curator_name: string
   location: string
   ticket: string
-  pin_code: string
   hub_url?: string
   qr_payload: string
   qr_code_data_url?: string
@@ -266,8 +281,7 @@ export interface BootstrapResult {
 }
 
 export interface PairConfirmPayload {
-  ticket?: string
-  pin_code?: string
+  ticket: string
   device_name: string
   platform: 'ios' | 'macos' | 'android' | 'web' | string
   device_model?: string
@@ -513,14 +527,11 @@ export interface UpdateCheckResult {
   check_error?: string
 }
 
-export interface UpdateNotice {
-  id: number
-  version: string
-  title: string
-  body: string
-  released_at?: string
-  created_at?: string
-  updated_at?: string
+export interface BackupItem {
+  filename: string
+  size: number
+  created_at: string
+  storage_type: 'r2' | 'local' | string
 }
 
 

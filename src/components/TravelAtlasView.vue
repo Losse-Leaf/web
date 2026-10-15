@@ -3,12 +3,12 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   Plus,
   Compass,
-  Tag,
   Sparkles,
   Layers,
   ChevronRight,
   BookOpen,
   MapPin,
+  Stamp,
 } from 'lucide-vue-next'
 import { fetchFootprintsAtlas, fetchFootprints, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
@@ -20,6 +20,7 @@ import {
   REGION_GROUPS,
   PROVINCE_SHORT_MAP,
   PROVINCE_ADCODE_MAP,
+  PROVINCE_EPITHET_MAP,
   getCityEpithet,
   formatVisitStampCount,
 } from '../utils/atlasHelpers'
@@ -79,13 +80,14 @@ const handleAddEntryInCity = (city: { code: string; name: string }) => {
   emit('openAddWithCity', city)
 }
 
-// 视图模式：'celestial' (山川经纬星野) | 'tickets' (典藏票根印信架)
-const currentViewMode = ref<'celestial' | 'tickets'>('celestial')
+// 山河印谱过滤控制：大区筛选 ('all' 或大区名称) 与 显隐模式 ('all' 全谱34省 | 'lit' 仅看已钤印)
+const selectedRegionFilter = ref<string>('all')
+const sealDisplayFilter = ref<'all' | 'lit'>('all')
 
 // 票根架整理模式：'region' (按地域大区归档) | 'timeline' (按编年时间轴)
 const ticketGrouping = ref<'region' | 'timeline'>('region')
 
-// 当前在星图中聚焦的高亮城市 (默认最新或首座城市)
+// 当前在印谱中聚焦的高亮城市 (默认最新或首座城市)
 const focusedCityCode = ref('')
 
 // 选中的回忆抽屉目标
@@ -148,6 +150,18 @@ const chinaCityOptionMap = computed<Map<string, CityOption>>(() => {
   const map = new Map<string, CityOption>()
   for (const c of CHINA_CITIES) {
     map.set(c.code, c)
+  }
+  return map
+})
+
+// 各省对应的标准地级单位列表 (province -> CityOption[])
+const provincePrefecturesMap = computed<Map<string, CityOption[]>>(() => {
+  const map = new Map<string, CityOption[]>()
+  for (const c of CHINA_CITIES) {
+    if (!map.has(c.province)) {
+      map.set(c.province, [])
+    }
+    map.get(c.province)!.push(c)
   }
   return map
 })
@@ -221,12 +235,18 @@ const litCitiesList = computed<LitCityItem[]>(() => {
   return list.sort((a, b) => b.latestVisitedAt.localeCompare(a.latestVisitedAt))
 })
 
-// 当前聚焦的星野城市实体
+// 当前聚焦的城市实体
 const currentFocusedCity = computed<LitCityItem | null>(() => {
   if (!focusedCityCode.value && litCitiesList.value.length > 0) {
     return litCitiesList.value[0]
   }
   return litCitiesList.value.find((c) => c.code === focusedCityCode.value) || litCitiesList.value[0] || null
+})
+
+// 当前聚焦城市所在省份的全部已点亮城邑 (用于右侧折页卡快捷切换)
+const focusedProvinceCities = computed<LitCityItem[]>(() => {
+  if (!currentFocusedCity.value) return []
+  return litCitiesList.value.filter((c) => c.province === currentFocusedCity.value!.province)
 })
 
 // 已踏足省份集合
@@ -248,6 +268,120 @@ const cityCoveragePercentage = computed(() => {
 const provinceCoveragePercentage = computed(() => {
   return Math.min(100, Number(((litProvinceCount.value / 34) * 100).toFixed(1))).toFixed(1)
 })
+
+// 34 省百宝格印笺模型
+export interface ProvinceSealItem {
+  name: string
+  shortName: string
+  adcode: string
+  regionName: string
+  epithet: string
+  isLit: boolean
+  visitedCities: LitCityItem[]
+  totalPrefectures: number
+  totalVisits: number
+  firstVisitedAt: string
+  latestVisitedAt: string
+  latestNote: string
+}
+
+const allProvinceSeals = computed<ProvinceSealItem[]>(() => {
+  const cityByProvince = new Map<string, LitCityItem[]>()
+  for (const c of litCitiesList.value) {
+    if (!cityByProvince.has(c.province)) {
+      cityByProvince.set(c.province, [])
+    }
+    cityByProvince.get(c.province)!.push(c)
+  }
+
+  const list: ProvinceSealItem[] = []
+  for (const group of REGION_GROUPS) {
+    for (const prov of group.provinces) {
+      const visited = (cityByProvince.get(prov) || []).sort((a, b) =>
+        b.latestVisitedAt.localeCompare(a.latestVisitedAt)
+      )
+      const prefectures = provincePrefecturesMap.value.get(prov) || []
+      let totalVisits = 0
+      let firstVisitedAt = ''
+      let latestVisitedAt = ''
+      let latestNote = ''
+
+      for (const c of visited) {
+        totalVisits += c.visitCount
+        if (!firstVisitedAt || (c.firstVisitedAt && c.firstVisitedAt < firstVisitedAt)) {
+          firstVisitedAt = c.firstVisitedAt
+        }
+        if (!latestVisitedAt || (c.latestVisitedAt && c.latestVisitedAt > latestVisitedAt)) {
+          latestVisitedAt = c.latestVisitedAt
+        }
+        if (!latestNote && c.latestNote) {
+          latestNote = c.latestNote
+        }
+      }
+
+      list.push({
+        name: prov,
+        shortName: PROVINCE_SHORT_MAP[prov] || prov.slice(0, 1),
+        adcode: PROVINCE_ADCODE_MAP[prov] || '110000',
+        regionName: group.name,
+        epithet: PROVINCE_EPITHET_MAP[prov] || '山河表里 · 岁月风物',
+        isLit: visited.length > 0,
+        visitedCities: visited,
+        totalPrefectures: Math.max(1, prefectures.length),
+        totalVisits,
+        firstVisitedAt,
+        latestVisitedAt,
+        latestNote,
+      })
+    }
+  }
+
+  // 已钤印的省份优先排列在前，同为已钤印按最近到访时间倒序；未钤印保持八大区人文秩序
+  return list.sort((a, b) => {
+    if (a.isLit !== b.isLit) return a.isLit ? -1 : 1
+    if (a.isLit && b.isLit) {
+      return b.latestVisitedAt.localeCompare(a.latestVisitedAt)
+    }
+    return 0
+  })
+})
+
+const filteredProvinceSeals = computed<ProvinceSealItem[]>(() => {
+  return allProvinceSeals.value.filter((item) => {
+    if (selectedRegionFilter.value !== 'all' && item.regionName !== selectedRegionFilter.value) {
+      return false
+    }
+    if (sealDisplayFilter.value === 'lit' && !item.isLit) {
+      return false
+    }
+    return true
+  })
+})
+
+// 点击百宝格中的已钤印省份：聚焦该省首座城市，二次点击或点印章直接打开省卷抽屉
+const handleLitProvinceSelect = (seal: ProvinceSealItem) => {
+  audio.playTink()
+  if (seal.visitedCities.length > 0) {
+    focusedCityCode.value = seal.visitedCities[0].code
+  }
+}
+
+// 点击百宝格中的未钤印省份：主理人可直接带入该省代表城市补录足迹
+const handleUnlitProvinceClick = (seal: ProvinceSealItem) => {
+  const prefectures = provincePrefecturesMap.value.get(seal.name) || []
+  const defaultCity = prefectures[0]
+  if (defaultCity) {
+    handleAddFootprintInCity({ code: defaultCity.code, name: defaultCity.name })
+  } else {
+    if (!isAdmin.value) {
+      emit('requestAuth', () => {
+        isAddModalOpen.value = true
+      })
+      return
+    }
+    isAddModalOpen.value = true
+  }
+}
 
 // 票根架：按地域大区归类
 const regionGroupedTickets = computed(() => {
@@ -302,99 +436,6 @@ const timelineGroupedTickets = computed(() => {
   }))
 })
 
-// 到访频次三层视觉梯度 (单次淡墨、双次深青、三次以上朱砂红)
-const getCityAuraColor = (c: LitCityItem): string => {
-  if (c.visitCount >= 3) return '#b94a3b'
-  if (c.visitCount === 2) return 'var(--accent-moss)'
-  return 'var(--ink-secondary)'
-}
-
-const getCityCoreColor = (c: LitCityItem): string => {
-  if (c.visitCount >= 3) return '#b94a3b'
-  if (c.visitCount === 2) return 'var(--accent-moss)'
-  return 'var(--ink-primary)'
-}
-
-// 星野画布平移与无级缩放
-const zoomLevel = ref(1)
-const panX = ref(0)
-const panY = ref(0)
-const isDragging = ref(false)
-const dragStart = ref({ x: 0, y: 0 })
-
-const computedViewBox = computed(() => {
-  const baseW = 800
-  const baseH = 550
-  const w = baseW / zoomLevel.value
-  const h = baseH / zoomLevel.value
-  const centerX = 420 + panX.value
-  const centerY = 290 + panY.value
-  const minX = centerX - w / 2
-  const minY = centerY - h / 2
-  return `${minX} ${minY} ${w} ${h}`
-})
-
-const zoomIn = () => {
-  audio.playTink()
-  zoomLevel.value = Math.min(3.5, Number((zoomLevel.value + 0.3).toFixed(1)))
-}
-
-const zoomOut = () => {
-  audio.playTink()
-  zoomLevel.value = Math.max(0.8, Number((zoomLevel.value - 0.3).toFixed(1)))
-  if (zoomLevel.value <= 1) {
-    panX.value = 0
-    panY.value = 0
-  }
-}
-
-const resetZoom = () => {
-  audio.playTink()
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
-}
-
-const handleWheel = (e: WheelEvent) => {
-  if (e.ctrlKey || e.metaKey || zoomLevel.value > 1) {
-    e.preventDefault()
-    if (e.deltaY < 0) {
-      zoomLevel.value = Math.min(3.5, Number((zoomLevel.value + 0.15).toFixed(2)))
-    } else {
-      zoomLevel.value = Math.max(0.8, Number((zoomLevel.value - 0.15).toFixed(2)))
-      if (zoomLevel.value <= 1) {
-        panX.value = 0
-        panY.value = 0
-      }
-    }
-  }
-}
-
-const handleMouseDown = (e: MouseEvent) => {
-  if (zoomLevel.value <= 1) return
-  isDragging.value = true
-  dragStart.value = { x: e.clientX, y: e.clientY }
-}
-
-const handleMouseMove = (e: MouseEvent) => {
-  if (!isDragging.value) return
-  const dx = (e.clientX - dragStart.value.x) / zoomLevel.value
-  const dy = (e.clientY - dragStart.value.y) / zoomLevel.value
-  panX.value -= dx
-  panY.value -= dy
-  dragStart.value = { x: e.clientX, y: e.clientY }
-}
-
-const handleMouseUp = () => {
-  isDragging.value = false
-}
-
-// 切换视角
-const switchViewMode = (mode: 'celestial' | 'tickets') => {
-  audio.playTink()
-  currentViewMode.value = mode
-}
-
 // 打开城市回忆抽屉
 const openCityDrawer = (cityCode: string, cityName: string) => {
   audio.playPaperFlip()
@@ -426,69 +467,61 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-10 pb-16 animate-in fade-in duration-300">
+  <div class="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left space-y-12 animate-in fade-in duration-300">
     <!-- 顶栏出版物刊头与指标纸签 -->
-    <header class="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--border-subtle)]">
-      <div class="space-y-2">
-        <div class="flex items-center gap-2.5">
-          <span class="text-xs font-serif-editorial tracking-wider text-[var(--ink-muted)]">
-            散页山川卷
-          </span>
-          <span class="w-1.5 h-1.5 rounded-full bg-[var(--ink-muted)]/40"></span>
-          <span class="text-xs font-serif-editorial text-[var(--ink-muted)]">
-            山川行迹 · 旅途档案
+    <header class="pb-10 border-b border-[var(--border-subtle)] space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-wrap items-baseline gap-3.5">
+          <h1 class="type-page-heading text-[var(--ink-primary)]">
+            山川行迹
+          </h1>
+          <span class="type-mono-meta tracking-widest text-[var(--ink-muted)]">
+            山河印谱 · 典藏票根 · 旅途行历
           </span>
         </div>
-        <h1 class="font-serif-editorial text-2xl sm:text-3xl font-medium tracking-tight text-[var(--ink-primary)]">
-          山川行迹
-        </h1>
-        <p class="font-serif-editorial text-sm text-[var(--ink-secondary)] leading-relaxed max-w-xl">
-          以经纬度星图与典藏票根印信，收录踏足过的每一座城与山海回忆。拾起散落的足迹，装订成册。
-        </p>
-      </div>
 
-      <!-- 右侧控制区：视角切换胶囊 ＋ 录入足迹 -->
-      <div class="flex flex-wrap items-center gap-3">
-        <!-- 双生视角切换胶囊 -->
-        <div class="flex items-center p-0.5 rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+        <!-- 右侧控制区：印谱显隐切换 ＋ 录入足迹 -->
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center p-0.5 rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+            <button
+              @click="sealDisplayFilter = 'all'"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer"
+              :class="
+                sealDisplayFilter === 'all'
+                  ? 'bg-[var(--bg-archive)] text-[var(--ink-primary)] font-medium shadow-xs border border-[var(--border-subtle)]'
+                  : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+              "
+            >
+              <Stamp class="w-3.5 h-3.5" />
+              <span>全谱 34 省</span>
+            </button>
+            <button
+              @click="sealDisplayFilter = 'lit'"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer"
+              :class="
+                sealDisplayFilter === 'lit'
+                  ? 'bg-[var(--bg-archive)] text-[#b94a3b] font-medium shadow-xs border border-[var(--border-subtle)]'
+                  : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+              "
+            >
+              <Sparkles class="w-3.5 h-3.5" />
+              <span>已钤印 ({{ litProvinceCount }})</span>
+            </button>
+          </div>
+
           <button
-            @click="switchViewMode('celestial')"
-            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer"
-            :class="
-              currentViewMode === 'celestial'
-                ? 'bg-[var(--bg-archive)] text-[var(--ink-primary)] font-medium shadow-xs border border-[var(--border-subtle)]'
-                : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
-            "
-            title="切换至山川经纬星野视图"
+            @click="isAdmin ? (isAddModalOpen = true) : emit('requestAuth', () => { isAddModalOpen = true })"
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-mono-archive rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
           >
-            <Compass class="w-3.5 h-3.5" />
-            <span>经纬星野</span>
-          </button>
-          <button
-            @click="switchViewMode('tickets')"
-            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer"
-            :class="
-              currentViewMode === 'tickets'
-                ? 'bg-[var(--bg-archive)] text-[var(--ink-primary)] font-medium shadow-xs border border-[var(--border-subtle)]'
-                : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
-            "
-            title="切换至典藏票根印信架视图"
-          >
-            <Tag class="w-3.5 h-3.5" />
-            <span>典藏票根</span>
+            <Plus class="w-3.5 h-3.5" />
+            <span>录入足迹</span>
           </button>
         </div>
-
-        <!-- 录入足迹快捷按键 -->
-        <button
-          v-if="isAdmin"
-          @click="isAddModalOpen = true"
-          class="flex items-center gap-1 px-3.5 py-1.5 text-xs font-serif-editorial rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          <span>录入足迹</span>
-        </button>
       </div>
+
+      <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-muted)] leading-relaxed max-w-3xl prose-editorial">
+        以三十四省活字朱砂印谱与特种纸车票存根，收录踏足过的每一处山海与城邑。拾起散落的步履，钤印成册。
+      </p>
     </header>
 
     <!-- 错误提示条 -->
@@ -506,38 +539,53 @@ onMounted(() => {
     </div>
 
     <!-- 三联生活指标纸签 -->
-    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
-        <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider mb-1">
-          点亮地级市 · 驻足城邑
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+      <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs space-y-2">
+        <div class="flex items-center justify-between text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider">
+          <span>点亮地级市 · 驻足城邑</span>
+          <span class="font-mono-archive text-[11px]">{{ cityCoveragePercentage }}%</span>
         </div>
         <div class="flex items-baseline gap-2">
           <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
             {{ litCityCount }}
           </span>
           <span class="text-xs text-[var(--ink-muted)] font-mono-archive">
-            / 375 ({{ cityCoveragePercentage }}%)
+            / 375 城
           </span>
+        </div>
+        <div class="w-full h-1 bg-[var(--border-subtle)]/60 rounded-full overflow-hidden">
+          <div
+            class="h-full bg-[#b94a3b] transition-all duration-500"
+            :style="{ width: `${Math.max(litCityCount > 0 ? 3 : 0, Number(cityCoveragePercentage))}%` }"
+          ></div>
         </div>
       </div>
 
-      <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
-        <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider mb-1">
-          踏足省级区 · 山河疆域
+      <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs space-y-2">
+        <div class="flex items-center justify-between text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider">
+          <span>踏足省级区 · 山河印谱</span>
+          <span class="font-mono-archive text-[11px]">{{ provinceCoveragePercentage }}%</span>
         </div>
         <div class="flex items-baseline gap-2">
           <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
             {{ litProvinceCount }}
           </span>
           <span class="text-xs text-[var(--ink-muted)] font-mono-archive">
-            / 34 ({{ provinceCoveragePercentage }}%)
+            / 34 省区
           </span>
+        </div>
+        <div class="w-full h-1 bg-[var(--border-subtle)]/60 rounded-full overflow-hidden">
+          <div
+            class="h-full bg-[var(--ink-primary)] transition-all duration-500"
+            :style="{ width: `${Math.max(litProvinceCount > 0 ? 4 : 0, Number(provinceCoveragePercentage))}%` }"
+          ></div>
         </div>
       </div>
 
-      <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs">
-        <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider mb-1">
-          漫游足迹总数 · 岁月印信
+      <div class="bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] p-4 rounded-xs space-y-2">
+        <div class="flex items-center justify-between text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider">
+          <span>漫游足迹总数 · 岁月印信</span>
+          <span class="font-serif-editorial text-[11px]">卷宗在册</span>
         </div>
         <div class="flex items-baseline gap-2">
           <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
@@ -547,216 +595,268 @@ onMounted(() => {
             次行迹刻度
           </span>
         </div>
+        <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)] truncate">
+          <template v-if="currentFocusedCity">
+            最近驻足：{{ currentFocusedCity.province }} · {{ currentFocusedCity.shortName }}
+          </template>
+          <template v-else>
+            尚待装订第一枚山河印信
+          </template>
+        </div>
       </div>
     </section>
 
     <!-- ================================================================================== -->
-    <!-- 视角 A：【山川经纬星野】(Celestial Voyage Cartography)                             -->
-    <!-- 采用宽屏双栏工作台排版：左侧纯粹经纬天球星野 ＋ 右侧驻足城市星野档案卡              -->
+    <!-- 第一卷：【山河印谱 · 三十四省御朱印百宝格】(The 34-Province Seal & Curio Cabinet)   -->
+    <!-- 左侧 8 栏：八大风物分区索引 + 三十四省活字印笺百宝格                               -->
+    <!-- 右侧 4 栏：当前聚焦城邑与省卷御朱印折页卡                                         -->
     <!-- ================================================================================== -->
-    <section v-if="currentViewMode === 'celestial'" class="space-y-6">
+    <section class="space-y-5">
+      <!-- 八大风物分区筛选栏 -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
+        <div class="flex items-center gap-2">
+          <Stamp class="w-4 h-4 text-[#b94a3b]" />
+          <h2 class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
+            卷一 · 山河印谱百宝格
+          </h2>
+          <span class="text-xs font-serif-editorial text-[var(--ink-muted)] hidden sm:inline">
+            （点击已钤印省份或城邑纸签可调阅印信与回忆抽屉）
+          </span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5 text-xs font-serif-editorial">
+          <button
+            @click="selectedRegionFilter = 'all'"
+            class="px-2.5 py-1 rounded-xs border transition-colors cursor-pointer"
+            :class="
+              selectedRegionFilter === 'all'
+                ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium'
+                : 'border-[var(--border-subtle)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+            "
+          >
+            全部疆域
+          </button>
+          <button
+            v-for="rg in REGION_GROUPS"
+            :key="rg.name"
+            @click="selectedRegionFilter = rg.name"
+            class="px-2.5 py-1 rounded-xs border transition-colors cursor-pointer"
+            :class="
+              selectedRegionFilter === rg.name
+                ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium'
+                : 'border-[var(--border-subtle)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
+            "
+          >
+            {{ rg.name }}
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        <!-- 左侧 8 栏：纯粹宁静的天球经纬星野图 -->
-        <div class="lg:col-span-8 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-4 sm:p-6 shadow-sm overflow-hidden relative">
-          <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--border-subtle)]/60 text-xs font-serif-editorial text-[var(--ink-secondary)]">
-            <div class="flex items-center gap-2">
-              <Sparkles class="w-3.5 h-3.5 text-[var(--ink-muted)]" />
-              <span>山川经纬星野图 · 375 城星宿坐标与航海罗盘</span>
-            </div>
-            <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">
-              东经 85°~125° · 北纬 22°~45°
+        <!-- 左侧 8 栏：三十四省百宝格印笺矩阵 -->
+        <div class="lg:col-span-8">
+          <div
+            v-if="filteredProvinceSeals.length === 0"
+            class="bg-[var(--bg-archive)] border border-dashed border-[var(--border-subtle)] rounded-xs p-12 text-center space-y-3"
+          >
+            <p class="font-serif-editorial text-base text-[var(--ink-primary)]">
+              该分区暂未钤印任何省份足迹
+            </p>
+            <p class="font-serif-editorial text-xs text-[var(--ink-muted)]">
+              可切换至「全谱 34 省」查看待探访山河印格，或直接录入新一站旅程。
+            </p>
+            <div class="pt-1 flex items-center justify-center gap-3">
+              <button
+                @click="sealDisplayFilter = 'all'; selectedRegionFilter = 'all'"
+                class="px-3.5 py-1.5 text-xs font-serif-editorial border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer"
+              >
+                展开全谱 34 省
+              </button>
             </div>
           </div>
 
+          <!-- 百宝格木框底盘 -->
           <div
-            class="relative w-full aspect-[4/3] sm:aspect-[16/11] flex items-center justify-center overflow-hidden"
-            :class="{ 'cursor-grab': zoomLevel > 1 && !isDragging, 'cursor-grabbing': isDragging }"
-            @wheel="handleWheel"
-            @mousedown="handleMouseDown"
-            @mousemove="handleMouseMove"
-            @mouseup="handleMouseUp"
-            @mouseleave="handleMouseUp"
+            v-else
+            class="grid grid-cols-1 sm:grid-cols-2 gap-4"
           >
-            <svg
-              :viewBox="computedViewBox"
-              class="w-full h-full select-none"
+            <div
+              v-for="seal in filteredProvinceSeals"
+              :key="seal.adcode"
+              @click="seal.isLit ? handleLitProvinceSelect(seal) : handleUnlitProvinceClick(seal)"
+              class="relative rounded-xs p-4 text-left transition-all duration-200 flex flex-col justify-between cursor-pointer group overflow-hidden"
+              :class="[
+                seal.isLit
+                  ? currentFocusedCity?.province === seal.name
+                    ? 'bg-[#FAF6EE] dark:bg-[#221F1C] border-2 border-[#b94a3b] shadow-[0_6px_20px_rgba(185,74,59,0.10)]'
+                    : 'bg-[#FAF7F0] dark:bg-[#1C1A18] border border-[#D5CDC0] dark:border-[#383430] hover:border-[#b94a3b]/70 shadow-xs'
+                  : 'bg-[var(--bg-subtle)]/35 hover:bg-[var(--bg-subtle)]/70 border border-dashed border-[var(--border-subtle)] opacity-75 hover:opacity-100',
+              ]"
             >
-              <defs>
-                <!-- 焦点星芒脉冲光晕滤镜 -->
-                <filter id="focus-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
+              <!-- 顶栏：分区题名、省份主名 与 朱砂/铅字方印 -->
+              <div class="flex items-start justify-between gap-2">
+                <div class="space-y-0.5 min-w-0">
+                  <div class="flex items-center gap-1.5 text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                    <span>{{ seal.regionName }}</span>
+                    <span v-if="seal.isLit" class="text-[#b94a3b] font-serif-editorial">
+                      · {{ seal.visitedCities.length }}/{{ seal.totalPrefectures }}城
+                    </span>
+                  </div>
+                  <div class="flex items-baseline gap-2">
+                    <h3
+                      class="font-serif-editorial text-lg font-medium tracking-wide truncate"
+                      :class="seal.isLit ? 'text-[var(--ink-primary)]' : 'text-[var(--ink-secondary)]'"
+                    >
+                      {{ seal.name }}
+                    </h3>
+                    <span class="text-[11px] font-serif-editorial text-[var(--ink-muted)] truncate">
+                      {{ seal.epithet }}
+                    </span>
+                  </div>
+                </div>
 
-              <!-- 1. 双线纸本外框与四角复古裁切标 -->
-              <rect x="25" y="20" width="790" height="540" fill="none" stroke="var(--border-subtle)" stroke-width="1.2" />
-              <rect x="29" y="24" width="782" height="532" fill="none" stroke="var(--border-subtle)" stroke-width="0.6" stroke-dasharray="8 4" />
-
-              <path d="M 25 35 L 40 35 M 25 35 L 25 50" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
-              <path d="M 815 35 L 800 35 M 815 35 L 815 50" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
-              <path d="M 25 545 L 40 545 M 25 545 L 25 530" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
-              <path d="M 815 545 L 800 545 M 815 545 L 815 530" stroke="var(--ink-muted)" stroke-width="1.2" fill="none" />
-
-              <!-- 2. 经纬度刻度虚线与标注 -->
-              <g stroke="var(--border-subtle)" stroke-width="0.5" stroke-dasharray="4 6" opacity="0.55">
-                <line x1="150" y1="20" x2="150" y2="560" />
-                <line x1="270" y1="20" x2="270" y2="560" />
-                <line x1="390" y1="20" x2="390" y2="560" />
-                <line x1="510" y1="20" x2="510" y2="560" />
-                <line x1="630" y1="20" x2="630" y2="560" />
-                <line x1="750" y1="20" x2="750" y2="560" />
-                <line x1="25" y1="110" x2="815" y2="110" />
-                <line x1="25" y1="210" x2="815" y2="210" />
-                <line x1="25" y1="310" x2="815" y2="310" />
-                <line x1="25" y1="410" x2="815" y2="410" />
-                <line x1="25" y1="500" x2="815" y2="500" />
-              </g>
-
-              <g font-family="monospace" font-size="9" fill="var(--ink-muted)" opacity="0.65">
-                <text x="150" y="38" text-anchor="middle">85°E</text>
-                <text x="270" y="38" text-anchor="middle">95°E</text>
-                <text x="390" y="38" text-anchor="middle">105°E</text>
-                <text x="510" y="38" text-anchor="middle">115°E</text>
-                <text x="630" y="38" text-anchor="middle">125°E</text>
-                <text x="38" y="113" text-anchor="start">45°N</text>
-                <text x="38" y="213" text-anchor="start">38°N</text>
-                <text x="38" y="313" text-anchor="start">30°N</text>
-                <text x="38" y="413" text-anchor="start">22°N</text>
-              </g>
-
-              <!-- 3. 左下角复古航海罗盘玫瑰 -->
-              <g transform="translate(90, 485)" opacity="0.75">
-                <circle cx="0" cy="0" r="26" fill="none" stroke="var(--border-subtle)" stroke-width="0.8" />
-                <circle cx="0" cy="0" r="13" fill="none" stroke="var(--border-subtle)" stroke-width="0.6" stroke-dasharray="2 2" />
-                <path d="M 0 -24 L 4 0 L 0 5 L -4 0 Z" fill="var(--ink-secondary)" />
-                <path d="M 0 24 L 4 0 L 0 -5 L -4 0 Z" fill="var(--border-divider)" />
-                <path d="M -24 0 L 0 4 L 5 0 L 0 -4 Z" fill="var(--border-divider)" />
-                <path d="M 24 0 L 0 4 L -5 0 L 0 -4 Z" fill="var(--border-divider)" />
-                <text x="0" y="-28" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-primary)">北</text>
-                <text x="0" y="36" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-muted)">南</text>
-                <text x="34" y="3" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-muted)">东</text>
-                <text x="-34" y="3" font-size="8" font-family="serif" text-anchor="middle" fill="var(--ink-muted)">西</text>
-              </g>
-
-              <!-- 4. 全量 375 座城市的微尘星点 (呈现宁静壮阔的星象底座) -->
-              <g fill="var(--ink-muted)" opacity="0.18">
-                <circle
-                  v-for="city in CHINA_CITIES"
-                  :key="city.code"
-                  :cx="city.x"
-                  :cy="city.y"
-                  r="1.2"
-                />
-              </g>
-
-              <!-- 5. 点亮城市的星芒节点 (三层视觉梯度与触控热区倍增) -->
-              <g>
-                <g
-                  v-for="c in litCitiesList"
-                  :key="c.code"
-                  class="cursor-pointer group"
-                  @mouseenter="focusedCityCode = c.code"
-                  @click="openCityDrawer(c.code, c.name)"
+                <!-- 篆刻方印：已点亮为朱砂红泥印章，未点亮为浅墨待钤暗印 -->
+                <div
+                  v-if="seal.isLit"
+                  @click.stop="openProvinceDrawer(seal.adcode, seal.name)"
+                  class="shrink-0 w-9 h-9 rounded-xs border-2 border-[#b94a3b] bg-[#b94a3b] text-[#FAF7F0] flex items-center justify-center font-serif-editorial font-bold text-base shadow-xs transform rotate-[-4deg] group-hover:rotate-0 transition-transform"
+                  :title="`点击打开 ${seal.name} 省级回忆抽屉`"
                 >
-                  <!-- 触控感应透明扩展圈 (显著提升移动端命中率) -->
-                  <circle
-                    :cx="c.x"
-                    :cy="c.y"
-                    r="16"
-                    fill="transparent"
-                  />
-                  <!-- 节点温润光晕 (按到访频次三层视觉梯度) -->
-                  <circle
-                    :cx="c.x"
-                    :cy="c.y"
-                    :r="focusedCityCode === c.code ? 11 : 7.5"
-                    fill="none"
-                    :stroke="getCityAuraColor(c)"
-                    stroke-width="1.1"
-                    opacity="0.6"
-                    filter="url(#focus-glow)"
-                  />
-                  <!-- 节点中心实心星芒 -->
-                  <circle
-                    :cx="c.x"
-                    :cy="c.y"
-                    :r="focusedCityCode === c.code ? 4.8 : 3.5"
-                    :fill="getCityCoreColor(c)"
-                  />
-                  <!-- 城市名称常驻注记 (支持自适应显隐与避让) -->
-                  <text
-                    v-if="zoomLevel > 1.2 || focusedCityCode === c.code || c.visitCount >= 2 || litCitiesList.length <= 15"
-                    :x="c.x + 8"
-                    :y="c.y + 4"
-                    font-size="11"
-                    font-family="serif"
-                    fill="var(--ink-primary)"
-                    class="font-semibold transition-all pointer-events-none"
-                    style="paint-order: stroke; stroke: var(--bg-archive); stroke-width: 3px; stroke-linejoin: round;"
-                  >
-                    {{ c.shortName }}
-                  </text>
-                </g>
-              </g>
-            </svg>
+                  <span class="border border-[#FAF7F0]/50 w-7 h-7 flex items-center justify-center leading-none">
+                    {{ seal.shortName }}
+                  </span>
+                </div>
+                <div
+                  v-else
+                  class="shrink-0 w-8 h-8 rounded-xs border border-dashed border-[var(--border-subtle)] text-[var(--ink-muted)]/50 flex items-center justify-center font-serif-editorial text-sm select-none group-hover:border-[var(--ink-secondary)] group-hover:text-[var(--ink-secondary)] transition-colors"
+                >
+                  {{ seal.shortName }}
+                </div>
+              </div>
 
-            <!-- 星野画布无级缩放微操盘 -->
-            <div class="absolute bottom-3 right-3 flex items-center gap-1 p-1 bg-[var(--bg-archive)]/90 backdrop-blur-xs border border-[var(--border-subtle)] rounded-xs font-mono-archive text-xs shadow-xs z-10">
-              <button
-                @click="zoomIn"
-                class="w-6 h-6 flex items-center justify-center rounded-xs hover:bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
-                title="放大星图"
+              <!-- 中部：已点亮省份展示城邑活字纸签；未点亮省份展示待访留白签 -->
+              <div v-if="seal.isLit" class="py-3 space-y-2">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <button
+                    v-for="city in seal.visitedCities.slice(0, 5)"
+                    :key="city.code"
+                    @click.stop="focusedCityCode = city.code; openCityDrawer(city.code, city.name)"
+                    @mouseenter="focusedCityCode = city.code"
+                    class="px-2 py-0.5 rounded-xs text-xs font-serif-editorial border transition-all cursor-pointer inline-flex items-center gap-1"
+                    :class="
+                      focusedCityCode === city.code
+                        ? 'border-[#b94a3b] bg-[#b94a3b]/10 text-[#b94a3b] font-medium'
+                        : 'border-[#D5CDC0] dark:border-[#383430] bg-[var(--bg-archive)] text-[var(--ink-primary)] hover:border-[#b94a3b]'
+                    "
+                    :title="`点击翻阅 ${city.name} 城市回忆抽屉`"
+                  >
+                    <span>{{ city.shortName }}</span>
+                    <span v-if="city.visitCount > 1" class="text-[10px] font-mono-archive opacity-75">
+                      ×{{ city.visitCount }}
+                    </span>
+                  </button>
+                  <span
+                    v-if="seal.visitedCities.length > 5"
+                    class="text-[11px] font-mono-archive text-[var(--ink-muted)] px-1"
+                  >
+                    +{{ seal.visitedCities.length - 5 }}城
+                  </span>
+                </div>
+
+                <p
+                  v-if="seal.latestNote"
+                  class="text-[11px] font-serif-editorial text-[var(--ink-secondary)] line-clamp-1 italic"
+                >
+                  “{{ seal.latestNote }}”
+                </p>
+              </div>
+
+              <div v-else class="py-2.5 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]/75">
+                <span>尚未钤印 · 共 {{ seal.totalPrefectures }} 处城邑</span>
+                <span class="opacity-0 group-hover:opacity-100 text-[var(--ink-secondary)] transition-opacity">
+                  ＋ 补录足迹
+                </span>
+              </div>
+
+              <!-- 底栏：时间刻度与省卷抽屉直达 -->
+              <div
+                v-if="seal.isLit"
+                class="pt-2 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]"
               >
-                +
-              </button>
-              <span class="text-[10px] text-[var(--ink-muted)] px-1 select-none">{{ Math.round(zoomLevel * 100) }}%</span>
-              <button
-                @click="zoomOut"
-                class="w-6 h-6 flex items-center justify-center rounded-xs hover:bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
-                title="缩小星图"
-              >
-                -
-              </button>
-              <button
-                v-if="zoomLevel !== 1 || panX !== 0 || panY !== 0"
-                @click="resetZoom"
-                class="px-1.5 py-0.5 text-[10px] rounded-xs border border-[var(--border-subtle)] hover:bg-[var(--bg-subtle)] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] ml-0.5 cursor-pointer"
-                title="重置星野视口"
-              >
-                复位
-              </button>
+                <span class="font-mono-archive text-[10px]">
+                  {{ seal.latestVisitedAt || seal.firstVisitedAt || '已留步' }} · 累计 {{ seal.totalVisits }} 次
+                </span>
+                <button
+                  @click.stop="openProvinceDrawer(seal.adcode, seal.name)"
+                  class="inline-flex items-center gap-0.5 text-[var(--ink-secondary)] hover:text-[#b94a3b] transition-colors cursor-pointer"
+                >
+                  <span>省卷</span>
+                  <ChevronRight class="w-3 h-3" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 右侧 4 栏：驻足城市星野档案卡 (即使只有 1 座城市也能充满故事) -->
-        <div class="lg:col-span-4 space-y-6 text-left">
+        <!-- 右侧 4 栏 Sticky：当前聚焦【驻足印信 · 精装御朱印折页卡】 -->
+        <div class="lg:col-span-4 lg:sticky lg:top-24 space-y-5 text-left">
           <div
             v-if="currentFocusedCity"
-            class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-5 sm:p-6 shadow-sm space-y-5 relative overflow-hidden"
+            class="bg-[#FAF7F0] dark:bg-[#1C1A18] border border-[#D5CDC0] dark:border-[#383430] rounded-xs p-5 sm:p-6 shadow-sm space-y-5 relative overflow-hidden"
           >
-            <!-- 顶栏：真实中文省市题记与省份印章 -->
-            <div class="flex items-start justify-between border-b border-[var(--border-subtle)]/70 pb-3">
-              <div>
-                <span class="text-xs font-serif-editorial font-medium text-[#b94a3b] tracking-wider">
-                  {{ currentFocusedCity.province }} · 驻足城邑
-                </span>
-                <h3 class="font-serif-editorial text-2xl font-medium text-[var(--ink-primary)] mt-0.5">
+            <!-- 顶栏：双印合璧（省名题记 + 篆刻大方印） -->
+            <div class="flex items-start justify-between border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 pb-4">
+              <div class="space-y-1">
+                <div class="flex items-center gap-1.5 text-xs font-serif-editorial font-medium text-[#b94a3b] tracking-wider">
+                  <span>{{ currentFocusedCity.province }} · 御朱印信</span>
+                </div>
+                <h3 class="font-serif-editorial text-2xl font-bold text-[var(--ink-primary)]">
                   {{ currentFocusedCity.name }}
                 </h3>
+                <p class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">
+                  {{ PROVINCE_EPITHET_MAP[currentFocusedCity.province] || currentFocusedCity.epithet }}
+                </p>
               </div>
-              <div class="w-8 h-8 rounded-xs border border-[var(--ink-primary)] flex items-center justify-center font-serif-editorial font-bold text-sm text-[var(--ink-primary)] bg-[var(--bg-subtle)]">
-                {{ PROVINCE_SHORT_MAP[currentFocusedCity.province] || currentFocusedCity.province.slice(0, 1) }}
+
+              <!-- 宣纸朱文篆刻大方印 -->
+              <div
+                @click="openProvinceDrawer(PROVINCE_ADCODE_MAP[currentFocusedCity.province] || '110000', currentFocusedCity.province)"
+                class="w-12 h-12 rounded-xs border-2 border-[#b94a3b] p-0.5 flex items-center justify-center bg-[#b94a3b]/5 text-[#b94a3b] cursor-pointer hover:bg-[#b94a3b] hover:text-[#FAF7F0] transition-colors shrink-0"
+                :title="`打开 ${currentFocusedCity.province} 省级回忆抽屉`"
+              >
+                <div class="border border-[#b94a3b]/60 w-full h-full flex flex-col items-center justify-center leading-none">
+                  <span class="font-serif-editorial font-bold text-base">
+                    {{ PROVINCE_SHORT_MAP[currentFocusedCity.province] || currentFocusedCity.province.slice(0, 1) }}
+                  </span>
+                  <span class="text-[8px] font-serif-editorial tracking-tighter mt-0.5">山河藏</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 同省已点亮城邑快捷切换排签 -->
+            <div v-if="focusedProvinceCities.length > 1" class="space-y-1.5">
+              <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">
+                {{ currentFocusedCity.province }}已点亮城邑 ({{ focusedProvinceCities.length }})：
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <button
+                  v-for="pc in focusedProvinceCities"
+                  :key="pc.code"
+                  @click="focusedCityCode = pc.code"
+                  class="px-2.5 py-1 rounded-xs text-xs font-serif-editorial border transition-colors cursor-pointer"
+                  :class="
+                    pc.code === currentFocusedCity.code
+                      ? 'border-[#b94a3b] bg-[#b94a3b] text-[#FAF7F0] font-medium'
+                      : 'border-[#D5CDC0] dark:border-[#383430] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'
+                  "
+                >
+                  {{ pc.shortName }}
+                </button>
               </div>
             </div>
 
             <!-- 文化笺注 -->
-            <div class="p-2.5 rounded-xs bg-[var(--bg-subtle)]/50 border border-[var(--border-subtle)]/60 text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
+            <div class="p-3 rounded-xs bg-[var(--bg-archive)]/80 border border-[#D5CDC0]/60 dark:border-[#383430]/60 text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
               {{ currentFocusedCity.epithet }}
             </div>
 
@@ -764,7 +864,7 @@ onMounted(() => {
             <div class="space-y-2 text-xs font-serif-editorial text-[var(--ink-secondary)]">
               <div class="flex items-center justify-between">
                 <span class="text-[var(--ink-muted)]">到访印信：</span>
-                <span class="font-medium text-[var(--ink-primary)]">
+                <span class="font-medium text-[#b94a3b]">
                   {{ formatVisitStampCount(currentFocusedCity.visitCount) }}
                 </span>
               </div>
@@ -772,29 +872,44 @@ onMounted(() => {
                 <span class="text-[var(--ink-muted)]">首次探访：</span>
                 <span class="font-mono-archive">{{ currentFocusedCity.firstVisitedAt || '早年行迹' }}</span>
               </div>
-              <div v-if="currentFocusedCity.latestVisitedAt && currentFocusedCity.latestVisitedAt !== currentFocusedCity.firstVisitedAt" class="flex items-center justify-between">
+              <div
+                v-if="currentFocusedCity.latestVisitedAt && currentFocusedCity.latestVisitedAt !== currentFocusedCity.firstVisitedAt"
+                class="flex items-center justify-between"
+              >
                 <span class="text-[var(--ink-muted)]">最近踏足：</span>
                 <span class="font-mono-archive">{{ currentFocusedCity.latestVisitedAt }}</span>
               </div>
             </div>
 
             <!-- 旅途随笔手札引用 -->
-            <div v-if="currentFocusedCity.latestNote" class="text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed bg-[var(--bg-subtle)]/30 p-3 rounded-xs border-l-2 border-[#b94a3b]">
+            <div
+              v-if="currentFocusedCity.latestNote"
+              class="text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed bg-[var(--bg-archive)]/60 p-3 rounded-xs border-l-2 border-[#b94a3b]"
+            >
               <span class="text-[var(--ink-muted)] block text-[11px] font-serif-editorial mb-1">行旅随笔：</span>
               “{{ currentFocusedCity.latestNote }}”
             </div>
 
-            <!-- 操作按钮：翻阅四章节回忆抽屉 -->
-            <button
-              @click="openCityDrawer(currentFocusedCity.code, currentFocusedCity.name)"
-              class="w-full py-2.5 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 font-serif-editorial text-xs font-medium flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            >
-              <span>翻阅城市回忆抽屉 (4个章节)</span>
-              <ChevronRight class="w-3.5 h-3.5" />
-            </button>
+            <!-- 双联操作按钮：城卷抽屉 + 省卷总览 -->
+            <div class="space-y-2 pt-1">
+              <button
+                @click="openCityDrawer(currentFocusedCity.code, currentFocusedCity.name)"
+                class="w-full py-2.5 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 font-serif-editorial text-xs font-medium flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              >
+                <span>翻阅 {{ currentFocusedCity.shortName }} 城市回忆抽屉 (4章节)</span>
+                <ChevronRight class="w-3.5 h-3.5" />
+              </button>
+              <button
+                @click="openProvinceDrawer(PROVINCE_ADCODE_MAP[currentFocusedCity.province] || '110000', currentFocusedCity.province)"
+                class="w-full py-2 px-4 rounded-xs border border-[#D5CDC0] dark:border-[#383430] hover:border-[#b94a3b] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[#b94a3b] font-serif-editorial text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>调阅 {{ currentFocusedCity.province }} 省级行迹总卷</span>
+                <ChevronRight class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          <!-- 无城市数据时的优雅星野占位卡 -->
+          <!-- 无城市数据时的优雅印谱占位卡 -->
           <div
             v-else
             class="bg-[var(--bg-archive)] border border-dashed border-[var(--border-subtle)] rounded-xs p-6 text-center space-y-4"
@@ -804,51 +919,49 @@ onMounted(() => {
             </div>
             <div class="space-y-1">
               <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
-                星野待启 · 山川初歇
+                印谱待启 · 山川初歇
               </h3>
               <p class="font-serif-editorial text-xs text-[var(--ink-muted)] leading-relaxed">
-                尚未钤印任何地级市足迹。装订第一张车票或在左侧星图中探索，即可点亮专属生活星宿。
+                尚未钤印任何地级市足迹。点击左侧任意省份方格或下方按钮，即可盖下第一枚朱砂山河印。
               </p>
             </div>
             <button
-              v-if="isAdmin"
-              @click="isAddModalOpen = true"
+              @click="isAdmin ? (isAddModalOpen = true) : emit('requestAuth', () => { isAddModalOpen = true })"
               class="py-2 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-serif-editorial text-xs font-medium inline-flex items-center gap-1 cursor-pointer"
             >
               <Plus class="w-3.5 h-3.5" />
-              <span>装订第一站足迹</span>
+              <span>钤印第一站足迹</span>
             </button>
           </div>
 
-          <!-- 备忘与漫游箴言纸签 (充实右侧视觉高度) -->
+          <!-- 备忘与漫游箴言纸签 -->
           <div class="bg-[var(--bg-subtle)]/50 border border-[var(--border-subtle)] rounded-xs p-5 space-y-3">
             <div class="text-xs font-serif-editorial text-[var(--ink-muted)] tracking-wider">
-              散页山川录 · 行迹手记
+              散页山川录 · 印谱小记
             </div>
             <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-              “凡是走过的山川，皆成岁月星芒。不必丈量走得多远，只在乎留下了多少真实的生活刻度。”
+              “凡所踏足之州郡，皆以朱砂入印、车票归档。不必丈量走得多远，只在乎留下了多少真实可感的生活刻度。”
             </p>
             <div class="pt-2 border-t border-[var(--border-subtle)]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]">
-              <span>已点亮星宿：{{ litCityCount }} 座</span>
-              <span>山河涉猎：{{ cityCoveragePercentage }}%</span>
+              <span>已钤印省区：{{ litProvinceCount }} / 34</span>
+              <span>点亮城邑：{{ litCityCount }} 座</span>
             </div>
           </div>
         </div>
-
       </div>
     </section>
 
     <!-- ================================================================================== -->
-    <!-- 视角 B：【典藏票根印信架】(Authentic Vintage Voyage Tickets Rack)                   -->
+    <!-- 第二卷：【典藏票根印信架】(Authentic Vintage Voyage Tickets Rack)                   -->
     <!-- 两段式经典复古特种纸车票、双圈波浪邮戳、虚线针孔打孔与备忘插槽                     -->
     <!-- ================================================================================== -->
-    <section v-else class="space-y-10">
+    <section class="space-y-10 pt-8 border-t border-[var(--border-subtle)]">
       <!-- 票根架控制工具栏 -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[var(--border-subtle)]">
         <div class="flex items-center gap-2">
-          <Layers class="w-4 h-4 text-[var(--ink-muted)]" />
-          <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-            典藏车票存根与印信插架
+          <Layers class="w-4 h-4 text-[#b94a3b]" />
+          <span class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
+            卷二 · 典藏车票存根与印信插架
           </span>
         </div>
 
@@ -952,9 +1065,11 @@ onMounted(() => {
             >
               <!-- 1. 左联：副券 / 旅客存根 -->
               <div class="w-full md:w-52 shrink-0 bg-[#F2EDE2] dark:bg-[#23201D] border-b md:border-b-0 md:border-r-2 border-dashed border-[#C5BBAA] dark:border-[#423D38] p-5 flex flex-col justify-between relative overflow-hidden">
-                <!-- 针孔咬痕咬角 (上下两处半圆切口) -->
+                <!-- 针孔咬痕咬角 (PC 端为右侧纵切口，移动端为底部横切口) -->
                 <div class="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
                 <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
+                <div class="absolute -left-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
+                <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
 
                 <div class="space-y-3">
                   <!-- 存根抬头与仿真条形码 -->
@@ -1043,8 +1158,8 @@ onMounted(() => {
 
                   <!-- 右侧：倾斜复古红色双圈波浪橡皮邮戳 -->
                   <div class="shrink-0 transform rotate-[-6deg] group-hover:rotate-0 transition-transform duration-300">
-                    <div class="border-2 border-[#b94a3b]/80 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative">
-                      <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center">
+                    <div class="border-2 border-[#b94a3b]/85 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative shadow-[inset_0_0_6px_rgba(185,74,59,0.18)] bg-[#b94a3b]/[0.02]">
+                      <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center select-none">
                         <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
                         <span class="text-[9px] font-serif-editorial font-bold my-0.5">
                           {{ city.latestVisitedAt || city.firstVisitedAt || '留步' }}
@@ -1054,7 +1169,7 @@ onMounted(() => {
                         </span>
                       </div>
                       <!-- 右侧波浪邮戳切线 -->
-                      <div class="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 text-[#b94a3b]/70 font-mono-archive text-[10px]">
+                      <div class="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 text-[#b94a3b]/70 font-mono-archive text-[10px] select-none">
                         <span>〰〰</span>
                         <span>〰〰</span>
                         <span>〰〰</span>
@@ -1154,8 +1269,11 @@ onMounted(() => {
             >
               <!-- 存根联 -->
               <div class="w-full md:w-52 shrink-0 bg-[#F2EDE2] dark:bg-[#23201D] border-b md:border-b-0 md:border-r-2 border-dashed border-[#C5BBAA] dark:border-[#423D38] p-5 flex flex-col justify-between relative overflow-hidden">
+                <!-- 针孔咬痕咬角 (PC 端为右侧纵切口，移动端为底部横切口) -->
                 <div class="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
                 <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
+                <div class="absolute -left-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
+                <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
 
                 <div class="space-y-3">
                   <div class="flex items-center justify-between">
@@ -1221,8 +1339,8 @@ onMounted(() => {
                   </div>
 
                   <div class="shrink-0 transform rotate-[-6deg] group-hover:rotate-0 transition-transform">
-                    <div class="border-2 border-[#b94a3b]/80 rounded-full w-20 h-20 p-0.5 flex items-center justify-center">
-                      <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center">
+                    <div class="border-2 border-[#b94a3b]/85 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative shadow-[inset_0_0_6px_rgba(185,74,59,0.18)] bg-[#b94a3b]/[0.02]">
+                      <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center select-none">
                         <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
                         <span class="text-[9px] font-serif-editorial font-bold my-0.5">{{ city.latestVisitedAt }}</span>
                         <span class="text-[8px] font-serif-editorial border-t border-[#b94a3b]/60 px-1 pt-0.5">

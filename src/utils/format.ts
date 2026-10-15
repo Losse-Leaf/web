@@ -99,3 +99,53 @@ export function parseOccurredDate(occurredAt?: string): ParsedOccurredDate {
     timestamp: d.getTime(),
   }
 }
+
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatEditorialInline(raw: string): string {
+  const escaped = escapeHtml(raw)
+  return escaped
+    .replace(
+      /`([^`]+)`/g,
+      '<code class="px-1.5 py-0.5 mx-0.5 text-[0.88em] font-mono-archive bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)]">$1</code>'
+    )
+    .replace(
+      /\*\*([^*]+)\*\*/g,
+      '<strong class="font-semibold text-[var(--ink-primary)]">$1</strong>'
+    )
+}
+
+/**
+ * 轻量出版级排版渲染 (支持 > 引言、- [ ] / - [x] 清单、行内 `code` 与 **加粗**，严格转义防 XSS)
+ */
+export function renderEditorialContent(content?: string): string {
+  if (!content) return ''
+  const lines = content.split(/\r?\n/)
+  return lines
+    .map((line) => {
+      if (/^>\s?/.test(line)) {
+        const inner = formatEditorialInline(line.replace(/^>\s?/, ''))
+        return `<blockquote class="my-1.5 pl-3.5 py-0.5 border-l-2 border-[var(--accent-warm)] italic text-[var(--ink-primary)]/90 font-serif-editorial">${inner}</blockquote>`
+      }
+      if (/^[-*]\s+\[\s\]\s+/.test(line)) {
+        const inner = formatEditorialInline(line.replace(/^[-*]\s+\[\s\]\s+/, ''))
+        return `<div class="my-1 flex items-baseline gap-2"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--ink-muted)] text-[10px] leading-none select-none shrink-0">&#9744;</span><span>${inner}</span></div>`
+      }
+      if (/^[-*]\s+\[[xX]\]\s+/.test(line)) {
+        const inner = formatEditorialInline(line.replace(/^[-*]\s+\[[xX]\]\s+/, ''))
+        return `<div class="my-1 flex items-baseline gap-2 text-[var(--ink-muted)]"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--accent-warm)] bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[10px] leading-none select-none shrink-0">&#10003;</span><span class="line-through decoration-[var(--ink-muted)]/60">${inner}</span></div>`
+      }
+      if (!line.trim()) {
+        return '<div class="h-3"></div>'
+      }
+      return `<div>${formatEditorialInline(line)}</div>`
+    })
+    .join('')
+}

@@ -8,6 +8,7 @@ import AlmanacModal from './AlmanacModal.vue'
 
 const props = defineProps<{
   entries: LifeEntry[]
+  refreshKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -35,9 +36,7 @@ const loadAllEntriesForYear = async (yr: string) => {
       if (pageData.length < 100) break
       page++
     }
-    if (collected.length > 0) {
-      fetchedYearEntries.value = collected
-    }
+    fetchedYearEntries.value = collected
   } catch (err) {
     console.warn(`Failed to fetch full entries for year ${yr}:`, err)
   } finally {
@@ -45,11 +44,15 @@ const loadAllEntriesForYear = async (yr: string) => {
   }
 }
 
-watch(selectedYear, (yr) => {
-  if (yr) {
-    loadAllEntriesForYear(yr)
-  }
-}, { immediate: true })
+watch(
+  [selectedYear, () => props.refreshKey, () => props.entries],
+  ([yr]) => {
+    if (yr) {
+      loadAllEntriesForYear(yr)
+    }
+  },
+  { immediate: true }
+)
 
 // 获取所有出现的年份 (RC-48)
 const years = computed(() => {

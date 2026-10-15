@@ -5,7 +5,6 @@ import {
   Plus,
   Trash2,
   Edit2,
-  CheckCircle2,
   MapPin,
   ShieldCheck,
   Calendar,
@@ -406,20 +405,21 @@ onMounted(() => {
             />
           </div>
 
-          <!-- 达成归册印记 -->
-          <div v-if="w.status === 'fulfilled'" class="pt-1 flex flex-wrap items-center gap-2 font-mono-archive text-[10px] text-[var(--accent-moss)]">
-            <span class="inline-flex items-center gap-1">
-              <CheckCircle2 class="w-3 h-3" />
-              <span>已圆满达成</span>
+          <!-- 达成归册印记 / 拔草印记 -->
+          <div v-if="w.status === 'fulfilled'" class="pt-1 flex flex-wrap items-center gap-2 font-mono-archive text-[10px]">
+            <span class="vermilion-seal px-2 py-0.5 text-[10px]">
+              圆满归册
             </span>
             <span v-if="w.fulfilled_at" class="text-[var(--ink-muted)]">
               · {{ w.fulfilled_at.slice(0, 10) }}
             </span>
           </div>
 
-          <div v-else-if="w.status === 'relinquished'" class="pt-1 flex items-center gap-1.5 font-mono-archive text-[10px] text-emerald-700">
-            <ShieldCheck class="w-3 h-3" />
-            <span>已理性拔草释怀 · 守住生活秩序</span>
+          <div v-else-if="w.status === 'relinquished'" class="pt-1 flex items-center gap-1.5 font-mono-archive text-[10px]">
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xs border border-emerald-600/30 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
+              <ShieldCheck class="w-3 h-3" />
+              <span>已理性拔草释怀 · 守住生活秩序</span>
+            </span>
           </div>
 
           <div v-else-if="w.target_date" class="pt-1 flex items-center gap-1 font-mono-archive text-[10px] text-[var(--ink-muted)]">

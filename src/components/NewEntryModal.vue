@@ -72,7 +72,112 @@ const userManuallyChangedCity = ref(false)
 const occurredAt = ref(getBeijingDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const selectedFootprintId = ref<number | null>(null)
+const featured = ref(false)
 const attachmentIds = ref<number[]>([])
+const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
+
+// 自动草稿持久化 (looseleaf_entry_draft_v1)
+const DRAFT_STORAGE_KEY = 'looseleaf_entry_draft_v1'
+const hasRestoredDraft = ref(false)
+let isResettingForm = false
+
+interface EntryDraftPayload {
+  title: string
+  content: string
+  location: string
+  city_code: string
+  city_name: string
+  entryType: EntryKind
+  projectId: number | null
+  featured: boolean
+}
+
+const saveDraftToStorage = () => {
+  if (!props.isOpen || isResettingForm) return
+  if (selectedKind.value === 'transaction') return
+  const hasContent = Boolean(title.value.trim() || content.value.trim())
+  if (!hasContent) return
+  const draft: EntryDraftPayload = {
+    title: title.value,
+    content: content.value,
+    location: location.value,
+    city_code: selectedCityCode.value,
+    city_name: selectedCityName.value,
+    entryType: selectedKind.value,
+    projectId: selectedProjectId.value,
+    featured: featured.value,
+  }
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
+  } catch {}
+}
+
+const restoreDraftFromStorage = (): boolean => {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as Partial<EntryDraftPayload>
+    if (!parsed || (!parsed.title?.trim() && !parsed.content?.trim())) {
+      return false
+    }
+    isResettingForm = true
+    if (parsed.entryType && !props.initialKind) {
+      selectedKind.value = normalizeKind(parsed.entryType)
+    }
+    title.value = parsed.title || ''
+    content.value = parsed.content || ''
+    if (parsed.location) location.value = parsed.location
+    if (parsed.city_code) {
+      selectedCityCode.value = parsed.city_code
+      userManuallyChangedCity.value = true
+    }
+    if (parsed.city_name) {
+      selectedCityName.value = parsed.city_name
+    }
+    if (parsed.projectId !== undefined && !props.initialProjectId) {
+      selectedProjectId.value = parsed.projectId
+    }
+    featured.value = Boolean(parsed.featured)
+    hasRestoredDraft.value = true
+    isResettingForm = false
+    return true
+  } catch {
+    isResettingForm = false
+    return false
+  }
+}
+
+const clearSavedDraft = (resetFields = false) => {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY)
+  } catch {}
+  hasRestoredDraft.value = false
+  if (resetFields) {
+    isResettingForm = true
+    title.value = ''
+    content.value = ''
+    featured.value = false
+    isResettingForm = false
+  }
+}
+
+const handleModalPaste = (e: ClipboardEvent) => {
+  if (e.defaultPrevented || selectedKind.value === 'transaction') return
+  const clipboardItems = e.clipboardData?.items
+  if (!clipboardItems) return
+  const imageFiles: File[] = []
+  for (let i = 0; i < clipboardItems.length; i++) {
+    const item = clipboardItems[i]
+    if (item.type.startsWith('image/')) {
+      const f = item.getAsFile()
+      if (f) imageFiles.push(f)
+    }
+  }
+  if (imageFiles.length > 0 && imageUploaderRef.value) {
+    e.preventDefault()
+    imageUploaderRef.value.uploadFiles(imageFiles)
+  }
+}
 
 // 造物项目模式：'new' (立项新造物) | 'entry' (为已有项目写造物手记)
 const projectMode = ref<'new' | 'entry'>('new')
@@ -263,10 +368,19 @@ watch(
         projectMode.value = 'new'
         selectedProjectId.value = null
       }
+      hasRestoredDraft.value = false
+      restoreDraftFromStorage()
       errorMsg.value = null
     }
   },
   { immediate: true }
+)
+
+watch(
+  [title, content, location, selectedCityCode, selectedCityName, selectedKind, selectedProjectId, featured],
+  () => {
+    saveDraftToStorage()
+  }
 )
 
 const onWishSelected = () => {
@@ -323,9 +437,11 @@ const handleEntryCitySelect = (city: { code: string; name: string }) => {
 }
 
 const resetForm = () => {
+  isResettingForm = true
   selectedKind.value = normalizeKind(props.initialKind)
   title.value = ''
   content.value = ''
+  featured.value = false
   if (props.initialCityCode && props.initialCityName) {
     userManuallyChangedCity.value = true
     selectedCityCode.value = props.initialCityCode
@@ -367,6 +483,7 @@ const resetForm = () => {
   wishTargetDate.value = ''
   errorMsg.value = null
   isSubmitting.value = false
+  isResettingForm = false
 }
 
 const handleClose = () => {
@@ -518,6 +635,7 @@ const handleSubmit = async () => {
       }
 
       audio.playShutter()
+      clearSavedDraft()
       emit('wishCreated', createdWish)
       handleClose()
     } catch (err: any) {
@@ -567,6 +685,7 @@ const handleSubmit = async () => {
         })
 
         audio.playShutter()
+        clearSavedDraft()
         emit('projectCreated', createdProj)
         emit('entryCreated', createdEntry)
         handleClose()
@@ -603,6 +722,7 @@ const handleSubmit = async () => {
           attachment_ids: attachmentIds.value,
         })
         audio.playShutter()
+        clearSavedDraft()
         emit('entryCreated', createdEntry)
         handleClose()
       } catch (err: any) {
@@ -648,10 +768,12 @@ const handleSubmit = async () => {
       project_id: selectedProjectId.value,
       wish_id: selectedWishId.value,
       footprint_id: selectedFootprintId.value || undefined,
+      featured: featured.value,
       attachment_ids: attachmentIds.value,
     })
 
     audio.playShutter()
+    clearSavedDraft()
     emit('entryCreated', created)
     handleClose()
   } catch (err: any) {
@@ -670,13 +792,29 @@ const handleSubmit = async () => {
   >
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
+      @paste="handleModalPaste"
     >
       <!-- 顶部轻量标头 -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)] mb-5">
         <div>
-          <h2 class="font-serif-editorial text-xl sm:text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
-            记录 · {{ currentKindMeta.label }}
-          </h2>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <h2 class="font-serif-editorial text-xl sm:text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
+              记录 · {{ currentKindMeta.label }}
+            </h2>
+            <span
+              v-if="hasRestoredDraft"
+              class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xs border border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[11px] font-mono-archive text-[var(--accent-warm)]"
+            >
+              <span>已恢复未发手稿 ·</span>
+              <button
+                type="button"
+                @click="clearSavedDraft(true)"
+                class="underline underline-offset-2 hover:text-[var(--ink-primary)] cursor-pointer"
+              >
+                [清空草稿]
+              </button>
+            </span>
+          </div>
           <p class="font-mono-archive text-[11px] text-[var(--ink-muted)] mt-0.5">
             {{ currentKindMeta.desc }}
           </p>
@@ -692,13 +830,13 @@ const handleSubmit = async () => {
       </div>
 
       <!-- 顶部一步式形态切换栏 (日常 / 游历 / 造物 / 心愿 / 账目) -->
-      <div class="grid grid-cols-5 gap-1.5 p-1 bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] rounded-xs mb-6">
+      <div class="grid grid-cols-5 gap-1 sm:gap-1.5 p-1 bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] rounded-xs mb-6">
         <button
           v-for="opt in kindOptions"
           :key="opt.key"
           type="button"
           @click="selectKind(opt.key)"
-          class="py-1.5 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer text-center"
+          class="py-1.5 px-0.5 sm:px-2 text-[11px] sm:text-xs font-serif-editorial rounded-xs transition-all cursor-pointer text-center truncate"
           :class="
             selectedKind === opt.key
               ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-2xs'
@@ -1043,6 +1181,7 @@ const handleSubmit = async () => {
             </div>
 
             <ImageUploader
+              ref="imageUploaderRef"
               :storageConfigured="storageConfigured"
               @update:attachments="attachmentIds = $event"
             />
@@ -1142,6 +1281,7 @@ const handleSubmit = async () => {
             </div>
 
             <ImageUploader
+              ref="imageUploaderRef"
               :storageConfigured="storageConfigured"
               @update:attachments="attachmentIds = $event"
             />
@@ -1238,6 +1378,7 @@ const handleSubmit = async () => {
           </div>
 
           <ImageUploader
+            ref="imageUploaderRef"
             :storageConfigured="storageConfigured"
             @update:attachments="attachmentIds = $event"
           />
@@ -1319,6 +1460,7 @@ const handleSubmit = async () => {
 
           <!-- 照片上传组件 -->
           <ImageUploader
+            ref="imageUploaderRef"
             :storageConfigured="storageConfigured"
             @update:attachments="attachmentIds = $event"
           />

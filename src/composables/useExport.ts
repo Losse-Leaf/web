@@ -25,7 +25,7 @@ export function useExport() {
     const backup = {
       version: '1.1.0',
       exported_at: new Date().toISOString(),
-      generator: '散页 · 生活档案与时光手账',
+      generator: '散页 · 个人生活志',
       profile: data.profile || loadCuratorProfile(),
       stats: {
         total_entries: data.entries.length,

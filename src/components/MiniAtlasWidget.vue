@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Compass, ChevronRight, MapPin } from 'lucide-vue-next'
+import { Stamp, ChevronRight, MapPin } from 'lucide-vue-next'
 import { fetchFootprintsAtlas } from '../utils/api'
 import { CHINA_CITIES } from '../utils/cities'
+import { ALL_PROVINCES_ORDERED, PROVINCE_SHORT_MAP } from '../utils/atlasHelpers'
 import type { AtlasCitySummary } from '../types'
 
 const props = defineProps<{
@@ -38,24 +39,51 @@ const loadMiniAtlas = async () => {
   }
 }
 
-const cityCoordMap = computed(() => {
-  const map = new Map<string, { x: number; y: number }>()
+const cityProvinceMap = computed(() => {
+  const map = new Map<string, string>()
   for (const c of CHINA_CITIES) {
-    map.set(c.code, { x: c.x, y: c.y })
+    map.set(c.code, c.province)
   }
   return map
 })
 
 const litPoints = computed(() => {
   return (atlasData.value.cities || []).map((c) => {
-    const coords = cityCoordMap.value.get(c.city_code) || { x: 450, y: 280 }
+    const province = cityProvinceMap.value.get(c.city_code) || '其他'
     return {
       ...c,
+      province,
       shortName: c.city_name.replace(/市|地区|自治州|特别行政区|盟/g, '') || c.city_name,
-      x: coords.x,
-      y: coords.y,
     }
   })
+})
+
+const provinceStatsMap = computed(() => {
+  const map = new Map<string, { cityCount: number; visitCount: number }>()
+  for (const c of litPoints.value) {
+    const cur = map.get(c.province) || { cityCount: 0, visitCount: 0 }
+    cur.cityCount += 1
+    cur.visitCount += c.visit_count || 1
+    map.set(c.province, cur)
+  }
+  return map
+})
+
+const miniProvinceSeals = computed(() => {
+  return ALL_PROVINCES_ORDERED.map((prov) => {
+    const stat = provinceStatsMap.value.get(prov)
+    return {
+      name: prov,
+      shortName: PROVINCE_SHORT_MAP[prov] || prov.slice(0, 1),
+      isLit: Boolean(stat && stat.cityCount > 0),
+      cityCount: stat?.cityCount || 0,
+      visitCount: stat?.visitCount || 0,
+    }
+  })
+})
+
+const litProvinceCount = computed(() => {
+  return miniProvinceSeals.value.filter((p) => p.isLit).length
 })
 
 const recentCities = computed(() => {
@@ -76,90 +104,67 @@ onMounted(() => {
 
 <template>
   <div class="space-y-4">
-    <!-- 微缩经纬星野画布 (高度可控、视差自洽) -->
+    <!-- 微缩山河印谱 · 三十四省活字印章盘 -->
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-3 sm:p-5 relative overflow-hidden group cursor-pointer"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-4 sm:p-5 relative overflow-hidden group cursor-pointer"
       @click="emit('navigateAtlas')"
-      title="点击进入山川行迹全屏星野与典藏票根"
+      title="点击进入山川行迹 · 三十四省山河印谱与典藏车票存根"
     >
-      <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border-subtle)]/60 text-xs font-serif-editorial text-[var(--ink-secondary)]">
+      <div class="flex items-center justify-between pb-3 mb-3.5 border-b border-[var(--border-subtle)]/60 text-xs font-serif-editorial text-[var(--ink-secondary)]">
         <div class="flex items-center gap-1.5">
-          <Compass class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-          <span>山川星宿概览 · 已驻足 {{ atlasData.total_cities }} 座城市 ({{ atlasData.total_footprints }} 次履迹)</span>
+          <Stamp class="w-3.5 h-3.5 text-[#b94a3b]" />
+          <span>
+            山河印谱概览 · 已钤印 {{ litProvinceCount }} / 34 省区 · {{ atlasData.total_cities }} 座城邑 ({{ atlasData.total_footprints }} 次履迹)
+          </span>
         </div>
         <span class="text-[11px] font-serif-editorial text-[var(--ink-muted)] flex items-center gap-0.5 group-hover:text-[var(--ink-primary)] transition-colors">
-          <span>全屏视界</span>
+          <span>翻阅全谱与票根</span>
           <ChevronRight class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
 
-      <div class="relative w-full aspect-[21/9] sm:aspect-[24/9] flex items-center justify-center">
-        <svg viewBox="60 30 720 380" class="w-full h-full select-none pointer-events-none">
-          <defs>
-            <filter id="mini-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          <!-- 经纬度极细虚线 -->
-          <g stroke="var(--border-subtle)" stroke-width="0.5" stroke-dasharray="3 4" opacity="0.45">
-            <line x1="200" y1="30" x2="200" y2="400" />
-            <line x1="340" y1="30" x2="340" y2="400" />
-            <line x1="480" y1="30" x2="480" y2="400" />
-            <line x1="620" y1="30" x2="620" y2="400" />
-            <line x1="60" y1="120" x2="780" y2="120" />
-            <line x1="60" y1="210" x2="780" y2="210" />
-            <line x1="60" y1="300" x2="780" y2="300" />
-          </g>
-
-          <!-- 全量 375 城市星尘基座 -->
-          <g fill="var(--ink-muted)" opacity="0.14">
-            <circle
-              v-for="city in CHINA_CITIES"
-              :key="city.code"
-              :cx="city.x"
-              :cy="city.y"
-              r="1"
-            />
-          </g>
-
-          <!-- 点亮城市星宿节点 -->
-          <g>
-            <g v-for="c in litPoints" :key="c.city_code">
-              <circle
-                :cx="c.x"
-                :cy="c.y"
-                :r="c.visit_count >= 3 ? 9 : 6.5"
-                fill="none"
-                :stroke="c.visit_count >= 3 ? '#b94a3b' : c.visit_count === 2 ? 'var(--accent-moss)' : 'var(--ink-secondary)'"
-                stroke-width="1"
-                opacity="0.6"
-                filter="url(#mini-glow)"
-              />
-              <circle
-                :cx="c.x"
-                :cy="c.y"
-                :r="c.visit_count >= 3 ? 4 : 3"
-                :fill="c.visit_count >= 3 ? '#b94a3b' : c.visit_count === 2 ? 'var(--accent-moss)' : 'var(--ink-primary)'"
-              />
-              <text
-                :x="c.x + 6"
-                :y="c.y + 3"
-                font-size="9"
-                font-family="serif"
-                fill="var(--ink-primary)"
-                class="font-medium"
-                style="paint-order: stroke; stroke: var(--bg-archive); stroke-width: 2.5px; stroke-linejoin: round;"
-              >
-                {{ c.shortName }}
-              </text>
-            </g>
-          </g>
-        </svg>
+      <!-- 34 省活字印章矩阵 (紧凑博古小格) -->
+      <div class="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-12 gap-2">
+        <div
+          v-for="seal in miniProvinceSeals"
+          :key="seal.name"
+          class="rounded-xs p-2 flex flex-col items-center justify-center text-center transition-all relative"
+          :class="
+            seal.isLit
+              ? 'bg-[#FAF6EE] dark:bg-[#221F1C] border border-[#b94a3b] shadow-2xs'
+              : 'bg-[var(--bg-subtle)]/35 border border-dashed border-[var(--border-subtle)]/70 opacity-65'
+          "
+        >
+          <!-- 单字印章 -->
+          <div
+            class="w-7 h-7 rounded-xs flex items-center justify-center font-serif-editorial font-bold text-sm leading-none mb-1"
+            :class="
+              seal.isLit
+                ? 'bg-[#b94a3b] text-[#FAF7F0] border border-[#b94a3b]'
+                : 'text-[var(--ink-muted)]'
+            "
+          >
+            {{ seal.shortName }}
+          </div>
+          <span
+            class="text-[10px] font-serif-editorial truncate max-w-full"
+            :class="seal.isLit ? 'text-[var(--ink-primary)] font-medium' : 'text-[var(--ink-muted)]'"
+          >
+            {{ seal.name }}
+          </span>
+          <span
+            v-if="seal.isLit"
+            class="text-[9px] font-mono-archive text-[#b94a3b] leading-tight mt-0.5"
+          >
+            {{ seal.cityCount }}城
+          </span>
+          <span
+            v-else
+            class="text-[9px] font-serif-editorial text-[var(--ink-muted)]/50 leading-tight mt-0.5"
+          >
+            待访
+          </span>
+        </div>
       </div>
     </div>
 
@@ -170,17 +175,17 @@ onMounted(() => {
         v-for="c in recentCities"
         :key="c.city_code"
         @click="emit('navigateAtlas')"
-        class="px-2 py-0.5 rounded-xs bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] inline-flex items-center gap-1 cursor-pointer transition-colors"
+        class="px-2 py-0.5 rounded-xs bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] hover:border-[#b94a3b] text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] inline-flex items-center gap-1 cursor-pointer transition-colors"
       >
-        <MapPin class="w-3 h-3 text-[var(--accent-warm)]" />
+        <MapPin class="w-3 h-3 text-[#b94a3b]" />
         <span>{{ c.city_name }}</span>
         <span class="text-[10px] text-[var(--ink-muted)]">({{ c.visit_count }}次)</span>
       </button>
       <button
         @click="emit('navigateAtlas')"
-        class="text-[11px] text-[var(--accent-warm)] hover:underline ml-auto cursor-pointer"
+        class="text-[11px] text-[#b94a3b] hover:underline ml-auto cursor-pointer font-serif-editorial"
       >
-        查看全部 {{ atlasData.total_cities }} 城票根与回忆抽屉 ↗
+        查看全部 {{ atlasData.total_cities }} 城印谱与车票存根 ↗
       </button>
     </div>
   </div>

@@ -4,6 +4,7 @@ import type {
   Transaction,
   TransactionSummary,
   StorageStatus,
+  StorageConfigPayload,
   GlobalStats,
   Project,
   TrustedDevice,
@@ -27,11 +28,11 @@ import type {
   ProvinceMemoryDrawerData,
   AnnualAlmanacSummary,
   UpdateCheckResult,
-  UpdateNotice,
   GearItem,
   CategoryOption,
   CategoriesResponse,
   CategoryScope,
+  BackupItem,
 } from '../types'
 
 const API_BASE = '/api/v1'
@@ -130,10 +131,26 @@ try {
   entriesETag = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
 } catch {}
 
+const etagMap = new Map<string, string>()
+const payloadMap = new Map<string, unknown>()
+
 export function resetEntriesETag(): void {
   entriesETag = ''
+  etagMap.delete(`${API_BASE}/entries`)
+  payloadMap.delete(`${API_BASE}/entries`)
   try {
     localStorage.removeItem(ENTRIES_ETAG_KEY)
+  } catch {}
+}
+
+export function clearApiCache(): void {
+  resetEntriesETag()
+  etagMap.clear()
+  payloadMap.clear()
+  try {
+    localStorage.removeItem('looseleaf_entries_cache')
+    localStorage.removeItem('looseleaf_transactions_cache')
+    localStorage.removeItem('looseleaf_curator_profile')
   } catch {}
 }
 
@@ -220,6 +237,52 @@ export async function fetchEntryById(id: number): Promise<LifeEntry> {
   return request<LifeEntry>(`${API_BASE}/entries/${id}`)
 }
 
+export async function fetchOnThisDayEntries(): Promise<{
+  month: number
+  day: number
+  entries: LifeEntry[]
+}> {
+  const res = await request<{
+    month?: number
+    day?: number
+    entries?: LifeEntry[]
+  }>(`${API_BASE}/entries/on-this-day`)
+  return {
+    month: Number(res?.month || 0),
+    day: Number(res?.day || 0),
+    entries: Array.isArray(res?.entries) ? res.entries : [],
+  }
+}
+
+export async function searchGlobalArchive(
+  q: string,
+  limit = 30
+): Promise<{
+  query: string
+  entries: LifeEntry[]
+  footprints: Footprint[]
+  wishes: Wish[]
+  projects: Project[]
+}> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  const res = await request<{
+    query?: string
+    entries?: LifeEntry[]
+    footprints?: Footprint[]
+    wishes?: Wish[]
+    projects?: Project[]
+  }>(`${API_BASE}/search?${params.toString()}`)
+  return {
+    query: res?.query ?? q,
+    entries: Array.isArray(res?.entries) ? res.entries : [],
+    footprints: Array.isArray(res?.footprints) ? res.footprints : [],
+    wishes: Array.isArray(res?.wishes) ? res.wishes : [],
+    projects: Array.isArray(res?.projects) ? res.projects : [],
+  }
+}
+
 export async function createLifeEntry(data: {
   type: string
   title?: string
@@ -290,6 +353,42 @@ export async function cleanupUploads(objectKeys: string[]): Promise<void> {
 
 export async function fetchStorageStatus(): Promise<StorageStatus> {
   return request<StorageStatus>(`${API_BASE}/storage/status`)
+}
+
+export async function testStorageConfig(payload: StorageConfigPayload): Promise<{ status: string; message: string; latency_ms?: number }> {
+  return request<{ status: string; message: string; latency_ms?: number }>(`${API_BASE}/storage/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateStorageConfig(payload: StorageConfigPayload): Promise<StorageStatus> {
+  return request<StorageStatus>(`${API_BASE}/storage/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function resetStorageConfig(): Promise<StorageStatus> {
+  return request<StorageStatus>(`${API_BASE}/storage/config`, {
+    method: 'DELETE',
+  })
+}
+
+export async function migrateStorageMedia(): Promise<{
+  uploaded_to_r2: number
+  downloaded_to_local: number
+  message: string
+}> {
+  return request<{
+    uploaded_to_r2: number
+    downloaded_to_local: number
+    message: string
+  }>(`${API_BASE}/storage/migrate`, {
+    method: 'POST',
+  })
 }
 
 // 统一文件上传接口：上传物理文件至后端 POST /api/v1/files/upload，返回相对路径 object_key 与临时签名 URL
@@ -579,6 +678,16 @@ export async function revokeTrustedDevice(id: number): Promise<boolean> {
     method: 'DELETE',
   })
   return true
+}
+
+export async function updateTrustedDeviceName(
+  id: string | number,
+  name: string
+): Promise<TrustedDevice> {
+  return request<TrustedDevice>(`${API_BASE}/auth/devices/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  })
 }
 
 // 7. Site Config (站点配置，全端动态驱动)
@@ -898,48 +1007,9 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
   }
 }
 
-// 15. 系统版本检测与更新公告存档 (System Update Check & Update Notices · 管理端专用 RC-97)
+// 15. 系统版本检测 (System Update Check · 管理端专用 RC-97)
 export async function checkSystemUpdate(force?: boolean): Promise<UpdateCheckResult> {
   return request<UpdateCheckResult>(`${API_BASE}/system/update-check${force ? '?force=true' : ''}`)
-}
-
-export async function fetchUpdateNotices(): Promise<UpdateNotice[]> {
-  const res = await request<UpdateNotice[]>(`${API_BASE}/system/update-notices`)
-  return Array.isArray(res) ? res : []
-}
-
-export async function createUpdateNotice(data: {
-  version: string
-  title: string
-  body: string
-  released_at?: string
-}): Promise<UpdateNotice> {
-  return request<UpdateNotice>(`${API_BASE}/system/update-notices`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function updateUpdateNotice(
-  id: number,
-  data: Partial<{
-    version: string
-    title: string
-    body: string
-    released_at: string
-  }>
-): Promise<UpdateNotice> {
-  return request<UpdateNotice>(`${API_BASE}/system/update-notices/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function deleteUpdateNotice(id: number): Promise<boolean> {
-  await request(`${API_BASE}/system/update-notices/${id}`, {
-    method: 'DELETE',
-  })
-  return true
 }
 
 // 16. 全局自定义分类字典 (Custom Categories CRUD)
@@ -985,6 +1055,123 @@ export async function resetCategoryOptions(scope?: CategoryScope): Promise<Categ
     method: 'POST',
     body: JSON.stringify({ scope: scope || '' }),
   })
+}
+
+// 17. 全量 ZIP 备份与灾难恢复 (System Backup & Disaster Recovery)
+export async function fetchBackupList(): Promise<BackupItem[]> {
+  const res = await request<BackupItem[]>(`${API_BASE}/system/backup/list`)
+  return Array.isArray(res) ? res : []
+}
+
+export async function createBackupNow(): Promise<BackupItem> {
+  return request<BackupItem>(`${API_BASE}/system/backup/now`, {
+    method: 'POST',
+  })
+}
+
+export async function deleteBackup(filename: string): Promise<BackupItem[]> {
+  const res = await request<BackupItem[]>(`${API_BASE}/system/backup/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+  })
+  return Array.isArray(res) ? res : []
+}
+
+export async function restoreBackupByFilename(
+  filename: string
+): Promise<{ message: string; filename: string; size: number }> {
+  const res = await request<{ message: string; filename: string; size: number }>(
+    `${API_BASE}/system/backup/restore`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ filename }),
+    }
+  )
+  clearApiCache()
+  return res
+}
+
+export async function restoreBackupByFile(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ message: string; filename: string; size: number }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const formData = new FormData()
+    formData.append('file', file)
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100)
+          onProgress(percent)
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText)
+          clearApiCache()
+          if (res.data) {
+            resolve(res.data)
+          } else {
+            resolve(res)
+          }
+        } catch {
+          reject(new Error('解析还原响应失败'))
+        }
+      } else {
+        try {
+          const errRes = JSON.parse(xhr.responseText)
+          reject(new Error(errRes.message || `恢复失败 (HTTP ${xhr.status})`))
+        } catch {
+          reject(new Error(`恢复失败 (HTTP ${xhr.status})`))
+        }
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error('网络中断，上传恢复文件失败'))
+    }
+
+    xhr.open('POST', `${API_BASE}/system/backup/restore`, true)
+    const token = getAdminToken()
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      xhr.setRequestHeader('X-Device-Token', token)
+    }
+    xhr.send(formData)
+  })
+}
+
+export async function downloadBackup(filename: string): Promise<void> {
+  const token = getAdminToken()
+  const authHeaders: Record<string, string> = {}
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`
+    authHeaders['X-Device-Token'] = token
+  }
+  const res = await fetch(`${API_BASE}/system/backup/download/${encodeURIComponent(filename)}`, {
+    headers: authHeaders,
+  })
+  if (!res.ok) {
+    let msg = `下载备份失败 (HTTP ${res.status})`
+    try {
+      const err = await res.json()
+      if (err.message) msg = err.message
+    } catch {}
+    throw new Error(msg)
+  }
+  const blob = await res.blob()
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
 }
 
 

@@ -30,7 +30,7 @@ const currentYear = computed(() => getBeijingYear())
             《散页》
           </span>
           <p class="mt-1 text-[11px] text-[var(--ink-secondary)] font-serif-editorial">
-            个人生活手账与时光档案 · 记录做过的事、看过的风景、思考过的念头。
+            个人生活志 · 记录日常、打理资产、兑现心愿、丈量山河、实践造物。
           </p>
         </div>
 

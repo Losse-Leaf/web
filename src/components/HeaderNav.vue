@@ -27,12 +27,10 @@ const emit = defineEmits<{
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'openAdd'): void
   (e: 'openStats'): void
-  (e: 'openStorage'): void
+  (e: 'openStorageBackup', tab?: 'backup' | 'storage' | 'export'): void
   (e: 'openSearch'): void
-  (e: 'openExport'): void
   (e: 'openPairing'): void
   (e: 'openUpdateCheck'): void
-  (e: 'openUpdateNotices'): void
   (e: 'toggleTheme'): void
   (e: 'openLogin'): void
   (e: 'logout'): void
@@ -61,7 +59,6 @@ const navItems = computed(() => {
     { key: 'wishes', label: '心愿' },
     { key: 'atlas', label: '足迹' },
     { key: 'projects', label: '项目' },
-    { key: 'archive', label: '归档' },
     { key: 'about', label: '主理人' }
   )
   return items
@@ -84,24 +81,14 @@ const toolOptions = computed(() => {
         action: () => emit('openPairing'),
       },
       {
-        key: 'export',
-        label: '数据备份',
-        action: () => emit('openExport'),
-      },
-      {
-        key: 'storage',
-        label: '存储设置',
-        action: () => emit('openStorage'),
+        key: 'storage-backup',
+        label: '存储与备份',
+        action: () => emit('openStorageBackup', 'backup'),
       },
       {
         key: 'update-check',
         label: '检查更新',
         action: () => emit('openUpdateCheck'),
-      },
-      {
-        key: 'update-notices',
-        label: '更新公告',
-        action: () => emit('openUpdateNotices'),
       },
       {
         key: 'logout',
@@ -173,7 +160,7 @@ onUnmounted(() => {
   >
     <div class="max-w-5xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
       
-      <!-- 极简出版标识：动态从后端配置与主理人档案中驱动 -->
+      <!-- 极简出版标识：纯净呈现品牌名，告别冗余口号 -->
       <button
         @click="setView('home')"
         class="text-left group cursor-pointer"
@@ -181,21 +168,18 @@ onUnmounted(() => {
         <span class="font-serif-editorial text-xl font-medium tracking-wider text-[var(--ink-primary)]">
           {{ displaySiteName }}
         </span>
-        <span class="text-xs text-[var(--ink-muted)] ml-2.5 hidden sm:inline tracking-wider font-serif-editorial">
-          时光手账与生活档案
-        </span>
       </button>
 
       <!-- 桌面端克制纯中文导航 -->
-      <nav class="hidden md:flex items-center gap-7">
+      <nav class="hidden md:flex items-center gap-1.5 lg:gap-2">
         <button
           v-for="item in navItems"
           :key="item.key"
           @click="setView(item.key)"
-          class="text-sm tracking-wider transition-colors cursor-pointer py-1"
+          class="relative text-sm tracking-wider transition-all duration-200 cursor-pointer py-1.5 px-2.5 lg:px-3 rounded-xs select-none"
           :class="currentView === item.key 
-            ? 'text-[var(--ink-primary)] font-semibold border-b border-[var(--ink-primary)]' 
-            : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
+            ? 'text-[var(--ink-primary)] font-medium bg-[var(--bg-subtle)]/75 shadow-2xs after:content-[\'\'] after:absolute after:bottom-0 after:left-2.5 after:right-2.5 after:h-[2px] after:bg-[var(--accent-warm)]' 
+            : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--bg-subtle)]/40'"
         >
           {{ item.label }}
         </button>
@@ -324,46 +308,48 @@ onUnmounted(() => {
 
     </div>
 
-    <!-- 移动端展开抽屉 -->
+    <!-- 移动端手账折页抽屉 -->
     <div
       v-if="mobileMenuOpen"
-      class="md:hidden border-b border-[var(--border-subtle)] bg-[var(--bg-archive)] px-6 py-6 space-y-6"
+      class="md:hidden border-b border-[var(--border-subtle)] bg-[var(--bg-archive)]/98 backdrop-blur-lg px-5 py-6 space-y-6 shadow-xl animate-in slide-in-from-top-2 duration-200"
     >
       <!-- 快捷新增与身份状态 -->
-      <div class="space-y-2">
+      <div class="space-y-2.5">
         <button
           @click="handleOpenAdd"
-          class="w-full py-2.5 px-3 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs text-xs font-mono-archive flex items-center justify-center gap-2 cursor-pointer"
+          class="w-full py-2.5 px-3 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs text-xs font-mono-archive flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.99] transition-transform"
         >
           <Plus class="w-4 h-4" />
-          <span class="font-serif-editorial text-sm">记录一点什么</span>
+          <span class="font-serif-editorial text-sm font-medium">写下一篇散页手账</span>
         </button>
         <button
           v-if="!isAdmin"
           @click="emit('openLogin'); mobileMenuOpen = false"
-          class="w-full py-2 px-3 border border-[var(--accent-warm)]/50 bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] rounded-xs text-xs font-serif-editorial flex items-center justify-center gap-1.5 cursor-pointer"
+          class="w-full py-2 px-3 border border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)] rounded-xs text-xs font-serif-editorial flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[var(--accent-warm)]/12 transition-colors"
         >
           <KeyRound class="w-3.5 h-3.5" />
           <span>主理人印鉴登录</span>
         </button>
       </div>
 
-      <!-- 导航栏目 -->
+      <!-- 导航栏目：双列纸签网格 -->
       <div class="space-y-2">
-        <span class="text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] block">
-          页面导航
-        </span>
+        <div class="flex items-center justify-between text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/70 pb-1.5">
+          <span>生活档案章节</span>
+          <span>CH. 01–06</span>
+        </div>
         <div class="grid grid-cols-2 gap-2 text-sm font-serif-editorial">
           <button
             v-for="item in navItems"
             :key="item.key"
             @click="setView(item.key)"
-            class="text-left py-2 px-2.5 rounded-xs border text-xs flex items-center justify-between"
+            class="text-left py-2.5 px-3 rounded-xs border transition-all flex items-center justify-between cursor-pointer"
             :class="currentView === item.key 
-              ? 'border-[var(--ink-primary)] text-[var(--ink-primary)] font-bold' 
-              : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+              ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold shadow-2xs' 
+              : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'"
           >
             <span>{{ item.label }}</span>
+            <span v-if="currentView === item.key" class="w-1.5 h-1.5 rounded-full bg-[var(--accent-warm)]"></span>
           </button>
         </div>
       </div>
@@ -371,14 +357,14 @@ onUnmounted(() => {
       <!-- 工具选项 -->
       <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
         <span class="text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] block">
-          设置与工具
+          档案馆系统与设置
         </span>
         <div class="grid grid-cols-2 gap-2 text-xs font-serif-editorial">
           <button
             v-for="opt in toolOptions"
             :key="opt.key"
             @click="handleToolClick(opt)"
-            class="text-left py-1.5 px-2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-secondary)]"
+            class="text-left py-2 px-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:border-[var(--border-divider)] transition-colors cursor-pointer"
           >
             {{ opt.label }}
           </button>

@@ -114,6 +114,35 @@ const onDrop = (e: DragEvent) => {
   Array.from(e.dataTransfer.files).forEach((f) => handleFileProcess(f))
 }
 
+const uploadFiles = (files: File[]) => {
+  files.forEach((f) => {
+    if (f.type.startsWith('image/')) {
+      handleFileProcess(f)
+    }
+  })
+}
+
+const onPaste = (e: ClipboardEvent) => {
+  const clipboardItems = e.clipboardData?.items
+  if (!clipboardItems) return
+  const imageFiles: File[] = []
+  for (let i = 0; i < clipboardItems.length; i++) {
+    const item = clipboardItems[i]
+    if (item.type.startsWith('image/')) {
+      const f = item.getAsFile()
+      if (f) imageFiles.push(f)
+    }
+  }
+  if (imageFiles.length > 0) {
+    e.preventDefault()
+    uploadFiles(imageFiles)
+  }
+}
+
+defineExpose({
+  uploadFiles,
+})
+
 const removeItem = (item: UploadItem) => {
   if (item.objectKey && !item.id.startsWith('existing-')) {
     cleanupUploads([item.objectKey])
@@ -150,6 +179,7 @@ onUnmounted(() => {
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
+      @paste="onPaste"
     >
       <!-- 隐藏的文件选择器 -->
       <input
@@ -228,7 +258,7 @@ onUnmounted(() => {
         </button>
 
         <div v-if="items.length === 0" class="text-xs text-[var(--ink-muted)] font-serif-editorial ml-2">
-          点击或拖拽照片到此处
+          点击、拖拽或直接粘贴 (⌘V / Ctrl+V) 照片到此处
         </div>
       </div>
     </div>
