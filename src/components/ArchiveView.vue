@@ -66,6 +66,22 @@ const years = computed(() => {
   return list.length > 0 ? list : [currentYearStr]
 })
 
+const availableAlmanacYears = computed(() => {
+  const currentY = getBeijingYear()
+  let minYear = currentY
+  props.entries.forEach(e => {
+    const y = parseInt(parseOccurredDate(e.occurred_at).year, 10)
+    if (!isNaN(y) && y >= 2000 && y <= currentY) {
+      if (y < minYear) minYear = y
+    }
+  })
+  const list: number[] = []
+  for (let y = currentY; y >= minYear; y--) {
+    list.push(y)
+  }
+  return list
+})
+
 // 当年份列表更新且 selectedYear 不在列表中时，选中最新的一年
 watch(years, (newYears) => {
   if (newYears.length > 0 && !newYears.includes(selectedYear.value)) {
@@ -256,6 +272,7 @@ const formatMonthDay = (occurredAt?: string) => {
       v-if="isAlmanacOpen"
       :isOpen="isAlmanacOpen"
       :initialYear="parseInt(selectedYear) || 2026"
+      :availableYears="availableAlmanacYears"
       @close="isAlmanacOpen = false"
     />
 

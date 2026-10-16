@@ -50,14 +50,18 @@ const selectedHeatmapDate = ref<string>('')
 const allEntries = computed(() => props.entries || [])
 
 const availableAlmanacYears = computed(() => {
-  const yearSet = new Set<number>([currentYear])
+  let minYear = currentYear
   allEntries.value.forEach((entry) => {
     const y = parseInt(parseOccurredDate(entry.occurred_at).year, 10)
-    if (!isNaN(y) && y >= 2000 && y <= 2100) {
-      yearSet.add(y)
+    if (!isNaN(y) && y >= 2000 && y <= currentYear) {
+      if (y < minYear) minYear = y
     }
   })
-  return Array.from(yearSet).sort((a, b) => b - a)
+  const list: number[] = []
+  for (let y = currentYear; y >= minYear; y--) {
+    list.push(y)
+  }
+  return list
 })
 
 const selectedDateEntries = computed(() => {
@@ -460,6 +464,7 @@ onUnmounted(() => {
       v-if="isAlmanacOpen"
       :isOpen="isAlmanacOpen"
       :initialYear="almanacYear"
+      :availableYears="availableAlmanacYears"
       @close="isAlmanacOpen = false"
     />
 

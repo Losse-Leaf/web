@@ -5,8 +5,6 @@ import {
   Calendar,
   Compass,
   Printer,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-vue-next'
 import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
 import { formatMoney, getBeijingYear } from '../utils/format'
@@ -15,6 +13,7 @@ import type { AnnualAlmanacSummary } from '../types'
 const props = defineProps<{
   isOpen: boolean
   initialYear?: number
+  availableYears?: number[]
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +25,19 @@ const currentYear = ref(props.initialYear || getBeijingYear())
 const summary = ref<AnnualAlmanacSummary | null>(null)
 const isLoading = ref(false)
 const errorMsg = ref('')
+
+const computedYears = computed(() => {
+  const beijingYear = getBeijingYear()
+  if (props.availableYears && props.availableYears.length > 0) {
+    const minYr = Math.min(...props.availableYears, beijingYear)
+    const list: number[] = []
+    for (let y = beijingYear; y >= minYr; y--) {
+      list.push(y)
+    }
+    return list
+  }
+  return [beijingYear]
+})
 
 const loadAlmanac = async (year: number) => {
   try {
@@ -54,11 +66,6 @@ onMounted(() => {
   loadAlmanac(currentYear.value)
 })
 
-const changeYear = (delta: number) => {
-  currentYear.value += delta
-  loadAlmanac(currentYear.value)
-}
-
 const handlePrint = () => {
   window.print()
 }
@@ -81,24 +88,19 @@ const formatDate = (dateStr?: string) => {
     >
       <!-- 顶栏工具行 (打印模式自动隐藏) -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)] print:hidden">
-        <!-- 年份切换器 -->
-        <div class="flex items-center gap-3 font-mono-archive text-sm">
+        <!-- 年份切换器 (从最初记录的年份到当前年份) -->
+        <div class="flex items-center gap-2 overflow-x-auto py-1 font-mono-archive text-sm max-w-md">
           <button
-            @click="changeYear(-1)"
-            class="p-1 hover:text-[var(--ink-primary)] text-[var(--ink-muted)] cursor-pointer"
-            title="前一年"
+            v-for="yr in computedYears"
+            :key="yr"
+            type="button"
+            @click="currentYear = yr; loadAlmanac(yr)"
+            class="px-2.5 py-1 rounded-xs border text-xs transition-colors cursor-pointer whitespace-nowrap"
+            :class="currentYear === yr
+              ? 'bg-[var(--accent-warm)] text-[var(--bg-paper)] border-[var(--accent-warm)] font-medium shadow-xs'
+              : 'bg-transparent text-[var(--ink-secondary)] border-[var(--border-subtle)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'"
           >
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <span class="font-serif-editorial text-lg text-[var(--ink-primary)] font-medium">
-            {{ currentYear }} 年度生活年鉴
-          </span>
-          <button
-            @click="changeYear(1)"
-            class="p-1 hover:text-[var(--ink-primary)] text-[var(--ink-muted)] cursor-pointer"
-            title="后一年"
-          >
-            <ChevronRight class="w-4 h-4" />
+            {{ yr }} 年
           </button>
         </div>
 
