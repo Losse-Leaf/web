@@ -616,113 +616,117 @@ onUnmounted(() => {
                 </div>
 
                 <!-- 散页纸墨风二维码暗房装裱框 + 配对深链 -->
-                <div class="p-4 sm:p-5 bg-[var(--bg-archive)]/80 border border-[var(--border-subtle)] rounded-xs flex flex-col sm:flex-row items-center gap-5">
-                  <!-- 散页纸墨风二维码装裱容器 (.film-frame + 四角复古裁切基准线 + #F9F8F5 棉纸内衬 RC-61) -->
-                  <div class="film-frame p-4 rounded-xs relative inline-flex flex-col items-center shrink-0">
-                    <span class="pointer-events-none absolute top-1.5 left-1.5 w-2.5 h-2.5 border-t-2 border-l-2 border-[var(--accent-warm)]/80"></span>
-                    <span class="pointer-events-none absolute top-1.5 right-1.5 w-2.5 h-2.5 border-t-2 border-r-2 border-[var(--accent-warm)]/80"></span>
-                    <span class="pointer-events-none absolute bottom-1.5 left-1.5 w-2.5 h-2.5 border-b-2 border-l-2 border-[var(--accent-warm)]/80"></span>
-                    <span class="pointer-events-none absolute bottom-1.5 right-1.5 w-2.5 h-2.5 border-b-2 border-r-2 border-[var(--accent-warm)]/80"></span>
+                <div class="p-4 sm:p-5 bg-[var(--bg-archive)]/80 border border-[var(--border-subtle)] rounded-xs space-y-4">
+                  <div class="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                    <!-- 散页纸墨风二维码装裱容器 (.film-frame + 四角复古裁切基准线 + #F9F8F5 棉纸内衬 RC-61) -->
+                    <div class="film-frame p-4 rounded-xs relative inline-flex flex-col items-center shrink-0">
+                      <span class="pointer-events-none absolute top-1.5 left-1.5 w-2.5 h-2.5 border-t-2 border-l-2 border-[var(--accent-warm)]/80"></span>
+                      <span class="pointer-events-none absolute top-1.5 right-1.5 w-2.5 h-2.5 border-t-2 border-r-2 border-[var(--accent-warm)]/80"></span>
+                      <span class="pointer-events-none absolute bottom-1.5 left-1.5 w-2.5 h-2.5 border-b-2 border-l-2 border-[var(--accent-warm)]/80"></span>
+                      <span class="pointer-events-none absolute bottom-1.5 right-1.5 w-2.5 h-2.5 border-b-2 border-r-2 border-[var(--accent-warm)]/80"></span>
 
-                    <div class="p-2.5 bg-[#F9F8F5] text-[#181716] rounded-xs border border-[#181716]/15 shadow-inner relative">
-                      <img
-                        v-if="bootstrapTicket?.qr_code_data_url"
-                        :src="bootstrapTicket.qr_code_data_url"
-                        alt="首台设备配对二维码"
-                        class="w-36 h-36 object-contain block"
-                      />
-                      <div
-                        v-else
-                        class="w-36 h-36 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-2"
-                      >
-                        使用移动端扫码或复制配对深链
+                      <div class="p-2.5 bg-[#F9F8F5] text-[#181716] rounded-xs border border-[#181716]/15 shadow-inner relative">
+                        <img
+                          v-if="bootstrapTicket?.qr_code_data_url"
+                          :src="bootstrapTicket.qr_code_data_url"
+                          alt="首台设备配对二维码"
+                          class="w-36 h-36 object-contain block"
+                        />
+                        <div
+                          v-else
+                          class="w-36 h-36 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-2"
+                        >
+                          使用移动端扫码或复制配对深链
+                        </div>
+
+                        <!-- 过期遮罩 -->
+                        <div
+                          v-if="pairCountdown <= 0"
+                          class="absolute inset-0 bg-[#F9F8F5]/95 flex flex-col items-center justify-center p-3 text-center space-y-2"
+                        >
+                          <span class="text-[11px] font-mono-archive text-[#57544e]">配对凭据已过期</span>
+                          <button
+                            @click="handleBootstrapStep1Submit"
+                            class="px-2.5 py-1 bg-[#181716] text-[#F9F8F5] text-[10px] font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <RotateCw class="w-3 h-3" />
+                            <span>重新生成</span>
+                          </button>
+                        </div>
                       </div>
 
-                      <!-- 过期遮罩 -->
-                      <div
-                        v-if="pairCountdown <= 0"
-                        class="absolute inset-0 bg-[#F9F8F5]/95 flex flex-col items-center justify-center p-3 text-center space-y-2"
-                      >
-                        <span class="text-[11px] font-mono-archive text-[#57544e]">配对凭据已过期</span>
-                        <button
-                          @click="handleBootstrapStep1Submit"
-                          class="px-2.5 py-1 bg-[#181716] text-[#F9F8F5] text-[10px] font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1"
-                        >
-                          <RotateCw class="w-3 h-3" />
-                          <span>重新生成</span>
-                        </button>
+                      <div class="mt-2 flex items-center justify-center w-full text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider px-0.5">
+                        <span>扫码或复制链接接入</span>
                       </div>
                     </div>
 
-                    <div class="mt-2 flex items-center justify-center w-full text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider px-0.5">
-                      <span>扫码或复制链接接入</span>
+                    <!-- 右侧：首台设备扫码/链接配对与实时监听状态 -->
+                    <div class="flex-1 space-y-3 text-center sm:text-left min-w-0 w-full">
+                      <div class="space-y-1">
+                        <div class="text-[11px] font-mono-archive text-[var(--accent-warm)] tracking-widest uppercase">
+                          INITIAL DEVICE PAIRING · 首台设备授信
+                        </div>
+                        <h4 class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
+                          扫码极速接入 或 复制配对深链
+                        </h4>
+                      </div>
+
+                      <div class="flex items-center justify-center sm:justify-start gap-2 text-xs font-mono-archive text-[var(--accent-moss)]">
+                        <span class="inline-block w-2 h-2 rounded-full bg-[var(--accent-moss)] animate-pulse"></span>
+                        <span>正在监听首台设备接入...</span>
+                      </div>
+
+                      <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
+                        请使用移动端扫描左侧纸墨二维码，或复制配对深链至 macOS 客户端一键完成设备钤印；接入后本页将自动激活并进入展厅。
+                      </p>
+
+                      <!-- 接入节点智能切换胶囊 -->
+                      <div v-if="(bootstrapTicket?.candidates || []).length > 1" class="space-y-1.5 pt-1">
+                        <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
+                          <span>选择连接节点：</span>
+                          <span v-if="isSwitchingNode" class="text-[var(--accent-warm)]">正在更新二维码...</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 font-mono-archive text-[11px]">
+                          <button
+                            v-for="cand in bootstrapTicket?.candidates"
+                            :key="cand.url"
+                            type="button"
+                            @click="handleSelectCandidate(cand.url)"
+                            class="px-2 py-1 rounded-xs border transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs select-none max-w-full min-w-0"
+                            :class="
+                              selectedCandidateUrl === cand.url
+                                ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
+                                : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
+                            "
+                          >
+                            <span
+                              class="w-1.5 h-1.5 rounded-full shrink-0"
+                              :class="selectedCandidateUrl === cand.url ? 'bg-[var(--accent-warm)]' : 'bg-[var(--border-divider)]'"
+                            ></span>
+                            <span class="truncate">{{ cand.label }}</span>
+                            <span class="opacity-70 text-[10px] font-mono-archive truncate">({{ cand.ip }})</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <!-- 右侧：首台设备扫码/链接配对与实时监听状态 -->
-                  <div class="flex-1 space-y-3 text-center sm:text-left">
-                    <div class="space-y-1">
-                      <div class="text-[11px] font-mono-archive text-[var(--accent-warm)] tracking-widest uppercase">
-                        INITIAL DEVICE PAIRING · 首台设备授信
-                      </div>
-                      <h4 class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
-                        扫码极速接入 或 复制配对深链
-                      </h4>
+                  <!-- 配对专属协议 Deep Link (跨全宽底部通栏，绝不溢出容器) -->
+                  <div
+                    v-if="bootstrapTicket?.qr_payload"
+                    class="pt-3 border-t border-[var(--border-subtle)]/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs font-mono-archive w-full"
+                  >
+                    <div class="truncate text-[10px] text-[var(--ink-muted)] select-all bg-[var(--bg-archive)]/60 px-2.5 py-1.5 rounded-xs border border-[var(--border-subtle)]/40 font-mono-archive flex-1 min-w-0">
+                      {{ bootstrapTicket.qr_payload }}
                     </div>
-
-                    <div class="flex items-center justify-center sm:justify-start gap-2 text-xs font-mono-archive text-[var(--accent-moss)]">
-                      <span class="inline-block w-2 h-2 rounded-full bg-[var(--accent-moss)] animate-pulse"></span>
-                      <span>正在监听首台设备接入...</span>
-                    </div>
-
-                    <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                      请使用移动端扫描左侧纸墨二维码，或复制配对深链至 macOS 客户端一键完成设备钤印；接入后本页将自动激活并进入展厅。
-                    </p>
-
-                    <!-- 接入节点智能切换胶囊 -->
-                    <div v-if="(bootstrapTicket?.candidates || []).length > 1" class="space-y-1.5 pt-1">
-                      <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
-                        <span>选择连接节点：</span>
-                        <span v-if="isSwitchingNode" class="text-[var(--accent-warm)]">正在更新二维码...</span>
-                      </div>
-                      <div class="flex flex-wrap gap-1.5 font-mono-archive text-[11px]">
-                        <button
-                          v-for="cand in bootstrapTicket?.candidates"
-                          :key="cand.url"
-                          type="button"
-                          @click="handleSelectCandidate(cand.url)"
-                          class="px-2.5 py-1.5 rounded-xs border transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap text-xs select-none"
-                          :class="
-                            selectedCandidateUrl === cand.url
-                              ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
-                              : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
-                          "
-                        >
-                          <span
-                            class="w-1.5 h-1.5 rounded-full shrink-0"
-                            :class="selectedCandidateUrl === cand.url ? 'bg-[var(--accent-warm)]' : 'bg-[var(--border-divider)]'"
-                          ></span>
-                          <span>{{ cand.label }}</span>
-                          <span class="opacity-70 text-[11px] font-mono-archive">({{ cand.ip }})</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div
-                      v-if="bootstrapTicket?.qr_payload"
-                      class="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2 text-[11px] font-mono-archive"
+                    <button
+                      @click="copyBootstrapPayload"
+                      type="button"
+                      class="px-3.5 py-1.5 shrink-0 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors whitespace-nowrap text-xs"
                     >
-                      <button
-                        @click="copyBootstrapPayload"
-                        class="px-3 py-1.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs cursor-pointer inline-flex items-center gap-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors"
-                      >
-                        <component :is="pairCopied ? Check : Copy" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-                        <span>{{ pairCopied ? '已复制配对深链' : '复制配对深链' }}</span>
-                      </button>
-                      <span v-if="bootstrapTicket?.hub_url" class="text-[10px] text-[var(--ink-muted)] truncate max-w-[200px]">
-                        {{ bootstrapTicket.hub_url }}
-                      </span>
-                    </div>
+                      <component :is="pairCopied ? Check : Copy" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+                      <span>{{ pairCopied ? '已复制深链' : '复制配对深链' }}</span>
+                    </button>
                   </div>
                 </div>
 
