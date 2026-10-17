@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Plus, Edit2, Trash2, Check, RotateCcw } from 'lucide-vue-next'
+import { X, Plus, Trash2, Check } from 'lucide-vue-next'
 import { useCategories, CATEGORY_SCOPE_META } from '../composables/useCategories'
 import type { CategoryOption, CategoryScope } from '../types'
 
@@ -11,18 +11,13 @@ const {
   getItemsByScope,
   closeCategoryManager,
   addCategory,
-  renameCategory,
   removeCategory,
-  restoreDefaults,
 } = useCategories()
 
 const newCategoryName = ref('')
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 const successMsg = ref<string | null>(null)
-
-const editingId = ref<number | null>(null)
-const editingName = ref('')
 
 const currentScopeMeta = computed(() => {
   return (
@@ -38,7 +33,6 @@ const currentScopeItems = computed<CategoryOption[]>(() => {
 watch(activeManagerScope, () => {
   errorMsg.value = null
   successMsg.value = null
-  editingId.value = null
   newCategoryName.value = ''
 })
 
@@ -66,38 +60,6 @@ const handleAdd = async () => {
   }
 }
 
-const startEdit = (item: CategoryOption) => {
-  editingId.value = item.id
-  editingName.value = item.name
-  errorMsg.value = null
-  successMsg.value = null
-}
-
-const cancelEdit = () => {
-  editingId.value = null
-  editingName.value = ''
-}
-
-const saveEdit = async (item: CategoryOption) => {
-  const trimmed = editingName.value.trim()
-  if (!trimmed || trimmed === item.name) {
-    cancelEdit()
-    return
-  }
-  try {
-    isSubmitting.value = true
-    errorMsg.value = null
-    successMsg.value = null
-    await renameCategory(item.id, trimmed)
-    editingId.value = null
-    successMsg.value = `已将「${item.name}」更名为「${trimmed}」，历史记录已自动同步`
-  } catch (err: any) {
-    errorMsg.value = err?.message || '修改分类名称失败'
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
 const handleDelete = async (item: CategoryOption) => {
   if (currentScopeItems.value.length <= 1) {
     errorMsg.value = '当前分类模块至少需要保留 1 个选项'
@@ -111,20 +73,6 @@ const handleDelete = async (item: CategoryOption) => {
     successMsg.value = `已移除「${item.name}」`
   } catch (err: any) {
     errorMsg.value = err?.message || '删除分类失败'
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-const handleRestoreDefaults = async () => {
-  try {
-    isSubmitting.value = true
-    errorMsg.value = null
-    successMsg.value = null
-    await restoreDefaults(activeManagerScope.value)
-    successMsg.value = '已补齐当前模块的默认预置分类'
-  } catch (err: any) {
-    errorMsg.value = err?.message || '恢复默认分类失败'
   } finally {
     isSubmitting.value = false
   }
@@ -150,7 +98,7 @@ const handleRestoreDefaults = async () => {
             自定义类型与分类管理
           </h3>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
-            统一管理收支分类、固定资产器物类型、支付方式与造物项目分类。重命名分类时将自动同步历史记录。
+            统一管理收支分类、固定资产器物类型、支付方式与造物项目分类。
           </p>
         </div>
         <button
@@ -238,86 +186,38 @@ const handleRestoreDefaults = async () => {
             :key="item.id"
             class="px-3.5 py-2.5 bg-[var(--bg-subtle)]/35 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs flex items-center justify-between gap-2 transition-colors"
           >
-            <!-- 编辑态 -->
-            <template v-if="editingId === item.id">
-              <input
-                v-model="editingName"
-                type="text"
-                @keyup.enter="saveEdit(item)"
-                @keyup.esc="cancelEdit"
-                class="flex-1 min-w-0 px-2 py-1 bg-[var(--bg-archive)] border border-[var(--ink-primary)] rounded-xs text-xs font-serif-editorial text-[var(--ink-primary)] outline-none"
-              />
-              <div class="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  @click="saveEdit(item)"
-                  class="px-2 py-1 text-[11px] font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer"
-                >
-                  保存
-                </button>
-                <button
-                  type="button"
-                  @click="cancelEdit"
-                  class="px-2 py-1 text-[11px] font-mono-archive border border-[var(--border-subtle)] text-[var(--ink-muted)] rounded-xs cursor-pointer"
-                >
-                  取消
-                </button>
-              </div>
-            </template>
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0">
+                {{ String(idx + 1).padStart(2, '0') }}
+              </span>
+              <span class="font-serif-editorial text-sm text-[var(--ink-primary)] truncate">
+                {{ item.name }}
+              </span>
+              <span
+                v-if="!item.is_builtin"
+                class="px-1.5 py-0.5 text-[9px] font-mono-archive border border-[var(--accent-warm)]/40 text-[var(--accent-warm)] rounded-xs shrink-0"
+              >
+                自定义
+              </span>
+            </div>
 
-            <!-- 展示态 -->
-            <template v-else>
-              <div class="flex items-center gap-2.5 min-w-0">
-                <span class="font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0">
-                  {{ String(idx + 1).padStart(2, '0') }}
-                </span>
-                <span class="font-serif-editorial text-sm text-[var(--ink-primary)] truncate">
-                  {{ item.name }}
-                </span>
-                <span
-                  v-if="!item.is_builtin"
-                  class="px-1.5 py-0.5 text-[9px] font-mono-archive border border-[var(--accent-warm)]/40 text-[var(--accent-warm)] rounded-xs shrink-0"
-                >
-                  自定义
-                </span>
-              </div>
-
-              <div class="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  @click="startEdit(item)"
-                  class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
-                  title="重命名该分类（自动同步历史记录）"
-                >
-                  <Edit2 class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  @click="handleDelete(item)"
-                  :disabled="currentScopeItems.length <= 1"
-                  class="p-1 text-[var(--ink-muted)] hover:text-[var(--accent-vermilion)] disabled:opacity-30 transition-colors cursor-pointer"
-                  title="删除该分类"
-                >
-                  <Trash2 class="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </template>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                @click="handleDelete(item)"
+                :disabled="currentScopeItems.length <= 1"
+                class="p-1 text-[var(--ink-muted)] hover:text-[var(--accent-vermilion)] disabled:opacity-30 transition-colors cursor-pointer"
+                title="删除该分类"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- 底部操作栏 -->
-      <div class="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)] shrink-0 font-mono-archive text-xs">
-        <button
-          type="button"
-          @click="handleRestoreDefaults"
-          :disabled="isSubmitting"
-          class="inline-flex items-center gap-1.5 text-[11px] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
-        >
-          <RotateCcw class="w-3.5 h-3.5" />
-          <span>补齐当前模块预置默认分类</span>
-        </button>
-
+      <div class="flex items-center justify-end pt-4 border-t border-[var(--border-subtle)] shrink-0 font-mono-archive text-xs">
         <button
           type="button"
           @click="closeCategoryManager"
