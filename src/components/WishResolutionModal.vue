@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { X, Sparkles, Check, ShieldCheck } from 'lucide-vue-next'
 import { resolveWish, fetchCreditChannels, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
-import { getBeijingDateString } from '../utils/format'
+import { getBeijingDateString, getBeijingISOString } from '../utils/format'
 import type { Wish, CreditChannel } from '../types'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -171,7 +171,7 @@ const handleSubmit = async () => {
       resolution_type: resolutionType.value,
       actual_cost: costCents,
       actual_title: finalTitle,
-      fulfilled_at: new Date(fulfilledDate.value).toISOString(),
+      fulfilled_at: getBeijingISOString(fulfilledDate.value),
       create_transaction: linkTransaction.value && costCents > 0,
       create_gear_asset: linkGearAsset.value && props.wish.kind === 'item',
       create_life_entry: linkLifeEntry.value,
@@ -323,7 +323,7 @@ const handleSubmit = async () => {
               v-model="actualTitle"
               type="text"
               required
-              placeholder="例如: MacBook Air M3 16G"
+              placeholder="实际达成名称"
               class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
             />
           </div>
@@ -331,7 +331,7 @@ const handleSubmit = async () => {
 
         <!-- 3. 达成归册日期 (支持自选历史时间，严格 <= now) -->
         <div>
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">达成归册日期 (默认今天，可补录历史) *</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">达成归册日期 *</label>
           <PaperDatePicker
             v-model="fulfilledDate"
             placeholder="选择达成日期..."
@@ -381,14 +381,14 @@ const handleSubmit = async () => {
 
         <!-- 5. 方案 B 多模块联动勾选 -->
         <div class="space-y-2.5">
-          <label class="block text-[11px] text-[var(--ink-muted)]">多模块自动联动 (自由勾选)</label>
+          <label class="block text-[11px] text-[var(--ink-muted)]">联动记录</label>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
             <label
               v-if="resolutionType !== 'relinquished'"
               class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors"
             >
               <input v-model="linkTransaction" type="checkbox" />
-              <span>记账支出 (实际金额记入账本)</span>
+              <span>记入收支账目</span>
             </label>
 
             <label
@@ -396,12 +396,12 @@ const handleSubmit = async () => {
               class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors"
             >
               <input v-model="linkGearAsset" type="checkbox" />
-              <span>沉淀设备 (一键入库随身硬件库)</span>
+              <span>沉淀至固定资产库</span>
             </label>
 
             <label class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors">
               <input v-model="linkLifeEntry" type="checkbox" />
-              <span>生活散页 (发一条 #心愿达成 动态)</span>
+              <span>记入生活散页</span>
             </label>
 
             <label
@@ -409,14 +409,14 @@ const handleSubmit = async () => {
               class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors"
             >
               <input v-model="linkFootprint" type="checkbox" />
-              <span>点亮足迹 (点亮目的地城市地图)</span>
+              <span>点亮山川足迹</span>
             </label>
           </div>
         </div>
 
         <!-- 6. 感言与生活随笔内容 -->
         <div v-if="linkLifeEntry">
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">达成随笔感言 (生成散页)</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">达成随笔感言</label>
           <textarea
             v-model="entryContent"
             rows="2"

@@ -6,9 +6,13 @@ import {
   ArrowLeft,
   Plus,
   PenLine,
+  Pencil,
+  Trash2,
 } from 'lucide-vue-next'
-import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken } from '../utils/api'
+import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken, deleteFootprint } from '../utils/api'
 import { formatMoney } from '../utils/format'
+import { audio } from '../utils/audio'
+import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { CityMemoryDrawerData, ProvinceMemoryDrawerData, Attachment } from '../types'
 
 const props = defineProps<{
@@ -21,9 +25,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'refresh'): void
   (e: 'selectEntry', entry: any): void
   (e: 'addEntryInCity', city: { code: string; name: string }): void
   (e: 'addFootprintInCity', city: { code: string; name: string }): void
+  (e: 'editFootprint', footprint: any): void
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
@@ -166,6 +172,31 @@ const totalCitiesCount = computed(() => {
   }
   return citiesSummary.value.length
 })
+
+const handleEditFootprint = (fp: any) => {
+  emit('editFootprint', fp)
+}
+
+const handleDeleteFootprint = async (fp: any) => {
+  const confirmed = await askConfirm({
+    title: '删除山河足迹',
+    message: `确定要抹去在「${fp.city_name || ''} · ${fp.title || '此行'}」留下的足迹票根吗？关联游记不受影响。`,
+    danger: true,
+    confirmText: '确认删除',
+  })
+  if (!confirmed) return
+
+  try {
+    await deleteFootprint(fp.id)
+    audio.playTink()
+    if (drawerData.value && 'footprints' in drawerData.value && Array.isArray(drawerData.value.footprints)) {
+      drawerData.value.footprints = drawerData.value.footprints.filter((f: any) => f.id !== fp.id)
+    }
+    emit('refresh')
+  } catch (err: any) {
+    showAlert({ title: '删除失败', message: err.message || '网络连接异常', danger: true })
+  }
+}
 </script>
 
 <template>
@@ -325,6 +356,24 @@ const totalCitiesCount = computed(() => {
                   <span v-if="isAdmin && (fp.total_spent || 0) > 0" class="px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] border border-[var(--accent-warm)]/30">
                     ¥{{ formatMoney(fp.total_spent || 0) }}
                   </span>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
+                    @click.stop="handleEditFootprint(fp)"
+                    class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-0.5 rounded cursor-pointer transition-colors"
+                    title="编辑足迹票根"
+                  >
+                    <Pencil class="w-3 h-3" />
+                  </button>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
+                    @click.stop="handleDeleteFootprint(fp)"
+                    class="text-[var(--ink-muted)] hover:text-[var(--accent-warm)] p-0.5 rounded cursor-pointer transition-colors"
+                    title="删除足迹票根"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                  </button>
                 </div>
               </div>
               <p v-if="fp.note" class="font-serif-editorial italic text-[var(--ink-secondary)]">

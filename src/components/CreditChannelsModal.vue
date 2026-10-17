@@ -268,7 +268,7 @@ onMounted(() => {
             <input
               v-model="newName"
               type="text"
-              placeholder="例如: 招行信用卡 / Apple免息"
+              placeholder="渠道名称"
               class="w-full px-2.5 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none text-xs text-[var(--ink-primary)] focus:border-[var(--ink-primary)]"
             />
           </div>

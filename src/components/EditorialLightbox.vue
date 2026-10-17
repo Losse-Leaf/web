@@ -58,7 +58,7 @@ onBeforeUnmount(() => {
       <button
         @click="emit('close')"
         class="inline-flex items-center gap-1.5 px-3 py-1 text-xs text-[#ece9e1] hover:text-[#d8764b] border border-white/10 hover:border-white/30 rounded-xs transition-colors cursor-pointer"
-        title="按 ESC 或点击关闭"
+        title="关闭"
       >
         <span>ESC 关闭</span>
         <X class="w-3.5 h-3.5" />

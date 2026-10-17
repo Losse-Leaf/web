@@ -703,6 +703,13 @@ export async function fetchSiteConfig(): Promise<SiteConfig> {
   return request<SiteConfig>(`${API_BASE}/config`)
 }
 
+export async function updateSiteConfig(data: Partial<SiteConfig>): Promise<SiteConfig> {
+  return request<SiteConfig>(`${API_BASE}/config`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
 // 9. Curator Profile (主理人身份档案中枢，全端动态驱动)
 export async function fetchCuratorProfile(): Promise<CuratorProfile | null> {
   try {

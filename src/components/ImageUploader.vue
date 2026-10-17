@@ -4,6 +4,7 @@ import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { audio } from '../utils/audio'
 import { showAlert } from '../composables/useConfirm'
+import { compressClientImage } from '../utils/imageCompressor'
 import type { Attachment } from '../types'
 
 const props = defineProps<{
@@ -62,12 +63,14 @@ const handleFileProcess = async (file: File) => {
     return
   }
 
-  const previewUrl = URL.createObjectURL(file)
+  // 客户端智能压制（限制 2560px / 85% 质量 JPEG，非图片原样透传）
+  const compressedFile = await compressClientImage(file)
+  const previewUrl = URL.createObjectURL(compressedFile)
   const item: UploadItem = {
     id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    file,
-    name: file.name,
-    size: file.size,
+    file: compressedFile,
+    name: compressedFile.name,
+    size: compressedFile.size,
     previewUrl,
     progress: 0,
     status: 'idle',

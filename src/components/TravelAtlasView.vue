@@ -9,9 +9,12 @@ import {
   BookOpen,
   MapPin,
   Stamp,
+  Pencil,
+  Trash2,
 } from 'lucide-vue-next'
-import { fetchFootprintsAtlas, fetchFootprints, getAdminToken } from '../utils/api'
+import { fetchFootprintsAtlas, fetchFootprints, deleteFootprint, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
+import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { AtlasCitySummary, Footprint, LifeEntry } from '../types'
 import { CHINA_CITIES, type CityOption } from '../utils/cities'
 
@@ -61,15 +64,49 @@ const isAddModalOpen = ref(false)
 const isDrawerOpen = ref(false)
 const addModalInitialCityCode = ref('')
 const addModalInitialCityName = ref('')
+const editingFootprint = ref<Footprint | null>(null)
 
 const handleAddFootprintInCity = (city: { code: string; name: string }) => {
   if (!isAdmin.value) {
     emit('requestAuth', () => handleAddFootprintInCity(city))
     return
   }
+  editingFootprint.value = null
   addModalInitialCityCode.value = city.code
   addModalInitialCityName.value = city.name
   isAddModalOpen.value = true
+}
+
+const handleEditFootprint = (fp: Footprint) => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => handleEditFootprint(fp))
+    return
+  }
+  editingFootprint.value = fp
+  isAddModalOpen.value = true
+}
+
+const handleDeleteFootprint = async (fp: Footprint) => {
+  if (!isAdmin.value) {
+    emit('requestAuth', () => handleDeleteFootprint(fp))
+    return
+  }
+  const confirmed = await askConfirm({
+    title: '删除山河足迹',
+    message: `确定要抹去在「${fp.city_name || ''} · ${fp.title || '此行'}」留下的足迹票根吗？关联游记不受影响。`,
+    danger: true,
+    confirmText: '确认删除',
+  })
+  if (!confirmed) return
+
+  try {
+    await deleteFootprint(fp.id)
+    audio.playTink()
+    await loadAtlas()
+    emit('footprintSaved')
+  } catch (err: any) {
+    showAlert({ title: '删除失败', message: err.message || '网络连接异常', danger: true })
+  }
 }
 
 const handleAddEntryInCity = (city: { code: string; name: string }) => {
@@ -1418,9 +1455,29 @@ onMounted(() => {
                 <span class="font-serif-editorial">{{ fp.city_name }}</span>
                 <span v-if="fp.title" class="text-[var(--ink-secondary)] font-serif-editorial truncate">· {{ fp.title }}</span>
               </div>
-              <span class="text-[11px] font-mono-archive text-[var(--ink-muted)] shrink-0">
-                {{ fp.visited_at ? fp.visited_at.slice(0, 10) : '' }}<template v-if="fp.departed_at && fp.departed_at.slice(0, 10) !== (fp.visited_at || '').slice(0, 10)"> ~ {{ fp.departed_at.slice(0, 10) }}</template>
-              </span>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
+                  {{ fp.visited_at ? fp.visited_at.slice(0, 10) : '' }}<template v-if="fp.departed_at && fp.departed_at.slice(0, 10) !== (fp.visited_at || '').slice(0, 10)"> ~ {{ fp.departed_at.slice(0, 10) }}</template>
+                </span>
+                <template v-if="isAdmin">
+                  <button
+                    type="button"
+                    @click.stop="handleEditFootprint(fp)"
+                    class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-0.5 rounded cursor-pointer transition-colors"
+                    title="编辑足迹手记"
+                  >
+                    <Pencil class="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    @click.stop="handleDeleteFootprint(fp)"
+                    class="text-[var(--ink-muted)] hover:text-[var(--accent-warm)] p-0.5 rounded cursor-pointer transition-colors"
+                    title="删除足迹票根"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                  </button>
+                </template>
+              </div>
             </div>
 
             <p v-if="fp.note" class="font-serif-editorial text-xs text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
@@ -1450,14 +1507,15 @@ onMounted(() => {
       </div>
     </section>
 
-    <!-- 录入足迹弹窗 -->
+    <!-- 录入与修订足迹弹窗 -->
     <AddFootprintModal
       v-if="isAddModalOpen"
       :isOpen="isAddModalOpen"
       :storageConfigured="storageConfigured"
       :initialCityCode="addModalInitialCityCode"
       :initialCityName="addModalInitialCityName"
-      @close="isAddModalOpen = false; addModalInitialCityCode = ''; addModalInitialCityName = ''"
+      :editingFootprint="editingFootprint"
+      @close="isAddModalOpen = false; editingFootprint = null; addModalInitialCityCode = ''; addModalInitialCityName = ''"
       @saved="handleFootprintSaved"
       @requestAuth="(cb) => emit('requestAuth', cb)"
     />
@@ -1471,9 +1529,11 @@ onMounted(() => {
       :cityCode="selectedCityCode"
       :cityName="selectedCityName"
       @close="isDrawerOpen = false"
+      @refresh="loadAtlas"
       @selectEntry="emit('selectEntry', $event)"
       @addFootprintInCity="handleAddFootprintInCity"
       @addEntryInCity="handleAddEntryInCity"
+      @editFootprint="handleEditFootprint"
     />
   </div>
 </template>

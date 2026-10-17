@@ -435,7 +435,7 @@ const isGitHubUrl = (url?: string) => {
             <input
               v-model="formTitle"
               type="text"
-              placeholder="例如：散页 或 机械键盘手作"
+              placeholder="项目名称"
               class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs focus:border-[var(--ink-primary)] outline-hidden font-serif-editorial text-sm text-[var(--ink-primary)]"
             />
           </div>

@@ -508,7 +508,7 @@ onUnmounted(() => {
               <input
                 v-model="form.name"
                 type="text"
-                placeholder="例如: 散页主理人"
+                placeholder="主理人称谓"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -518,7 +518,7 @@ onUnmounted(() => {
               <input
                 v-model="form.location"
                 type="text"
-                placeholder="例如: 中国 · 杭州 / 旅居中"
+                placeholder="常居城市 / 身处坐标"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -528,7 +528,7 @@ onUnmounted(() => {
         <!-- 签名与一句话近况 -->
         <div class="space-y-3">
           <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
-            03 副标与一句话近况（选填）
+            03 副标与一句话近况
           </div>
 
           <div class="space-y-1">
@@ -536,7 +536,7 @@ onUnmounted(() => {
             <input
               v-model="form.title"
               type="text"
-              placeholder="例如: 岁月总览 · 生活刻度 · 随身器物"
+              placeholder="副标题 / 状态标签"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -546,7 +546,7 @@ onUnmounted(() => {
             <input
               v-model="form.motto"
               type="text"
-              placeholder="例如: 记录真实可感的日子。"
+              placeholder="一句话近况 / 题记"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -563,7 +563,7 @@ onUnmounted(() => {
               <input
                 v-model="form.email"
                 type="text"
-                placeholder="例如: curator@looseleaf.me"
+                placeholder="公开联络邮箱"
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -573,7 +573,7 @@ onUnmounted(() => {
               <input
                 v-model="form.github"
                 type="text"
-                placeholder="例如: https://github.com/your-username"
+                placeholder="GitHub 主页链接"
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -637,7 +637,7 @@ onUnmounted(() => {
               <input
                 v-model="newGearName"
                 type="text"
-                placeholder="例如: 随身相机 / 笔记本电脑"
+                placeholder="设备名称"
                 class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
               />
             </div>
@@ -669,7 +669,7 @@ onUnmounted(() => {
             <input
               v-model="newGearSpec"
               type="text"
-              placeholder="例如: 38mm f/2.8 Carl Zeiss T*"
+              placeholder="规格型号"
               class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
             />
           </div>
@@ -679,19 +679,19 @@ onUnmounted(() => {
             <input
               v-model="newGearNote"
               type="text"
-              placeholder="例如: 快门清脆，成色完好"
+              placeholder="使用感受 / 体验笔记"
               class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
             />
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">购入金额 (¥，选填)</label>
+              <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">购入金额 (¥)</label>
               <input
                 v-model="newGearPrice"
                 type="number"
                 step="0.01"
-                placeholder="例如: 3200.00"
+                placeholder="0.00"
                 class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
               />
             </div>

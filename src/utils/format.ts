@@ -40,6 +40,32 @@ export function getBeijingDateTimeString(): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
 }
 
+/**
+ * 生成带 +08:00 偏移的标准北京时间 ISO8601 字符串 (YYYY-MM-DDTHH:mm:ss+08:00)
+ * 对齐 macOS 与 Android 原生端契约，消除无时区歧义与 UTC 零点漂移
+ */
+export function getBeijingISOString(dateStrOrDate?: string | Date): string {
+  if (!dateStrOrDate) {
+    return `${getBeijingDateTimeString()}:00+08:00`
+  }
+  if (typeof dateStrOrDate === 'string') {
+    const clean = dateStrOrDate.trim()
+    if (!clean) return `${getBeijingDateTimeString()}:00+08:00`
+    if (clean.includes('+08:00')) return clean
+    if (clean.endsWith('Z')) {
+      const d = new Date(clean)
+      return getBeijingISOString(d)
+    }
+    if (clean.length === 10) return `${clean}T12:00:00+08:00`
+    if (clean.length === 16) return `${clean}:00+08:00`
+    if (clean.length === 19) return `${clean}+08:00`
+    return clean
+  }
+  const d = toBeijingDate(dateStrOrDate)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}+08:00`
+}
+
 /** 北京时间年份 */
 export function getBeijingYear(): number {
   return getBeijingNow().getUTCFullYear()

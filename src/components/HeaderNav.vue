@@ -9,6 +9,8 @@ import {
   Moon,
   Sun,
   KeyRound,
+  Volume2,
+  VolumeX,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
 import { getAdminToken } from '../utils/api'
@@ -61,6 +63,14 @@ const navItems = computed(() => {
   return items
 })
 
+const isSoundEnabled = ref(audio.soundEnabled)
+const toggleSoundEffect = () => {
+  isSoundEnabled.value = audio.toggleSound()
+  if (isSoundEnabled.value) {
+    audio.playTink()
+  }
+}
+
 // 辅助工具与设置（纯净无赘述；设备配对、数据备份、存储设置、检查更新与更新公告仅管理端可见）
 const toolOptions = computed(() => {
   const opts: { key: string; label: string; action: () => void }[] = [
@@ -68,6 +78,11 @@ const toolOptions = computed(() => {
       key: 'stats',
       label: '生活统计',
       action: () => emit('openStats'),
+    },
+    {
+      key: 'sound',
+      label: isSoundEnabled.value ? '机械音效：开启' : '机械音效：静音',
+      action: () => toggleSoundEffect(),
     },
   ]
   if (isAdmin.value) {
@@ -189,7 +204,7 @@ onUnmounted(() => {
         <button
           @click="emit('openSearch')"
           class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
-          title="全局即时搜索 (快捷键 ⌘K)"
+          title="全局搜索 (⌘K)"
         >
           <Search class="w-3.5 h-3.5" />
           <span class="font-serif-editorial text-[13px] hidden lg:inline">搜索</span>
@@ -200,7 +215,7 @@ onUnmounted(() => {
         <button
           @click="handleOpenAdd"
           class="flex items-center gap-1 text-xs py-1 px-2.5 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
-          title="记录一点什么 (日常 / 游历 / 造物 / 心愿 / 账目)"
+          title="记录"
         >
           <Plus class="w-3.5 h-3.5" />
           <span class="font-serif-editorial text-[13px]">记录</span>
@@ -211,7 +226,7 @@ onUnmounted(() => {
           v-if="!isAdmin"
           @click="emit('openLogin')"
           class="flex items-center gap-1 text-xs py-1 px-2 rounded-xs border border-[var(--accent-warm)]/50 hover:border-[var(--accent-warm)] bg-[var(--accent-warm)]/5 text-[var(--accent-warm)] transition-colors cursor-pointer"
-          title="输入管理员口令以主人身份登录"
+          title="主理人登录"
         >
           <KeyRound class="w-3.5 h-3.5" />
           <span class="font-serif-editorial text-[13px]">登录</span>
@@ -219,7 +234,7 @@ onUnmounted(() => {
         <div
           v-else
           class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-emerald-600/30 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-mono-archive text-[11px]"
-          title="当前处于受信任的主人管理模式"
+          title="主理人在册"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>主理人</span>
@@ -230,7 +245,7 @@ onUnmounted(() => {
           <button
             @click.stop="isDropdownOpen = !isDropdownOpen"
             class="flex items-center gap-1 text-xs tracking-wider transition-colors cursor-pointer py-1 px-2 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-            title="数据备份、生活统计与设置"
+            title="系统设置"
           >
             <span class="font-serif-editorial text-[13px]">设置</span>
             <ChevronDown class="w-3 h-3 opacity-60 transition-transform duration-200" :class="{ 'rotate-180': isDropdownOpen }" />
@@ -258,6 +273,16 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <!-- 机械拟物音效开关 -->
+        <button
+          @click="toggleSoundEffect"
+          class="p-1 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] cursor-pointer transition-colors"
+          :title="isSoundEnabled ? '静音机械拟物音效' : '开启机械拟物音效'"
+        >
+          <Volume2 v-if="isSoundEnabled" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+          <VolumeX v-else class="w-3.5 h-3.5 opacity-40" />
+        </button>
 
         <!-- 纸张 / 暗房模式切换 -->
         <button

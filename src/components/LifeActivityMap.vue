@@ -429,7 +429,7 @@ onMounted(() => {
           </span>
         </template>
         <template v-else>
-          <span>点击任意有记录的格块，可向下筛选当天的生活时间线</span>
+          <span>生活时间线刻度</span>
         </template>
       </div>
 

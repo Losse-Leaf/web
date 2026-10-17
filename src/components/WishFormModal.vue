@@ -210,18 +210,18 @@ const handleSubmit = async () => {
             v-model="title"
             type="text"
             required
-            :placeholder="kind === 'item' ? '例如: Mac Mini M4 / 理光 GR3x' : kind === 'travel' ? '例如: 景德镇陶艺旅居 / 川西环线自驾' : '例如: 独立发布首款工具 App / 跑完一次半马'"
+            :placeholder="kind === 'item' ? '心愿好物名称' : kind === 'travel' ? '向往目的地或旅程' : '心愿或目标'"
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-sm text-[var(--ink-primary)] font-serif-editorial"
           />
         </div>
 
         <!-- 好物专属：期望规格型号 -->
         <div v-if="kind === 'item'">
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">期望规格 / 配置型号 (选填)</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">期望规格 / 配置型号</label>
           <input
             v-model="spec"
             type="text"
-            placeholder="例如: 24G+512G 银色 / 标配版"
+            placeholder="规格型号"
             class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
           />
         </div>
@@ -229,10 +229,10 @@ const handleSubmit = async () => {
         <!-- 旅程专属：目标城市 (接入 CityPicker.vue 自动绑定行政代码 RC-58) -->
         <div v-if="kind === 'travel'" class="space-y-3">
           <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">快速检索目的地城市 (归册时将自动点亮地图足迹)</label>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
             <CityPicker
               v-model="cityCode"
-              placeholder="输入城市名称检索并自动填入名称与行政代码..."
+              placeholder="检索目的地城市..."
               @select="onCityPicked"
             />
           </div>
@@ -242,16 +242,16 @@ const handleSubmit = async () => {
               <input
                 v-model="cityName"
                 type="text"
-                placeholder="例如: 景德镇市 / 大理"
+                placeholder="城市名称"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
               />
             </div>
             <div>
-              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行政代码 (选填)</label>
+              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行政代码</label>
               <input
                 v-model="cityCode"
                 type="text"
-                placeholder="例如: 360200"
+                placeholder="行政区划代码"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
               />
             </div>
@@ -261,7 +261,7 @@ const handleSubmit = async () => {
         <!-- 预算与目标期 -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">预估预算 (¥ 选填，0为无约束)</label>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">预估预算 (¥)</label>
             <div class="relative">
               <span class="absolute left-2.5 top-1.5 text-[var(--ink-muted)]">¥</span>
               <input
@@ -275,18 +275,18 @@ const handleSubmit = async () => {
           </div>
 
           <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">愿景目标期 (锚点无逾期惩罚)</label>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">愿景目标期</label>
             <PaperDatePicker
               v-model="targetDate"
               clearable
-              placeholder="选择目标日期 (选填)..."
+              placeholder="选择目标日期..."
             />
           </div>
         </div>
 
         <!-- 向往初心与愿景说明 -->
         <div>
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">向往初心与详细规划 (选填)</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">向往初心与规划</label>
           <textarea
             v-model="note"
             rows="3"
@@ -297,7 +297,7 @@ const handleSubmit = async () => {
 
         <!-- 心愿参考配图上传 -->
         <div class="space-y-1.5">
-          <label class="block text-[11px] text-[var(--ink-muted)]">心愿参考照片与灵感剪报 (选填)</label>
+          <label class="block text-[11px] text-[var(--ink-muted)]">心愿参考照片与灵感剪报</label>
           <ImageUploader
             :initialAttachments="attachments"
             :storageConfigured="storageConfigured ?? true"

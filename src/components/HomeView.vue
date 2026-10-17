@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeStream from './LifeStream.vue'
+import MiniAtlasWidget from './MiniAtlasWidget.vue'
 import { fetchOnThisDayEntries } from '../utils/api'
 import { getBeijingDotDate, getBeijingYear, parseOccurredDate } from '../utils/format'
 
@@ -175,6 +176,13 @@ const headerLocation = computed(() => {
           </p>
         </div>
       </div>
+    </section>
+
+    <!-- 迷你山河印谱概览 (Mini Atlas Widget RC-130) -->
+    <section class="mt-6">
+      <MiniAtlasWidget
+        @navigateAtlas="emit('navigate', 'atlas')"
+      />
     </section>
 
     <!-- 核心主角：纵向生活时间线 (Timeline / Life Stream) -->

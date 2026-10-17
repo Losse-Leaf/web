@@ -539,21 +539,21 @@ onUnmounted(() => {
                     <input
                       v-model="bootstrapForm.curator_name"
                       type="text"
-                      placeholder="请输入主理人称谓"
+                      placeholder="主理人称谓"
                       class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                     />
                   </div>
 
                   <div class="space-y-1.5">
                     <div class="flex items-center justify-between">
-                      <label class="block text-[var(--ink-muted)]">常驻城市 (选填)</label>
+                      <label class="block text-[var(--ink-muted)]">常驻城市</label>
                       <span v-if="bootstrapForm.location" class="text-[11px] text-[var(--accent-moss)]">
                         已选：{{ bootstrapForm.location }}
                       </span>
                     </div>
                     <CityPicker
                       v-model="bootstrapForm.city_code"
-                      placeholder="输入城市名称或拼音检索常驻城市..."
+                      placeholder="检索城市..."
                       @select="onBootstrapCitySelect"
                     />
                   </div>
@@ -564,7 +564,7 @@ onUnmounted(() => {
                       <input
                         v-model="bootstrapForm.master_passcode"
                         type="password"
-                        placeholder="设定专属管理员密钥"
+                        placeholder="设定管理员密钥"
                         class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                       />
                     </div>
@@ -573,7 +573,7 @@ onUnmounted(() => {
                       <input
                         v-model="bootstrapForm.confirm_passcode"
                         type="password"
-                        placeholder="再次输入以确认密钥"
+                        placeholder="确认管理员密钥"
                         @keydown.enter="handleBootstrapStep1Submit"
                         class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                       />
@@ -937,7 +937,7 @@ onUnmounted(() => {
                   <input
                     v-model="passcode"
                     type="password"
-                    placeholder="请输入管理员密钥..."
+                    placeholder="管理员密钥..."
                     @keydown.enter="handlePasscodeLogin"
                     class="flex-1 px-3.5 py-2.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                   />

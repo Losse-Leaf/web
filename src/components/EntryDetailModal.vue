@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle, LayoutGrid, Rows3 } from 'lucide-vue-next'
+import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle, LayoutGrid, Rows3, Bookmark } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -9,7 +9,7 @@ import EditorialLightbox from './EditorialLightbox.vue'
 import { matchCityFromLocation, saveLastUsedCity } from '../utils/cities'
 import { updateLifeEntry, deleteLifeEntry, getAdminToken } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
-import { parseOccurredDate, renderEditorialContent } from '../utils/format'
+import { parseOccurredDate, renderEditorialContent, getBeijingISOString } from '../utils/format'
 import { showAlert } from '../composables/useConfirm'
 
 const props = defineProps<{
@@ -42,6 +42,7 @@ const editCityName = ref('')
 const editOccurredAt = ref('')
 const editProjectId = ref<number | null>(null)
 const editAttachmentIds = ref<number[]>([])
+const editFeatured = ref(false)
 
 const handleEditCitySelect = (city: { code: string; name: string }) => {
   editCityCode.value = city.code
@@ -51,6 +52,31 @@ const handleEditCitySelect = (city: { code: string; name: string }) => {
   }
   if (city.code && city.name) {
     saveLastUsedCity(city)
+  }
+}
+
+const toggleFeaturedDirectly = async () => {
+  if (!props.entry) return
+  if (!getAdminToken()) {
+    emit('requestAuth', () => toggleFeaturedDirectly())
+    return
+  }
+  try {
+    const updated = await updateLifeEntry(props.entry.id, {
+      type: props.entry.type,
+      title: props.entry.title || '',
+      content: props.entry.content || '',
+      location: props.entry.location || undefined,
+      city_code: props.entry.city_code || undefined,
+      city_name: props.entry.city_name || undefined,
+      project_id: props.entry.project_id || undefined,
+      occurred_at: props.entry.occurred_at,
+      featured: !props.entry.featured,
+      attachment_ids: (props.entry.attachments || []).map((a) => a.id),
+    })
+    emit('updated', updated)
+  } catch (err: any) {
+    showAlert(`切换精选失败: ${err?.message || '网络异常'}`)
   }
 }
 
@@ -75,6 +101,7 @@ const startEdit = () => {
   editCityName.value = props.entry.city_name || matched?.name || ''
   editProjectId.value = props.entry.project_id || null
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
+  editFeatured.value = Boolean(props.entry.featured)
 
   // 统一经 parseOccurredDate 还原北京时间后再回填 (RC-134)
   editOccurredAt.value = props.entry.occurred_at
@@ -118,7 +145,8 @@ const handleSaveEdit = async () => {
       city_code: finalCityCode,
       city_name: finalCityName,
       project_id: editProjectId.value,
-      occurred_at: editOccurredAt.value,
+      occurred_at: getBeijingISOString(editOccurredAt.value),
+      featured: editFeatured.value,
       attachment_ids: editAttachmentIds.value,
     })
 
@@ -222,6 +250,15 @@ const getKindLabel = (type: string) => {
         <div class="flex items-center gap-3">
           <template v-if="isAdmin && !isEditing">
             <button
+              @click="toggleFeaturedDirectly"
+              class="text-xs font-mono-archive transition-colors cursor-pointer flex items-center gap-1 py-1 px-2 border rounded-xs"
+              :class="entry.featured ? 'text-[var(--accent-warm)] border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8' : 'text-[var(--ink-muted)] border-transparent hover:border-[var(--border-subtle)]'"
+              :title="entry.featured ? '取消精选' : '标记为精选'"
+            >
+              <Bookmark class="w-3.5 h-3.5" :class="{ 'fill-current': entry.featured }" />
+              <span>{{ entry.featured ? '已精选' : '精选' }}</span>
+            </button>
+            <button
               @click="startEdit"
               class="text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer flex items-center gap-1 py-1 px-2 border border-transparent hover:border-[var(--border-subtle)] rounded-xs"
               title="编辑记录"
@@ -297,7 +334,7 @@ const getKindLabel = (type: string) => {
             />
           </div>
           <div class="sm:col-span-2 space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标题 (选填)</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">标题</label>
             <input
               v-model="editTitle"
               type="text"
@@ -334,11 +371,11 @@ const getKindLabel = (type: string) => {
 
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              所在城市 (自动点亮山川足迹)
+              所在城市
             </label>
             <CityPicker
               v-model="editCityCode"
-              :placeholder="editCityName || '检索城市 (如: 雅安 / 杭州)...'"
+              :placeholder="editCityName || '检索城市...'"
               @select="handleEditCitySelect"
             />
           </div>
@@ -363,6 +400,18 @@ const getKindLabel = (type: string) => {
               ...projects.map((p) => ({ value: p.id, label: p.title })),
             ]"
           />
+        </div>
+
+        <!-- 标记为精选印记 -->
+        <div class="flex items-center gap-2 pt-1">
+          <label class="flex items-center gap-2 text-xs font-mono-archive text-[var(--ink-secondary)] cursor-pointer select-none">
+            <input
+              v-model="editFeatured"
+              type="checkbox"
+              class="w-3.5 h-3.5 rounded-xs accent-[var(--accent-warm)] cursor-pointer"
+            />
+            <span>标记为精选印记（收录于精选特刊）</span>
+          </label>
         </div>
 
         <div class="pt-6 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">

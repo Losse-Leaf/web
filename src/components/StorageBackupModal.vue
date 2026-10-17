@@ -1028,7 +1028,7 @@ onMounted(() => {
               <input
                 v-model="storageForm.endpoint"
                 type="text"
-                placeholder="例如 https://s3.ap-northeast-1.amazonaws.com"
+                placeholder="https://s3.ap-northeast-1.amazonaws.com"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
             </div>
@@ -1041,7 +1041,7 @@ onMounted(() => {
               <input
                 v-model="storageForm.bucket_name"
                 type="text"
-                placeholder="例如 loose-leaf"
+                placeholder="存储桶名称"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
             </div>
@@ -1092,12 +1092,12 @@ onMounted(() => {
             <!-- Col 5: 公网域名 -->
             <div>
               <label class="block text-xs text-[var(--ink-secondary)] mb-1">
-                公网加速域名 (选填)
+                公网加速域名
               </label>
               <input
                 v-model="storageForm.public_domain"
                 type="text"
-                placeholder="例如 https://media.example.com"
+                placeholder="https://media.example.com"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
             </div>

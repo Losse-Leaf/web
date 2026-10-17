@@ -37,7 +37,7 @@ import type {
 import { useExport } from '../composables/useExport'
 import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
-import { formatMoney, getBeijingDateString, parseOccurredDate } from '../utils/format'
+import { formatMoney, getBeijingDateString, parseOccurredDate, getBeijingISOString } from '../utils/format'
 import { loadCuratorProfile } from '../utils/profile'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -548,7 +548,7 @@ const saveEdit = async () => {
     category: editCategory.value,
     note: editNote.value.trim(),
     payment_method: editPaymentMethod.value.trim() || undefined,
-    occurred_at: editOccurredAt.value || undefined,
+    occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
     city_code: editCityCode.value || undefined,
     is_installment: editType.value === 'expense' && editIsInstallment.value,
     installment_channel_code:
@@ -668,7 +668,7 @@ const spectrumItems = computed(() => {
           <button
             @click="openCategoryManager('expense')"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-            title="管理自定义收支分类、设备分类与支付渠道"
+            title="分类管理"
           >
             <SlidersHorizontal class="w-3.5 h-3.5" />
             <span>分类管理</span>
@@ -779,7 +779,7 @@ const spectrumItems = computed(() => {
               累计二手回血 +¥{{ formatMoney(assetsOverview?.gear_summary?.sold_recovered_value || 0) }}
             </template>
             <template v-else>
-              点击管理在用生产力设备
+              在用生产力设备
             </template>
           </p>
         </div>
@@ -965,7 +965,7 @@ const spectrumItems = computed(() => {
         <button
           @click="exportTransactionsCSV(transactionsList)"
           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-          title="导出当前月份账目 CSV 表格"
+          title="导出 CSV"
         >
           <Download class="w-3.5 h-3.5" />
           <span>导出 CSV</span>
@@ -1053,7 +1053,7 @@ const spectrumItems = computed(() => {
           class="p-5 sm:p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-archive)]/50 space-y-3.5"
         >
           <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-            <span class="tracking-wider">支出类目分布（点击类目可筛选下方流水）</span>
+            <span class="tracking-wider">支出类目分布</span>
             <span>{{ spectrumItems.length }} 个支出类目</span>
           </div>
 
@@ -1206,7 +1206,7 @@ const spectrumItems = computed(() => {
           {{ gearFilter === 'sold' ? '尚无转售回血的设备记录' : '固定资产设备库暂无在役单品' }}
         </p>
         <p class="font-mono-archive text-xs text-[var(--ink-muted)]">
-          点击右上角「录入新设备」，或在达成心愿归册时勾选「沉淀至固定资产库」即可收录在役设备。
+          可录入新设备或在达成心愿时沉淀至固定资产库。
         </p>
       </div>
 
@@ -1245,7 +1245,7 @@ const spectrumItems = computed(() => {
                 type="button"
                 @click="openSellGearModal(gear)"
                 class="px-2.5 py-1 text-[11px] rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap shrink-0"
-                title="转售出二手并自动生成二手回血收入账单"
+                title="转售出二手"
               >
                 <ArrowRightLeft class="w-3 h-3 shrink-0" />
                 <span>出二手回血</span>
@@ -1352,7 +1352,7 @@ const spectrumItems = computed(() => {
               <input
                 v-model="newGearName"
                 type="text"
-                placeholder="如: MacBook Pro 14 / Ricoh GR3x"
+                placeholder="设备名称"
                 class="w-full px-3 py-2 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
               />
             </div>
@@ -1397,20 +1397,20 @@ const spectrumItems = computed(() => {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-[var(--ink-muted)] mb-1">规格与配置 (选填)</label>
+              <label class="block text-[var(--ink-muted)] mb-1">规格与配置</label>
               <input
                 v-model="newGearSpec"
                 type="text"
-                placeholder="如: M3 Max 36GB+1TB"
+                placeholder="规格型号"
                 class="w-full px-3 py-2 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
               />
             </div>
             <div>
-              <label class="block text-[var(--ink-muted)] mb-1">持有随记 (选填)</label>
+              <label class="block text-[var(--ink-muted)] mb-1">持有随记</label>
               <input
                 v-model="newGearNote"
                 type="text"
-                placeholder="主力生产力工具 / 随身街拍机"
+                placeholder="持有随记"
                 class="w-full px-3 py-2 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
               />
             </div>
@@ -1532,11 +1532,11 @@ const spectrumItems = computed(() => {
           </div>
 
           <div>
-            <label class="block text-[var(--ink-muted)] mb-1">流转备注 (选填)</label>
+            <label class="block text-[var(--ink-muted)] mb-1">流转备注</label>
             <input
               v-model="sellNote"
               type="text"
-              placeholder="如：闲鱼出给同城摄友，升级新镜头"
+              placeholder="流转备注"
               class="w-full px-3 py-2 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
             />
           </div>
@@ -1623,7 +1623,7 @@ const spectrumItems = computed(() => {
               <input
                 v-model="editTitle"
                 type="text"
-                placeholder="例如: 柴米油盐"
+                placeholder="事项名称"
                 class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
               />
             </div>
@@ -1689,7 +1689,7 @@ const spectrumItems = computed(() => {
           <!-- 城市坐标与备注 -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-[var(--ink-muted)] mb-1">关联城市 (可选)</label>
+              <label class="block text-[var(--ink-muted)] mb-1">关联城市</label>
               <CityPicker
                 v-model="editCityCode"
                 placeholder="检索城市..."
@@ -1700,7 +1700,7 @@ const spectrumItems = computed(() => {
               <input
                 v-model="editNote"
                 type="text"
-                placeholder="选填备注..."
+                placeholder="备注说明"
                 class="w-full px-3 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
               />
             </div>

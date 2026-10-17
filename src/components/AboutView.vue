@@ -172,7 +172,7 @@ onUnmounted(() => {
           v-if="localProfile.avatar_url"
           @click="isLightboxOpen = true"
           class="w-14 h-14 sm:w-16 sm:h-16 rounded-xs overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-subtle)] shrink-0 cursor-zoom-in group"
-          title="点击查看头像大图"
+          title="查看肖像大图"
         >
           <img
             :src="localProfile.avatar_url"
@@ -265,7 +265,7 @@ onUnmounted(() => {
             </span>
           </div>
           <p class="font-mono-archive text-xs text-[var(--ink-muted)]">
-            点击任意日期方格可速览当日记录，或选择右侧年份卷翻阅年度总结画报
+            编年刻度与年度总结画报
           </p>
         </div>
 
