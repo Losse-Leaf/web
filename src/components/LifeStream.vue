@@ -468,7 +468,6 @@ const getGapDays = (index: number): number => {
                 v-if="getEntryImages(entry).length === 1"
                 class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in border border-[var(--border-subtle)]/70 p-1.5 sm:p-2"
                 @click.stop="openLightbox(entry, getEntryImages(entry)[0].url)"
-                title="点击在暗房灯箱中放大"
               >
                 <img
                   :src="getEntryImages(entry)[0].url"
@@ -492,7 +491,6 @@ const getGapDays = (index: number): number => {
                   :key="img.id || imgIdx"
                   class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in aspect-[4/3] group/single border border-[var(--border-subtle)]/50"
                   @click.stop="openLightbox(entry, img.url)"
-                  title="点击在暗房灯箱中放大"
                 >
                   <img
                     :src="img.url"
@@ -516,7 +514,6 @@ const getGapDays = (index: number): number => {
                   :key="img.id || imgIdx"
                   class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in aspect-[4/3] group/single border border-[var(--border-subtle)]/50"
                   @click.stop="openLightbox(entry, img.url)"
-                  title="点击在暗房灯箱中放大"
                 >
                   <img
                     :src="img.url"

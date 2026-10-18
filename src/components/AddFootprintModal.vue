@@ -187,7 +187,7 @@ const handleSubmit = async () => {
             </h2>
           </div>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
-            {{ editingFootprint ? '修订山河图谱票根与旅途记忆。' : '点亮山川图谱。支持多日行程跨度，后续多篇游记与账单可挂载或自动聚合成同一次旅程。' }}
+            {{ editingFootprint ? '修订山河图谱票根。' : '点亮山川图谱。' }}
           </p>
         </div>
         <button
@@ -209,7 +209,6 @@ const handleSubmit = async () => {
           <label class="block text-[11px] text-[var(--ink-muted)] mb-1">到访城市 *</label>
           <CityPicker
             v-model="selectedCityCode"
-            placeholder="搜索城市..."
             @select="handleCitySelect"
           />
           <div v-if="selectedCityName" class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--accent-moss)]">
@@ -221,39 +220,35 @@ const handleSubmit = async () => {
         <!-- 启程与返程日期 (支持单日与多日行程) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">启程 / 到访日期 *</label>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">到访日期 *</label>
             <PaperDatePicker
               v-model="visitedAt"
-              placeholder="选择到访日期..."
             />
           </div>
           <div>
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">返程日期</label>
             <PaperDatePicker
               v-model="departedAt"
-              placeholder="选择返程日期..."
             />
           </div>
         </div>
 
         <!-- 行旅标题 -->
         <div>
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">旅程主题 / 行旅标题</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">旅程主题</label>
           <input
             v-model="title"
             type="text"
-            placeholder="行旅标题"
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial"
           />
         </div>
 
         <!-- 足迹简注 / 随笔 -->
         <div>
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">足迹简注 / 行旅随笔</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">随笔手记</label>
           <textarea
             v-model="note"
             rows="3"
-            placeholder="记下一缕风、一碗热汤或一处驻足..."
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
           ></textarea>
         </div>

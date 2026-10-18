@@ -182,7 +182,7 @@ const handleSubmit = async () => {
               class="py-2 px-3 border rounded-xs text-xs font-serif-editorial text-center cursor-pointer transition-colors"
               :class="kind === 'item' ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-primary)]'"
             >
-              好物 (器物硬件)
+              好物
             </button>
             <button
               type="button"
@@ -190,7 +190,7 @@ const handleSubmit = async () => {
               class="py-2 px-3 border rounded-xs text-xs font-serif-editorial text-center cursor-pointer transition-colors"
               :class="kind === 'travel' ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-primary)]'"
             >
-              旅程 (行游探索)
+              旅程
             </button>
             <button
               type="button"
@@ -198,7 +198,7 @@ const handleSubmit = async () => {
               class="py-2 px-3 border rounded-xs text-xs font-serif-editorial text-center cursor-pointer transition-colors"
               :class="kind === 'milestone' ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-primary)]'"
             >
-              里程碑 (心智进阶)
+              里程碑
             </button>
           </div>
         </div>
@@ -210,18 +210,16 @@ const handleSubmit = async () => {
             v-model="title"
             type="text"
             required
-            :placeholder="kind === 'item' ? '心愿好物名称' : kind === 'travel' ? '向往目的地或旅程' : '心愿或目标'"
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-sm text-[var(--ink-primary)] font-serif-editorial"
           />
         </div>
 
         <!-- 好物专属：期望规格型号 -->
         <div v-if="kind === 'item'">
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">期望规格 / 配置型号</label>
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">规格型号</label>
           <input
             v-model="spec"
             type="text"
-            placeholder="规格型号"
             class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
           />
         </div>
@@ -232,7 +230,6 @@ const handleSubmit = async () => {
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
             <CityPicker
               v-model="cityCode"
-              placeholder="检索目的地城市..."
               @select="onCityPicked"
             />
           </div>
@@ -242,7 +239,6 @@ const handleSubmit = async () => {
               <input
                 v-model="cityName"
                 type="text"
-                placeholder="城市名称"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
               />
             </div>
@@ -251,7 +247,6 @@ const handleSubmit = async () => {
               <input
                 v-model="cityCode"
                 type="text"
-                placeholder="行政区划代码"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
               />
             </div>
@@ -279,7 +274,6 @@ const handleSubmit = async () => {
             <PaperDatePicker
               v-model="targetDate"
               clearable
-              placeholder="选择目标日期..."
             />
           </div>
         </div>
@@ -290,7 +284,6 @@ const handleSubmit = async () => {
           <textarea
             v-model="note"
             rows="3"
-            placeholder="为什么想要它？它将如何丰富具体的生活体验？"
             class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
           ></textarea>
         </div>

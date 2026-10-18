@@ -259,7 +259,7 @@ onMounted(() => {
       <div class="p-4 bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] rounded-xs space-y-3 font-mono-archive text-xs">
         <h4 class="font-medium text-[var(--ink-primary)] flex items-center gap-1.5">
           <Plus class="w-3.5 h-3.5" />
-          <span>添加自定义信贷渠道 (信用卡 / 免息分期)</span>
+          <span>添加自定义信贷渠道</span>
         </h4>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -268,7 +268,6 @@ onMounted(() => {
             <input
               v-model="newName"
               type="text"
-              placeholder="渠道名称"
               class="w-full px-2.5 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none text-xs text-[var(--ink-primary)] focus:border-[var(--ink-primary)]"
             />
           </div>

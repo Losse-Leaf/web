@@ -164,7 +164,7 @@ onUnmounted(() => {
           ref="inputRef"
           v-model="query"
           type="text"
-          placeholder="搜索生活记录、随笔思考、器材底片或所在城市地点..."
+          placeholder="搜索……"
           class="w-full bg-transparent text-sm sm:text-base text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-hidden font-serif-editorial"
         />
         <button

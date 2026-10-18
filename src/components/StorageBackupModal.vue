@@ -1012,7 +1012,7 @@ onMounted(() => {
             <!-- Col 1: Account ID / Endpoint -->
             <div v-if="storageProviderType === 'r2'">
               <label class="block text-xs text-[var(--ink-secondary)] mb-1">
-                Cloudflare 账户 ID (Account ID) <span class="text-rose-600">*</span>
+                Cloudflare 账户 ID <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.account_id"
@@ -1023,7 +1023,7 @@ onMounted(() => {
             </div>
             <div v-else>
               <label class="block text-xs text-[var(--ink-secondary)] mb-1">
-                S3 服务端点 (Endpoint) <span class="text-rose-600">*</span>
+                S3 服务端点 <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.endpoint"
@@ -1036,12 +1036,11 @@ onMounted(() => {
             <!-- Col 2: 存储桶名称 -->
             <div>
               <label class="block text-xs text-[var(--ink-secondary)] mb-1">
-                存储桶名称 (Bucket Name) <span class="text-rose-600">*</span>
+                存储桶名称 <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.bucket_name"
                 type="text"
-                placeholder="存储桶名称"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
             </div>
@@ -1049,12 +1048,11 @@ onMounted(() => {
             <!-- Col 3: Access Key ID -->
             <div>
               <label class="block text-xs text-[var(--ink-secondary)] mb-1">
-                访问密钥 ID (Access Key ID) <span class="text-rose-600">*</span>
+                访问密钥 ID <span class="text-rose-600">*</span>
               </label>
               <input
                 v-model="storageForm.access_key_id"
                 type="text"
-                placeholder="Access Key ID"
                 class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
               />
             </div>
@@ -1063,7 +1061,7 @@ onMounted(() => {
             <div>
               <div class="flex items-center justify-between mb-1">
                 <label class="text-xs text-[var(--ink-secondary)]">
-                  私有访问密钥 (Secret Access Key)
+                  私有访问密钥
                   <span v-if="!localStorageStatus?.has_secret_key" class="text-rose-600">*</span>
                 </label>
                 <span v-if="localStorageStatus?.has_secret_key" class="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono-archive">
@@ -1074,7 +1072,7 @@ onMounted(() => {
                 <input
                   v-model="storageForm.secret_access_key"
                   :type="showSecretKey ? 'text' : 'password'"
-                  :placeholder="localStorageStatus?.has_secret_key ? '已保存 (留空保持不变)' : 'Secret Access Key'"
+                  :placeholder="localStorageStatus?.has_secret_key ? '留空保持不变' : ''"
                   class="w-full px-3 py-1.5 pr-8 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-mono-archive text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink-primary)]"
                 />
                 <button

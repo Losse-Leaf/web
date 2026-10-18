@@ -668,7 +668,6 @@ const spectrumItems = computed(() => {
           <button
             @click="openCategoryManager('expense')"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-            title="分类管理"
           >
             <SlidersHorizontal class="w-3.5 h-3.5" />
             <span>分类管理</span>
@@ -965,7 +964,6 @@ const spectrumItems = computed(() => {
         <button
           @click="exportTransactionsCSV(transactionsList)"
           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-          title="导出 CSV"
         >
           <Download class="w-3.5 h-3.5" />
           <span>导出 CSV</span>
@@ -1352,7 +1350,6 @@ const spectrumItems = computed(() => {
               <input
                 v-model="newGearName"
                 type="text"
-                placeholder="设备名称"
                 class="w-full px-3 py-2 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
               />
             </div>
@@ -1390,27 +1387,24 @@ const spectrumItems = computed(() => {
               <label class="block text-[var(--ink-muted)] mb-1">购入日期</label>
               <PaperDatePicker
                 v-model="newGearPurchaseDate"
-                placeholder="选择购入日期..."
               />
             </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-[var(--ink-muted)] mb-1">规格与配置</label>
+              <label class="block text-[var(--ink-muted)] mb-1">规格型号</label>
               <input
                 v-model="newGearSpec"
                 type="text"
-                placeholder="规格型号"
                 class="w-full px-3 py-2 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
               />
             </div>
             <div>
-              <label class="block text-[var(--ink-muted)] mb-1">持有随记</label>
+              <label class="block text-[var(--ink-muted)] mb-1">体验随记</label>
               <input
                 v-model="newGearNote"
                 type="text"
-                placeholder="持有随记"
                 class="w-full px-3 py-2 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
               />
             </div>
@@ -1527,7 +1521,6 @@ const spectrumItems = computed(() => {
             <label class="block text-[var(--ink-muted)] mb-1">出手日期</label>
             <PaperDatePicker
               v-model="sellDate"
-              placeholder="选择转售日期..."
             />
           </div>
 
@@ -1536,7 +1529,6 @@ const spectrumItems = computed(() => {
             <input
               v-model="sellNote"
               type="text"
-              placeholder="流转备注"
               class="w-full px-3 py-2 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
             />
           </div>
@@ -1623,7 +1615,6 @@ const spectrumItems = computed(() => {
               <input
                 v-model="editTitle"
                 type="text"
-                placeholder="事项名称"
                 class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)] font-serif-editorial"
               />
             </div>
@@ -1661,7 +1652,7 @@ const spectrumItems = computed(() => {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <div class="flex items-center justify-between mb-1">
-                <label class="block text-[var(--ink-muted)]">支付/收款方式</label>
+                <label class="block text-[var(--ink-muted)]">支付方式</label>
                 <button
                   type="button"
                   @click="openCategoryManager('payment')"
@@ -1692,7 +1683,6 @@ const spectrumItems = computed(() => {
               <label class="block text-[var(--ink-muted)] mb-1">关联城市</label>
               <CityPicker
                 v-model="editCityCode"
-                placeholder="检索城市..."
               />
             </div>
             <div>
@@ -1700,7 +1690,6 @@ const spectrumItems = computed(() => {
               <input
                 v-model="editNote"
                 type="text"
-                placeholder="备注说明"
                 class="w-full px-3 py-1.5 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
               />
             </div>

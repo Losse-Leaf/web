@@ -326,10 +326,10 @@ const getKindLabel = (type: string) => {
             <PaperSelect
               v-model="editType"
               :options="[
-                { value: 'life', label: '日常 (Life)' },
-                { value: 'travel', label: '游历 (Travel)' },
-                { value: 'project', label: '造物 (Project)' },
-                { value: 'wish', label: '心愿 (Wish)' },
+                { value: 'life', label: '日常' },
+                { value: 'travel', label: '游历' },
+                { value: 'project', label: '造物' },
+                { value: 'wish', label: '心愿' },
               ]"
             />
           </div>
@@ -365,7 +365,6 @@ const getKindLabel = (type: string) => {
             <PaperDatePicker
               v-model="editOccurredAt"
               enableTime
-              placeholder="选择发生时间..."
             />
           </div>
 
@@ -375,7 +374,7 @@ const getKindLabel = (type: string) => {
             </label>
             <CityPicker
               v-model="editCityCode"
-              :placeholder="editCityName || '检索城市...'"
+              :placeholder="editCityName || ''"
               @select="handleEditCitySelect"
             />
           </div>
@@ -410,7 +409,7 @@ const getKindLabel = (type: string) => {
               type="checkbox"
               class="w-3.5 h-3.5 rounded-xs accent-[var(--accent-warm)] cursor-pointer"
             />
-            <span>标记为精选印记（收录于精选特刊）</span>
+            <span>标记为精选</span>
           </label>
         </div>
 

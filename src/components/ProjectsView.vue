@@ -300,7 +300,6 @@ const isGitHubUrl = (url?: string) => {
               <button
                 @click="emit('openAddProjectEntry', proj.id)"
                 class="inline-flex items-center gap-1 px-2.5 py-1 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs transition-colors cursor-pointer text-[11px]"
-                title="为此项目撰写新的造物手记或阶段进展"
               >
                 <Plus class="w-3 h-3" />
                 <span>写造物手记</span>
@@ -435,7 +434,6 @@ const isGitHubUrl = (url?: string) => {
             <input
               v-model="formTitle"
               type="text"
-              placeholder="项目名称"
               class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs focus:border-[var(--ink-primary)] outline-hidden font-serif-editorial text-sm text-[var(--ink-primary)]"
             />
           </div>
@@ -446,7 +444,6 @@ const isGitHubUrl = (url?: string) => {
               <input
                 v-model="formSubtitle"
                 type="text"
-                placeholder="简短注脚"
                 class="w-full px-3 py-1.5 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)]"
               />
             </div>
@@ -498,17 +495,15 @@ const isGitHubUrl = (url?: string) => {
             <textarea
               v-model="formDescription"
               rows="2"
-              placeholder="用两三句话阐明这个项目的定位与创造目的..."
               class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm"
             ></textarea>
           </div>
 
           <div>
-            <label class="block text-[var(--ink-secondary)] mb-1">故事与经历 (Story)</label>
+            <label class="block text-[var(--ink-secondary)] mb-1">项目故事</label>
             <textarea
               v-model="formStory"
               rows="3"
-              placeholder="背后的故事、踩过的坑或心得感悟..."
               class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm"
             ></textarea>
           </div>

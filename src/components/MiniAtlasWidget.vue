@@ -108,7 +108,6 @@ onMounted(() => {
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs p-4 sm:p-5 relative overflow-hidden group cursor-pointer"
       @click="emit('navigateAtlas')"
-      title="山川行迹"
     >
       <div class="flex items-center justify-between pb-3 mb-3.5 border-b border-[var(--border-subtle)]/60 text-xs font-serif-editorial text-[var(--ink-secondary)]">
         <div class="flex items-center gap-1.5">

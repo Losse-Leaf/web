@@ -242,45 +242,30 @@ const handleSubmit = async () => {
             <button
               type="button"
               @click="resolutionType = 'exact'"
-              class="p-3 border rounded-xs text-left cursor-pointer transition-all flex flex-col justify-between"
+              class="p-3 border rounded-xs text-left cursor-pointer transition-all flex flex-col justify-center"
               :class="resolutionType === 'exact' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] ring-1 ring-[var(--ink-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)]'"
             >
-              <div>
-                <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">原计划达成</span>
-                <span class="block text-[10px] text-[var(--ink-muted)] mt-1 leading-normal">
-                  配置与价格跟预算一致，原物入手。
-                </span>
-              </div>
+              <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">原计划达成</span>
             </button>
 
             <!-- 路径二 -->
             <button
               type="button"
               @click="resolutionType = 'altered'"
-              class="p-3 border rounded-xs text-left cursor-pointer transition-all flex flex-col justify-between"
+              class="p-3 border rounded-xs text-left cursor-pointer transition-all flex flex-col justify-center"
               :class="resolutionType === 'altered' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] ring-1 ring-[var(--ink-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)]'"
             >
-              <div>
-                <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">改选替代方案</span>
-                <span class="block text-[10px] text-[var(--ink-muted)] mt-1 leading-normal">
-                  升降配置、平替或换成了同类替代品。
-                </span>
-              </div>
+              <span class="block font-medium font-serif-editorial text-sm text-[var(--ink-primary)]">改选替代方案</span>
             </button>
 
             <!-- 路径三 -->
             <button
               type="button"
               @click="resolutionType = 'relinquished'"
-              class="p-3 border rounded-xs text-left cursor-pointer transition-all flex flex-col justify-between"
+              class="p-3 border rounded-xs text-left cursor-pointer transition-all flex flex-col justify-center"
               :class="resolutionType === 'relinquished' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] ring-1 ring-[var(--ink-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)]'"
             >
-              <div>
-                <span class="block font-medium font-serif-editorial text-sm text-[var(--accent-moss)]">理性拔草释怀</span>
-                <span class="block text-[10px] text-[var(--ink-muted)] mt-1 leading-normal">
-                  冷静沉淀后决定放弃，省下 100% 预算。
-                </span>
-              </div>
+              <span class="block font-medium font-serif-editorial text-sm text-[var(--accent-moss)]">理性拔草释怀</span>
             </button>
           </div>
         </div>
@@ -323,7 +308,6 @@ const handleSubmit = async () => {
               v-model="actualTitle"
               type="text"
               required
-              placeholder="实际达成名称"
               class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
             />
           </div>
@@ -334,7 +318,6 @@ const handleSubmit = async () => {
           <label class="block text-[11px] text-[var(--ink-muted)] mb-1">达成归册日期 *</label>
           <PaperDatePicker
             v-model="fulfilledDate"
-            placeholder="选择达成日期..."
           />
         </div>
 
@@ -346,7 +329,7 @@ const handleSubmit = async () => {
               type="checkbox"
               class="rounded-xs text-[var(--ink-primary)]"
             />
-            <span class="font-medium text-[var(--ink-primary)]">使用信贷分期付款 (花呗 / 白条 / 信用卡)</span>
+            <span class="font-medium text-[var(--ink-primary)]">使用信贷分期付款</span>
           </label>
 
           <div v-if="isInstallment" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-subtle)]">

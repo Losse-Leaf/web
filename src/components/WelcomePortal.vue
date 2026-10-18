@@ -539,7 +539,6 @@ onUnmounted(() => {
                     <input
                       v-model="bootstrapForm.curator_name"
                       type="text"
-                      placeholder="主理人称谓"
                       class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                     />
                   </div>
@@ -553,7 +552,6 @@ onUnmounted(() => {
                     </div>
                     <CityPicker
                       v-model="bootstrapForm.city_code"
-                      placeholder="检索城市..."
                       @select="onBootstrapCitySelect"
                     />
                   </div>
@@ -564,7 +562,6 @@ onUnmounted(() => {
                       <input
                         v-model="bootstrapForm.master_passcode"
                         type="password"
-                        placeholder="设定管理员密钥"
                         class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                       />
                     </div>
@@ -573,7 +570,6 @@ onUnmounted(() => {
                       <input
                         v-model="bootstrapForm.confirm_passcode"
                         type="password"
-                        placeholder="确认管理员密钥"
                         @keydown.enter="handleBootstrapStep1Submit"
                         class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                       />

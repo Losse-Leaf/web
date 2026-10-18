@@ -495,18 +495,7 @@ const currentKindMeta = computed(() => {
   return kindOptions.find((o) => o.key === selectedKind.value) || kindOptions[0]
 })
 
-const contentPlaceholder = computed(() => {
-  switch (selectedKind.value) {
-    case 'travel':
-      return '记录在这座城市的见闻、走过的街巷、风物与旅途感触……'
-    case 'project':
-      return '记录本次造物推进的细节、攻克的问题或阶段性成果……'
-    case 'wish':
-      return '写下为什么想要它、向往的理由或期待达成的场景……'
-    default:
-      return '记录今天真实发生的一件事、脑海里的念头或定格的日常……'
-  }
-})
+const contentPlaceholder = computed(() => '')
 
 const handleSubmit = async () => {
   errorMsg.value = null
@@ -932,14 +921,13 @@ const handleSubmit = async () => {
               <input
                 v-model="title"
                 type="text"
-                placeholder="账目摘要"
                 class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
               />
             </div>
 
             <div class="space-y-1.5">
               <div class="flex items-center justify-between">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">支付/收款渠道</label>
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">支付渠道</label>
                 <button
                   type="button"
                   @click="openCategoryManager('payment')"
@@ -961,7 +949,6 @@ const handleSubmit = async () => {
               <input
                 v-model="txNote"
                 type="text"
-                placeholder="添加细节或批注……"
                 class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
               />
             </div>
@@ -969,7 +956,6 @@ const handleSubmit = async () => {
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">所在城市</label>
               <CityPicker
                 v-model="selectedCityCode"
-                placeholder="检索城市..."
                 @select="handleEntryCitySelect"
               />
             </div>
@@ -1111,7 +1097,6 @@ const handleSubmit = async () => {
                 <input
                   v-model="gearSpec"
                   type="text"
-                  placeholder="规格型号"
                   class="w-full px-2.5 py-1.5 text-xs bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
                 />
               </div>
@@ -1123,7 +1108,6 @@ const handleSubmit = async () => {
             <PaperDatePicker
               v-model="occurredAt"
               enableTime
-              placeholder="选择入账时间..."
             />
           </div>
         </template>
@@ -1165,7 +1149,6 @@ const handleSubmit = async () => {
               <input
                 v-model="title"
                 type="text"
-                placeholder="手记标题"
                 class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -1191,7 +1174,6 @@ const handleSubmit = async () => {
               <PaperDatePicker
                 v-model="occurredAt"
                 enableTime
-                placeholder="选择记录时间..."
               />
             </div>
           </div>
@@ -1204,16 +1186,14 @@ const handleSubmit = async () => {
                 <input
                   v-model="projTitle"
                   type="text"
-                  placeholder="项目名称"
                   class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
                 />
               </div>
               <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题 (简明定位)</label>
+                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题</label>
                 <input
                   v-model="projSubtitle"
                   type="text"
-                  placeholder="副标题或一句话定义"
                   class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
                 />
               </div>
@@ -1241,10 +1221,10 @@ const handleSubmit = async () => {
                 <PaperSelect
                   v-model="projStatus"
                   :options="[
-                    { value: 'Active', label: '活跃 (Active)' },
-                    { value: 'Maintained', label: '维护 (Maintained)' },
-                    { value: 'WIP', label: '构思试验 (WIP)' },
-                    { value: 'Archived', label: '归档 (Archived)' },
+                    { value: 'Active', label: '活跃' },
+                    { value: 'Maintained', label: '维护' },
+                    { value: 'WIP', label: '构思试验' },
+                    { value: 'Archived', label: '归档' },
                   ]"
                 />
               </div>
@@ -1255,23 +1235,21 @@ const handleSubmit = async () => {
               <textarea
                 v-model="projDescription"
                 rows="2"
-                placeholder="简明阐述该造物的核心价值与用途……"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
               ></textarea>
             </div>
 
             <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">背后的故事 / 立项初衷</label>
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">立项初衷</label>
               <textarea
                 v-model="projStory"
                 rows="3"
-                placeholder="记录为何萌生创造它的念头、技术选型或手艺经历……"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
               ></textarea>
             </div>
 
             <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">代码仓 / 访问外链</label>
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">仓库链接</label>
               <input
                 v-model="projGithubUrl"
                 type="url"
@@ -1323,7 +1301,6 @@ const handleSubmit = async () => {
               <input
                 v-model="title"
                 type="text"
-                placeholder="心愿名称"
                 class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -1346,7 +1323,6 @@ const handleSubmit = async () => {
               <input
                 v-model="wishSpec"
                 type="text"
-                placeholder="规格型号"
                 class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -1354,7 +1330,6 @@ const handleSubmit = async () => {
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">目的地城市 *</label>
               <CityPicker
                 v-model="selectedCityCode"
-                placeholder="检索目的地城市..."
                 @select="handleEntryCitySelect"
               />
             </div>
@@ -1362,13 +1337,12 @@ const handleSubmit = async () => {
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">期许达成日期</label>
               <PaperDatePicker
                 v-model="wishTargetDate"
-                placeholder="选择期许日期..."
               />
             </div>
           </div>
 
           <div class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">心愿寄语 / 种草理由</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">心愿寄语</label>
             <textarea
               v-model="content"
               rows="4"
@@ -1395,18 +1369,16 @@ const handleSubmit = async () => {
                 </label>
                 <CityPicker
                   v-model="selectedCityCode"
-                  placeholder="检索城市..."
                   @select="handleEntryCitySelect"
                 />
               </div>
               <div class="space-y-1.5">
                 <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-                  具体街巷 / 景点注记
+                  具体地点
                 </label>
                 <input
                   v-model="location"
                   type="text"
-                  placeholder="具体地点注记"
                   class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
                 />
               </div>
@@ -1415,7 +1387,7 @@ const handleSubmit = async () => {
             <!-- 关联已有旅程足迹 (支持一次多日旅游挂载多条游记手记) -->
             <div v-if="availableFootprints.length > 0" class="space-y-1.5 pt-1 border-t border-[var(--border-subtle)]/60">
               <label class="block text-xs font-mono-archive text-[var(--ink-secondary)]">
-                归属旅程足迹 (支持多条游记挂载至同一次旅途 · 不选则自动合并同城 7 日内行程)
+                归属旅程足迹
               </label>
               <PaperSelect
                 v-model="selectedFootprintId"
@@ -1440,7 +1412,6 @@ const handleSubmit = async () => {
             <input
               v-model="title"
               type="text"
-              :placeholder="selectedKind === 'travel' ? '旅程标题' : '记录标题'"
               class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -1472,7 +1443,6 @@ const handleSubmit = async () => {
               <PaperDatePicker
                 v-model="occurredAt"
                 enableTime
-                placeholder="选择发生时间..."
               />
             </div>
 
@@ -1482,7 +1452,6 @@ const handleSubmit = async () => {
               </label>
               <CityPicker
                 v-model="selectedCityCode"
-                placeholder="检索城市..."
                 @select="handleEntryCitySelect"
               />
             </div>
@@ -1490,12 +1459,11 @@ const handleSubmit = async () => {
 
           <div v-if="selectedKind === 'life'" class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              具体地点 / 街巷注记
+              具体地点
             </label>
             <input
               v-model="location"
               type="text"
-              placeholder="具体地点注记"
               class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -1508,7 +1476,7 @@ const handleSubmit = async () => {
                 type="checkbox"
                 class="w-3.5 h-3.5 rounded-xs accent-[var(--accent-warm)] cursor-pointer"
               />
-              <span>标记为精选印记（收录于精选特刊）</span>
+              <span>标记为精选</span>
             </label>
           </div>
         </template>

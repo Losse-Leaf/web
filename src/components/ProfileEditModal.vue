@@ -437,7 +437,6 @@ onUnmounted(() => {
               @dragover.prevent
               @drop.prevent="handleAvatarDrop"
               class="w-24 h-24 rounded-xs bg-[var(--bg-archive)] border-2 border-dashed border-[var(--border-subtle)] hover:border-[var(--ink-primary)] overflow-hidden shrink-0 relative cursor-pointer group transition-colors shadow-xs"
-              title="点击或拖拽本地照片更换肖像"
             >
               <img
                 v-if="form.avatar_url"
@@ -508,17 +507,15 @@ onUnmounted(() => {
               <input
                 v-model="form.name"
                 type="text"
-                placeholder="主理人称谓"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
 
             <div class="space-y-1">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">常居城市 / 身处坐标 *</label>
+              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">常居城市 *</label>
               <input
                 v-model="form.location"
                 type="text"
-                placeholder="常居城市 / 身处坐标"
                 class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -528,25 +525,23 @@ onUnmounted(() => {
         <!-- 签名与一句话近况 -->
         <div class="space-y-3">
           <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] uppercase tracking-wider">
-            03 副标与一句话近况
+            03 题记与近况
           </div>
 
           <div class="space-y-1">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题 / 状态标签</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题</label>
             <input
               v-model="form.title"
               type="text"
-              placeholder="副标题 / 状态标签"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
 
           <div class="space-y-1">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">一句话近况 / 题记</label>
+            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">近况题记</label>
             <input
               v-model="form.motto"
               type="text"
-              placeholder="一句话近况 / 题记"
               class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
           </div>
@@ -563,7 +558,6 @@ onUnmounted(() => {
               <input
                 v-model="form.email"
                 type="text"
-                placeholder="公开联络邮箱"
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -573,7 +567,6 @@ onUnmounted(() => {
               <input
                 v-model="form.github"
                 type="text"
-                placeholder="GitHub 主页链接"
                 class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
@@ -637,7 +630,6 @@ onUnmounted(() => {
               <input
                 v-model="newGearName"
                 type="text"
-                placeholder="设备名称"
                 class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
               />
             </div>
@@ -665,21 +657,19 @@ onUnmounted(() => {
           </div>
 
           <div>
-            <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">具体规格 / 型号说明</label>
+            <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">规格型号</label>
             <input
               v-model="newGearSpec"
               type="text"
-              placeholder="规格型号"
               class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
             />
           </div>
 
           <div>
-            <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">使用感受 / 体验笔记</label>
+            <label class="block text-[11px] font-mono-archive text-[var(--ink-muted)] mb-1">体验随记</label>
             <input
               v-model="newGearNote"
               type="text"
-              placeholder="使用感受 / 体验笔记"
               class="w-full px-2.5 py-1.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs outline-none"
             />
           </div>
@@ -701,7 +691,6 @@ onUnmounted(() => {
               <PaperDatePicker
                 v-model="newGearPurchaseDate"
                 size="sm"
-                placeholder="选择购置日期..."
               />
             </div>
           </div>
@@ -771,7 +760,6 @@ onUnmounted(() => {
                   type="button"
                   class="text-[11px] font-mono-archive px-2 py-0.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors"
                   :class="sellingGearIndex === idx ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
-                  title="标记为已出二手并自动生成回血账单"
                 >
                   出二手回血
                 </button>
@@ -812,7 +800,6 @@ onUnmounted(() => {
                   <PaperDatePicker
                     v-model="sellingDateInput"
                     size="sm"
-                    placeholder="选择转让日期..."
                   />
                 </div>
               </div>
