@@ -3,9 +3,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import {
   X,
   Download,
-  FileJson,
-  FileText,
-  FileSpreadsheet,
   Check,
   Archive,
   RotateCcw,
@@ -22,9 +19,9 @@ import {
   Plug,
   Trash2,
   FolderArchive,
+  Server,
 } from 'lucide-vue-next'
 import type { LifeEntry, Transaction, Project, BackupItem, StorageStatus, StorageConfigPayload } from '../types'
-import { useExport } from '../composables/useExport'
 import { askConfirm } from '../composables/useConfirm'
 import { audio } from '../utils/audio'
 import PaperSelect, { type PaperSelectOption } from './PaperSelect.vue'
@@ -47,7 +44,7 @@ import {
 const props = withDefaults(
   defineProps<{
     isOpen: boolean
-    initialTab?: 'backup' | 'storage' | 'export'
+    initialTab?: 'backup' | 'storage'
     entries: LifeEntry[]
     transactions: Transaction[]
     projects: Project[]
@@ -64,8 +61,8 @@ const emit = defineEmits<{
   (e: 'requestAuth', callback?: () => void, prompt?: string): void
 }>()
 
-// 激活选项卡：'backup' (全量快照与灾备) | 'storage' (对象存储设置) | 'export' (文稿与数据导出)
-const activeTab = ref<'backup' | 'storage' | 'export'>(props.initialTab)
+// 激活选项卡：'backup' (全量快照与灾备) | 'storage' (对象存储设置)
+const activeTab = ref<'backup' | 'storage'>(props.initialTab)
 
 watch(
   () => props.initialTab,
@@ -73,39 +70,6 @@ watch(
     if (newTab) activeTab.value = newTab
   }
 )
-
-// 1. 客户端文稿与表格导出
-const { exportJSON, exportMarkdown, exportTransactionsCSV } = useExport()
-const downloadedType = ref<string | null>(null)
-
-const handleExportJSON = () => {
-  audio.playPaperFlip()
-  exportJSON({
-    entries: props.entries,
-    transactions: props.transactions,
-    projects: props.projects,
-  })
-  flashSuccess('json')
-}
-
-const handleExportMarkdown = () => {
-  audio.playPaperFlip()
-  exportMarkdown(props.entries)
-  flashSuccess('markdown')
-}
-
-const handleExportCSV = () => {
-  audio.playPaperFlip()
-  exportTransactionsCSV(props.transactions)
-  flashSuccess('csv')
-}
-
-const flashSuccess = (type: string) => {
-  downloadedType.value = type
-  setTimeout(() => {
-    downloadedType.value = null
-  }, 3000)
-}
 
 // 2. 灾备状态与列表
 const backups = ref<BackupItem[]>([])
@@ -669,19 +633,6 @@ onMounted(() => {
             :class="localStorageStatus?.configured ? 'bg-emerald-500' : 'bg-[var(--ink-muted)]/40'"
           ></span>
         </button>
-
-        <button
-          @click="activeTab = 'export'"
-          class="px-3.5 py-2 rounded-xs border transition-all cursor-pointer flex items-center gap-2 shrink-0 font-serif-editorial"
-          :class="
-            activeTab === 'export'
-              ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-xs'
-              : 'border-transparent text-[var(--ink-secondary)] hover:border-[var(--border-subtle)] hover:bg-[var(--bg-subtle)]'
-          "
-        >
-          <FileText class="w-3.5 h-3.5" />
-          <span>文稿与数据导出</span>
-        </button>
       </div>
 
       <!-- 操作反馈提示条 -->
@@ -1172,80 +1123,6 @@ onMounted(() => {
                 <span>保存配置</span>
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ========================================== -->
-      <!-- 选项卡 3：文稿与数据导出 (JSON / MD / CSV) -->
-      <!-- ========================================== -->
-      <div v-else-if="activeTab === 'export'" class="space-y-4">
-        <!-- 三种格式导出选项卡 -->
-        <div class="space-y-3 font-serif-editorial">
-          <!-- 1. JSON 完整备份 -->
-          <div
-            class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-          >
-            <div class="space-y-0.5">
-              <div class="flex items-center gap-2 text-sm font-medium text-[var(--ink-primary)]">
-                <FileJson class="w-4 h-4 text-[var(--accent-warm)]" />
-                <span>全量 JSON 数据备份</span>
-              </div>
-              <p class="text-xs text-[var(--ink-muted)]">
-                包含生活档案、记账流水、造物项目与心愿单的完整结构化数据。
-              </p>
-            </div>
-            <button
-              @click="handleExportJSON"
-              class="px-3.5 py-1.5 text-xs font-medium border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 self-start sm:self-auto"
-            >
-              <component :is="downloadedType === 'json' ? Check : Download" class="w-3.5 h-3.5" />
-              <span>{{ downloadedType === 'json' ? '已导出' : '导出 JSON' }}</span>
-            </button>
-          </div>
-
-          <!-- 2. Markdown 日记文稿 -->
-          <div
-            class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-          >
-            <div class="space-y-0.5">
-              <div class="flex items-center gap-2 text-sm font-medium text-[var(--ink-primary)]">
-                <FileText class="w-4 h-4 text-[var(--accent-moss)]" />
-                <span>生活手账 Markdown 文稿</span>
-              </div>
-              <p class="text-xs text-[var(--ink-muted)]">
-                按时间倒序整理的标准 Markdown 文稿，适合导入 Obsidian 等笔记工具。
-              </p>
-            </div>
-            <button
-              @click="handleExportMarkdown"
-              class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all text-[var(--ink-primary)] shrink-0 self-start sm:self-auto"
-            >
-              <component :is="downloadedType === 'markdown' ? Check : Download" class="w-3.5 h-3.5" />
-              <span>{{ downloadedType === 'markdown' ? '已导出' : '导出 .md' }}</span>
-            </button>
-          </div>
-
-          <!-- 3. CSV 记账表格 -->
-          <div
-            class="p-3.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs bg-[var(--bg-archive)] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-          >
-            <div class="space-y-0.5">
-              <div class="flex items-center gap-2 text-sm font-medium text-[var(--ink-primary)]">
-                <FileSpreadsheet class="w-4 h-4 text-amber-700" />
-                <span>财务记账流水 CSV 表格</span>
-              </div>
-              <p class="text-xs text-[var(--ink-muted)]">
-                包含收支金额、分类、方式与时间明细，支持 Excel / Numbers 直接打开。
-              </p>
-            </div>
-            <button
-              @click="handleExportCSV"
-              class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all text-[var(--ink-primary)] shrink-0 self-start sm:self-auto"
-            >
-              <component :is="downloadedType === 'csv' ? Check : Download" class="w-3.5 h-3.5" />
-              <span>{{ downloadedType === 'csv' ? '已导出' : '导出 CSV' }}</span>
-            </button>
           </div>
         </div>
       </div>

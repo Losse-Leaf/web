@@ -26,7 +26,7 @@ const emit = defineEmits<{
   (e: 'navigate', view: string): void
   (e: 'openAdd'): void
   (e: 'openStats'): void
-  (e: 'openStorageBackup', tab?: 'backup' | 'storage' | 'export'): void
+  (e: 'openStorageBackup', tab?: 'backup' | 'storage'): void
   (e: 'openSearch'): void
   (e: 'openPairing'): void
   (e: 'openUpdateCheck'): void

@@ -131,7 +131,7 @@ const handleOpenAddWithCity = (city: { code: string; name: string }) => {
 }
 
 const isStorageBackupOpen = ref(false)
-const storageBackupInitialTab = ref<'backup' | 'storage' | 'export'>('backup')
+const storageBackupInitialTab = ref<'backup' | 'storage'>('backup')
 const isStatsOpen = ref(false)
 const isSearchOpen = ref(false)
 const isPairingOpen = ref(false)
@@ -247,7 +247,7 @@ const openStatsModal = async () => {
   }
 }
 
-const openStorageBackupModal = async (tab: 'backup' | 'storage' | 'export' = 'backup') => {
+const openStorageBackupModal = async (tab: 'backup' | 'storage' = 'backup') => {
   if (!getAdminToken()) {
     handleRequestAuth(() => openStorageBackupModal(tab), '请输入管理员密钥以访问存储设置与灾备中枢')
     return

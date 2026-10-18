@@ -7,7 +7,6 @@ import {
   Trash2,
   Edit2,
   Wallet,
-  Download,
   X,
   Settings,
   Laptop,
@@ -34,7 +33,6 @@ import type {
   CreditChannel,
   GearItem,
 } from '../types'
-import { useExport } from '../composables/useExport'
 import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import { formatMoney, getBeijingDateString, parseOccurredDate, getBeijingISOString } from '../utils/format'
@@ -58,7 +56,6 @@ const emit = defineEmits<{
   (e: 'gearChanged'): void
 }>()
 
-const { exportTransactionsCSV } = useExport()
 const {
   expenseCategories,
   incomeCategories,
@@ -960,14 +957,6 @@ const spectrumItems = computed(() => {
             <ChevronRight class="w-3.5 h-3.5" />
           </button>
         </div>
-
-        <button
-          @click="exportTransactionsCSV(transactionsList)"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
-        >
-          <Download class="w-3.5 h-3.5" />
-          <span>导出 CSV</span>
-        </button>
       </div>
 
       <div v-else class="flex flex-wrap items-center gap-2.5 text-xs font-mono-archive">
