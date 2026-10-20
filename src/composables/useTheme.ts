@@ -17,6 +17,17 @@ export function useTheme() {
       } else {
         root.classList.remove('darkroom', 'dark')
       }
+      // MOB-P2-82：同步浏览器地址栏 / 状态栏的主题色 ——
+      // 静态 <meta name="theme-color"> 只跟随系统深色，
+      // 而 App 有自己的「暗房」开关，两者不同步时地址栏会与页面配色打架。
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])')
+        || (() => {
+            const created = document.createElement('meta')
+            created.setAttribute('name', 'theme-color')
+            document.head.appendChild(created)
+            return created
+          })()
+      meta.setAttribute('content', theme === 'darkroom' ? '#141312' : '#f9f8f5')
     }
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme)

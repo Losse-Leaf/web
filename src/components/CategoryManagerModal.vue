@@ -86,12 +86,12 @@ const handleDelete = async (item: CategoryOption) => {
     @click.self="closeCategoryManager"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl w-full max-w-2xl min-h-[500px] rounded-xs p-6 sm:p-8 text-left space-y-6 max-h-[88vh] flex flex-col"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl w-full max-w-2xl rounded-xs p-6 sm:p-8 text-left space-y-6 max-h-[88dvh] flex flex-col pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 弹窗标头 -->
       <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)] shrink-0">
         <div>
-          <span class="font-mono-archive text-[10px] tracking-[0.2em] uppercase text-[var(--ink-muted)] block mb-1">
+          <span class="font-mono-archive text-[11px] tracking-[0.2em] uppercase text-[var(--ink-muted)] block mb-1">
             TAXONOMY &amp; CUSTOM CATEGORIES
           </span>
           <h3 class="font-serif-editorial text-2xl font-normal text-[var(--ink-primary)]">
@@ -187,7 +187,7 @@ const handleDelete = async (item: CategoryOption) => {
             class="px-3.5 py-2.5 bg-[var(--bg-subtle)]/35 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)]/50 rounded-xs flex items-center justify-between gap-2 transition-colors"
           >
             <div class="flex items-center gap-2.5 min-w-0">
-              <span class="font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0">
+              <span class="font-mono-archive text-[11px] text-[var(--ink-muted)] shrink-0">
                 {{ String(idx + 1).padStart(2, '0') }}
               </span>
               <span class="font-serif-editorial text-sm text-[var(--ink-primary)] truncate">
@@ -195,7 +195,7 @@ const handleDelete = async (item: CategoryOption) => {
               </span>
               <span
                 v-if="!item.is_builtin"
-                class="px-1.5 py-0.5 text-[9px] font-mono-archive border border-[var(--accent-warm)]/40 text-[var(--accent-warm)] rounded-xs shrink-0"
+                class="px-1.5 py-0.5 text-[11px] font-mono-archive border border-[var(--accent-warm)]/40 text-[var(--accent-warm)] rounded-xs shrink-0"
               >
                 自定义
               </span>

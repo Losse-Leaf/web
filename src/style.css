@@ -1,12 +1,20 @@
 @import "tailwindcss";
 
+/* MOB-P0-15：App 的「暗房」模式由 useTheme 给 <html> 加 .darkroom/.dark 类驱动，
+   而 Tailwind v4 默认的 dark: 变体绑定的是 @media (prefers-color-scheme: dark)。
+   二者脱钩会导致 62 处 dark: 工具类在暗房模式下失效（米底 + 白字 = 不可读），
+   这里把 dark: 重新绑定到应用自身的类名开关上。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --bg-archive: #f9f8f5;
     --bg-subtle: #f2f0eb;
     --ink-primary: #181716;
     --ink-secondary: #57544e;
-    --ink-muted: #8c8880;
+    /* MOB-P1-105：与 Android 端 theme/Color.kt 取同一组色值，
+       原 #8c8880 在纸底上仅 ≈3.0:1（AA 需 4.5:1），影响全站次级元信息 */
+    --ink-muted: #6f6b63;
     --border-subtle: rgba(24, 23, 22, 0.08);
     --border-divider: rgba(24, 23, 22, 0.12);
     --accent-warm: #a24f2b;
@@ -27,7 +35,7 @@
     --bg-subtle: #1d1b19;
     --ink-primary: #ede8e1;
     --ink-secondary: #a8a399;
-    --ink-muted: #6e6a62;
+    --ink-muted: #8e8a82;
     --border-subtle: rgba(237, 232, 225, 0.08);
     --border-divider: rgba(237, 232, 225, 0.14);
     --accent-warm: #c85635;
@@ -44,7 +52,9 @@
   body {
     background-color: var(--bg-archive);
     color: var(--ink-primary);
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* MOB-P1-98：本地字体 + 明确的中文回退栈 */
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
@@ -52,17 +62,70 @@
     line-height: 1.7;
     letter-spacing: -0.01em;
     transition: background-color 0.3s ease, color 0.3s ease;
+    /* MOB-P1-92：横屏时带刘海的 iPhone 左右各有约 44px 安全区，
+       不避让的话页面内容会压到圆角/刘海下被遮挡。 */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* MOB-P1-99：全工程此前 focus-visible 为 0 处，
+     输入框只靠 1px 边框变色表示焦点（颜色唯一、对比不足，不满足 WCAG 2.4.11）。 */
+  :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent-warm);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* MOB-P1-97：触屏没有 hover，必须给出按压反馈，
+     同时关掉 iOS 默认的灰蓝点击高亮（与「宣纸」美学冲突）。 */
+  @media (pointer: coarse) {
+    button,
+    a,
+    [role="button"] {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    button:active,
+    a:active,
+    [role="button"]:active {
+      opacity: 0.82;
+    }
+
+    /* MOB-P1-95：触控热区下限 44px（视觉尺寸不变，命中区补足） */
+    button,
+    [role="button"],
+    a[href] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* MOB-P1-106：尊重系统「减少动态效果」偏好 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   /* 优雅衬线排版字体 (Serif Editorial) */
   .font-serif-editorial {
-    font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
+    /* MOB-P1-98：衬线优先本地 Newsreader，中文走系统衬线（宋体/思源宋体） */
+    font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', 'Noto Serif CJK SC',
+      'STSong', Georgia, serif;
     font-feature-settings: "kern", "liga", "dlig", "calt";
   }
 
   /* 等宽排版字体 (Monospace Timestamp) */
   .font-mono-archive {
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    /* MOB-P1-98：等宽优先本地 JetBrains Mono */
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+      'Sarasa Mono SC', 'Noto Sans Mono CJK SC', monospace;
     letter-spacing: 0.02em;
   }
 
@@ -266,21 +329,63 @@ html.dark .book-spine-crease::after {
 }
 
 /* 纯原生 SVG 纸张微噪点覆盖层，赋予屏幕哑光相纸与实体书质感，0 外部网络依赖 */
+/* MOB-P1-94：tailwindcss-animate 未安装，全站 20+ 处 animate-in / fade-in /
+   zoom-in-95 / slide-in-* 类名全部是死代码（构建产物里 0 命中），
+   结果是所有弹窗瞬间出现、抽屉没有任何滑入过渡。
+   这里用纯 CSS 提供等价的最小实现，避免为一个动效引入额外依赖。 */
+@keyframes looseleaf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes looseleaf-zoom-in-95 {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes looseleaf-slide-in-from-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes looseleaf-slide-in-from-top-2 {
+  from { transform: translateY(-0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.fade-in { animation-name: looseleaf-fade-in; }
+.zoom-in-95 { animation-name: looseleaf-zoom-in-95; }
+.slide-in-from-right { animation-name: looseleaf-slide-in-from-right; }
+.slide-in-from-top-2 { animation-name: looseleaf-slide-in-from-top-2; }
+
+.duration-250 { animation-duration: 250ms; }
+.duration-500 { animation-duration: 500ms; }
+.duration-600 { animation-duration: 600ms; }
+
+/* MOB-P2-52：噪点覆盖层原先 z-index: 9999 —— 它浮在所有弹窗之上，
+   既让弹窗表面蒙着一层噪点，也会在每次弹窗打开时多合成一张全屏图层。
+   现在降到内容之下（z-index: 1），并去掉深色模式的 filter: invert(1)
+   （该滤镜会强制每帧重新栅格化整张 SVG 滤镜图）。 */
 .paper-grain-overlay {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 1;
   opacity: 0.038;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 html.darkroom .paper-grain-overlay,
 html.dark .paper-grain-overlay {
-  opacity: 0.045;
-  filter: invert(1);
+  opacity: 0.03;
 }
 
 html.darkroom ::-webkit-scrollbar-thumb,

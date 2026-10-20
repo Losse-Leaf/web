@@ -32,7 +32,7 @@ import {
   verifyMasterPasscode,
   detectBrowserDeviceName,
   getAdminToken,
-  setAdminToken,
+  establishSession,
   removeAdminToken,
   fetchPairQRCode,
 } from '../utils/api'
@@ -146,7 +146,8 @@ const startBootstrapStatusPolling = (ticket: string) => {
       const res = await pollPairingTicketStatus(ticket)
       if (res.status === 'paired' || res.initialized) {
         if (res.web_token) {
-          setAdminToken(res.web_token)
+          // MOB-P1-69：优先建立 HttpOnly Cookie 会话（令牌不落 localStorage）
+          await establishSession(res.web_token)
         }
         stopBootstrapPairingTimers()
         audio.playShutter()
@@ -250,7 +251,8 @@ const handleQuickConfirmCurrentBrowser = async () => {
       device_name: detectBrowserDeviceName(),
     })
     if (res.device_token) {
-      setAdminToken(res.device_token)
+      // MOB-P1-69：优先建立 HttpOnly Cookie 会话（令牌不落 localStorage）
+      await establishSession(res.device_token)
     }
     stopBootstrapPairingTimers()
     audio.playShutter()
@@ -451,7 +453,7 @@ onUnmounted(() => {
           <!-- 左页：素胚典藏封皮与装帧导言 -->
           <div class="lg:col-span-6 space-y-8 text-left">
             <div class="flex items-center gap-3">
-              <span class="px-2 py-0.5 rounded-xs border border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/10 text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
+              <span class="px-2 py-0.5 rounded-xs border border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/10 text-[11px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
                 卷一 · 素胚待装帧
               </span>
               <span class="text-xs font-mono-archive tracking-wider text-[var(--ink-muted)]">
@@ -522,7 +524,7 @@ onUnmounted(() => {
                     首次装帧 · 筑造私人档案馆
                   </span>
                 </div>
-                <span class="px-2 py-0.5 rounded-xs bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[10px] font-mono-archive tracking-widest">
+                <span class="px-2 py-0.5 rounded-xs bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[11px] font-mono-archive tracking-widest">
                   STEP 0{{ bootstrapStep }} / 02
                 </span>
               </div>
@@ -627,7 +629,7 @@ onUnmounted(() => {
                           :src="bootstrapTicket.qr_code_data_url"
                           alt="首台设备配对二维码"
                           class="w-36 h-36 object-contain block"
-                        />
+                         loading="lazy" decoding="async">
                         <div
                           v-else
                           class="w-36 h-36 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-2"
@@ -643,7 +645,7 @@ onUnmounted(() => {
                           <span class="text-[11px] font-mono-archive text-[#57544e]">配对凭据已过期</span>
                           <button
                             @click="handleBootstrapStep1Submit"
-                            class="px-2.5 py-1 bg-[#181716] text-[#F9F8F5] text-[10px] font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1"
+                            class="px-2.5 py-1 bg-[#181716] text-[#F9F8F5] text-[11px] font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1"
                           >
                             <RotateCw class="w-3 h-3" />
                             <span>重新生成</span>
@@ -651,7 +653,7 @@ onUnmounted(() => {
                         </div>
                       </div>
 
-                      <div class="mt-2 flex items-center justify-center w-full text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider px-0.5">
+                      <div class="mt-2 flex items-center justify-center w-full text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider px-0.5">
                         <span>扫码或复制链接接入</span>
                       </div>
                     </div>
@@ -700,7 +702,7 @@ onUnmounted(() => {
                               :class="selectedCandidateUrl === cand.url ? 'bg-[var(--accent-warm)]' : 'bg-[var(--border-divider)]'"
                             ></span>
                             <span class="truncate">{{ cand.label }}</span>
-                            <span class="opacity-70 text-[10px] font-mono-archive truncate">({{ cand.ip }})</span>
+                            <span class="opacity-70 text-[11px] font-mono-archive truncate">({{ cand.ip }})</span>
                           </button>
                         </div>
                       </div>
@@ -712,7 +714,7 @@ onUnmounted(() => {
                     v-if="bootstrapTicket?.qr_payload"
                     class="pt-3 border-t border-[var(--border-subtle)]/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs font-mono-archive w-full"
                   >
-                    <div class="truncate text-[10px] text-[var(--ink-muted)] select-all bg-[var(--bg-archive)]/60 px-2.5 py-1.5 rounded-xs border border-[var(--border-subtle)]/40 font-mono-archive flex-1 min-w-0">
+                    <div class="truncate text-[11px] text-[var(--ink-muted)] select-all bg-[var(--bg-archive)]/60 px-2.5 py-1.5 rounded-xs border border-[var(--border-subtle)]/40 font-mono-archive flex-1 min-w-0">
                       {{ bootstrapTicket.qr_payload }}
                     </div>
                     <button
@@ -767,7 +769,7 @@ onUnmounted(() => {
           <!-- 左页：典藏装帧手记与全馆编目 -->
           <div class="lg:col-span-6 space-y-8 text-left">
             <div class="flex items-center gap-3">
-              <span class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/70 text-[10px] font-mono-archive tracking-widest text-[var(--ink-muted)]">
+              <span class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/70 text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)]">
                 卷一 · 典藏本
               </span>
               <span class="text-xs font-mono-archive tracking-wider text-[var(--ink-muted)]">
@@ -805,7 +807,7 @@ onUnmounted(() => {
                   :key="ch.num"
                   class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 hover:bg-[var(--bg-subtle)]/60 transition-colors space-y-2 group"
                 >
-                  <div class="flex items-center justify-between text-[10px] font-mono-archive">
+                  <div class="flex items-center justify-between text-[11px] font-mono-archive">
                     <span class="text-[var(--accent-warm)] font-medium">{{ ch.num }}</span>
                     <component :is="ch.icon" class="w-3.5 h-3.5 text-[var(--ink-muted)] group-hover:text-[var(--accent-warm)] transition-colors" />
                   </div>
@@ -846,7 +848,7 @@ onUnmounted(() => {
                       访客通道 · 静心翻阅
                     </span>
                   </div>
-                  <span class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
+                  <span class="px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
                     公开阅览 · 免密直达
                   </span>
                 </div>
@@ -876,7 +878,7 @@ onUnmounted(() => {
               <!-- 压凹虚线与火漆印记分割条 -->
               <div class="relative flex items-center justify-center px-6">
                 <div class="w-full border-t border-dashed border-[var(--border-divider)]"></div>
-                <span class="px-3 py-0.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-widest shrink-0 -my-2.5">
+                <span class="px-3 py-0.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-widest shrink-0 -my-2.5">
                   散页 · 主人钤印通道
                 </span>
               </div>
@@ -892,7 +894,7 @@ onUnmounted(() => {
                   </div>
                   <span
                     v-if="isCurator"
-                    class="text-[10px] font-mono-archive text-[var(--accent-moss)] flex items-center gap-1"
+                    class="text-[11px] font-mono-archive text-[var(--accent-moss)] flex items-center gap-1"
                   >
                     <Check class="w-3 h-3" />
                     <span>本机凭证已就绪</span>

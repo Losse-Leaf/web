@@ -9,6 +9,7 @@ import {
 import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
 import { formatMoney, getBeijingYear } from '../utils/format'
 import type { AnnualAlmanacSummary } from '../types'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -75,6 +76,9 @@ const formatDate = (dateStr?: string) => {
   if (!dateStr) return ''
   return dateStr.slice(0, 10).replace(/-/g, '.')
 }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -84,7 +88,7 @@ const formatDate = (dateStr?: string) => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-4xl rounded-xs shadow-2xl p-6 sm:p-10 max-h-[95vh] overflow-y-auto text-left space-y-12 print:p-0 print:border-none print:shadow-none print:max-h-none print:overflow-visible"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-4xl rounded-xs shadow-2xl p-6 sm:p-10 max-h-[95dvh] overflow-y-auto text-left space-y-12 print:p-0 print:border-none print:shadow-none print:max-h-none print:overflow-visible pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 顶栏工具行 (打印模式自动隐藏) -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)] print:hidden">
@@ -310,7 +314,7 @@ const formatDate = (dateStr?: string) => {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- 春 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
-              <span class="text-[10px] font-mono-archive text-[var(--accent-moss)] font-medium tracking-wider block">
+              <span class="text-[11px] font-mono-archive text-[var(--accent-moss)] font-medium tracking-wider block">
                 春生 · 春季篇
               </span>
               <div v-if="summary.highlights.spring">
@@ -328,7 +332,7 @@ const formatDate = (dateStr?: string) => {
 
             <!-- 夏 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
-              <span class="text-[10px] font-mono-archive text-[var(--accent-warm)] font-medium tracking-wider block">
+              <span class="text-[11px] font-mono-archive text-[var(--accent-warm)] font-medium tracking-wider block">
                 夏长 · 夏季篇
               </span>
               <div v-if="summary.highlights.summer">
@@ -346,7 +350,7 @@ const formatDate = (dateStr?: string) => {
 
             <!-- 秋 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
-              <span class="text-[10px] font-mono-archive text-amber-600 font-medium tracking-wider block">
+              <span class="text-[11px] font-mono-archive text-amber-600 font-medium tracking-wider block">
                 秋收 · 秋季篇
               </span>
               <div v-if="summary.highlights.autumn">
@@ -364,7 +368,7 @@ const formatDate = (dateStr?: string) => {
 
             <!-- 冬 -->
             <div class="p-4 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs space-y-2">
-              <span class="text-[10px] font-mono-archive text-sky-700 font-medium tracking-wider block">
+              <span class="text-[11px] font-mono-archive text-sky-700 font-medium tracking-wider block">
                 冬藏 · 冬季篇
               </span>
               <div v-if="summary.highlights.winter">
@@ -397,7 +401,7 @@ const formatDate = (dateStr?: string) => {
                   loading="lazy"
                   class="w-full h-full object-cover"
                   alt="年度相片"
-                />
+                 decoding="async">
               </div>
             </div>
           </div>
@@ -470,7 +474,7 @@ const formatDate = (dateStr?: string) => {
       <!-- 卷末出版底款 (实体书翻页底款印章) -->
       <footer class="pt-10 border-t border-[var(--border-subtle)] text-center space-y-2 font-serif-editorial text-xs text-[var(--ink-muted)]">
         <p>《散页》· {{ currentYear }} 年度生活年鉴 · 纯本地优先与数据主权</p>
-        <p class="font-mono-archive text-[10px]">CRAFTED WITH MEMORY & CARE</p>
+        <p class="font-mono-archive text-[11px]">CRAFTED WITH MEMORY & CARE</p>
       </footer>
     </div>
   </div>

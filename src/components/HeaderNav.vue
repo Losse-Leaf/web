@@ -208,7 +208,7 @@ onUnmounted(() => {
         >
           <Search class="w-3.5 h-3.5" />
           <span class="font-serif-editorial text-[13px] hidden lg:inline">搜索</span>
-          <kbd class="text-[10px] bg-[var(--bg-subtle)] px-1 rounded-xs border border-[var(--border-subtle)] opacity-70">⌘K</kbd>
+          <kbd class="text-[11px] bg-[var(--bg-subtle)] px-1 rounded-xs border border-[var(--border-subtle)] opacity-70">⌘K</kbd>
         </button>
 
         <!-- 全局「＋」新增入口 (负责添加东西) -->
@@ -253,7 +253,7 @@ onUnmounted(() => {
             class="absolute right-0 top-full mt-2 w-32 bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] py-1.5 z-50 rounded-xs animate-in fade-in duration-150"
             @click.stop
           >
-            <div class="px-3 pb-1 mb-1 text-[10px] font-mono-archive tracking-widest text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/60">
+            <div class="px-3 pb-1 mb-1 text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/60">
               系统与工具
             </div>
 

@@ -2,8 +2,9 @@
 import { X, BarChart3 } from 'lucide-vue-next'
 import type { GlobalStats } from '../types'
 import { formatMoney } from '../utils/format'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
-defineProps<{
+const props = defineProps<{
   isOpen: boolean
   stats: GlobalStats | null
 }>()
@@ -11,6 +12,9 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -20,7 +24,7 @@ const emit = defineEmits<{
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_40px_rgba(0,0,0,0.1)] w-full max-w-md rounded-xs p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_40px_rgba(0,0,0,0.1)] w-full max-w-md rounded-xs p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
         <div class="flex items-center gap-2.5">

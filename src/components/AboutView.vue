@@ -177,7 +177,7 @@ onUnmounted(() => {
             :src="localProfile.avatar_url"
             :alt="localProfile.name || '主理人'"
             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+           loading="lazy" decoding="async">
         </button>
         <div
           v-else
@@ -330,7 +330,7 @@ onUnmounted(() => {
                 <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] truncate">
                   {{ item.title }}
                 </span>
-                <span class="font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0">
+                <span class="font-mono-archive text-[11px] text-[var(--ink-muted)] shrink-0">
                   {{ parseOccurredDate(item.occurred_at).time }}
                 </span>
               </div>
@@ -409,7 +409,7 @@ onUnmounted(() => {
 
             <span
               v-if="gear.status"
-              class="px-2 py-0.5 rounded-xs text-[10px] font-medium border"
+              class="px-2 py-0.5 rounded-xs text-[11px] font-medium border"
               :class="
                 gear.status === 'sold'
                   ? 'border-amber-600/30 bg-amber-600/5 text-amber-600'

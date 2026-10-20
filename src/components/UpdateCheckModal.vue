@@ -11,8 +11,9 @@ import {
 import { checkSystemUpdate } from '../utils/api'
 import { audio } from '../utils/audio'
 import type { UpdateCheckResult } from '../types'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
-defineProps<{
+const props = defineProps<{
   isOpen: boolean
 }>()
 
@@ -41,6 +42,9 @@ const runUpdateCheck = async (force = false) => {
 onMounted(() => {
   runUpdateCheck(false)
 })
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>

@@ -40,6 +40,7 @@ import {
   clearApiCache,
   getAdminToken,
 } from '../utils/api'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = withDefaults(
   defineProps<{
@@ -551,6 +552,9 @@ const handleResetStorage = async () => {
 onMounted(() => {
   loadData()
 })
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -560,7 +564,7 @@ onMounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-3xl min-h-[480px] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-5 sm:p-7 text-left space-y-5 max-h-[92dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
+      class="w-full max-w-3xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-5 sm:p-7 text-left space-y-5 max-h-[92dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200 pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 弹窗顶栏 -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
@@ -610,7 +614,7 @@ onMounted(() => {
           <Archive class="w-3.5 h-3.5" />
           <span>全量快照与灾备</span>
           <span
-            class="px-1.5 py-0.2 rounded-xs text-[10px] font-mono-archive"
+            class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive"
             :class="activeTab === 'backup' ? 'bg-white/20 text-white' : 'bg-[var(--bg-subtle)] text-[var(--ink-muted)]'"
           >
             {{ backups.length }}/7
@@ -661,7 +665,7 @@ onMounted(() => {
               <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
                 全量数据快照归档
               </span>
-              <span class="px-1.5 py-0.2 rounded-xs text-[10px] font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[var(--ink-muted)]">
+              <span class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[var(--ink-muted)]">
                 {{ backups.length }}/7 份
               </span>
             </div>
@@ -734,7 +738,7 @@ onMounted(() => {
                     {{ item.filename }}
                   </span>
                   <span
-                    class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-xs text-[10px] font-mono-archive border"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive border"
                     :class="
                       item.storage_type === 'r2'
                         ? 'border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/5'
@@ -843,7 +847,7 @@ onMounted(() => {
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs">
                 <div class="space-y-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="px-1.5 py-0.2 rounded-xs text-[10px] font-mono-archive bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] border border-[var(--accent-warm)]/20">
+                    <span class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] border border-[var(--accent-warm)]/20">
                       待恢复归档
                     </span>
                     <span class="font-mono-archive text-xs font-medium text-[var(--ink-primary)] truncate">
@@ -1015,7 +1019,7 @@ onMounted(() => {
                   私有访问密钥
                   <span v-if="!localStorageStatus?.has_secret_key" class="text-rose-600">*</span>
                 </label>
-                <span v-if="localStorageStatus?.has_secret_key" class="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono-archive">
+                <span v-if="localStorageStatus?.has_secret_key" class="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono-archive">
                   已保存
                 </span>
               </div>

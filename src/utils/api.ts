@@ -36,7 +36,12 @@ import type {
 } from '../types'
 
 const API_BASE = '/api/v1'
+// 旧版：明文令牌落盘（仅用于兼容**尚未下发 Cookie 的旧服务端**）
 const ADMIN_TOKEN_KEY = 'looseleaf_admin_token'
+// MOB-P1-69：Cookie 会话标记 —— **不是凭据**，只用来判断「当前是不是主人」
+const ADMIN_SESSION_KEY = 'looseleaf_admin_session'
+// MOB-P1-69：Cookie 会话模式下的占位符。绝不可当作令牌发送出去。
+const COOKIE_SESSION_MARKER = '__cookie_session__'
 
 function readStoredAdminToken(): string {
   try {
@@ -46,17 +51,38 @@ function readStoredAdminToken(): string {
   }
 }
 
-const adminTokenRef = ref<string>(readStoredAdminToken())
+/** MOB-P1-69：是否已建立基于 HttpOnly Cookie 的会话 */
+function hasCookieSession(): boolean {
+  try {
+    return localStorage.getItem(ADMIN_SESSION_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const adminTokenRef = ref<string>(hasCookieSession() ? COOKIE_SESSION_MARKER : readStoredAdminToken())
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key === ADMIN_TOKEN_KEY || e.key === null) {
-      adminTokenRef.value = readStoredAdminToken()
+    if (e.key === ADMIN_TOKEN_KEY || e.key === ADMIN_SESSION_KEY || e.key === null) {
+      adminTokenRef.value = hasCookieSession() ? COOKIE_SESSION_MARKER : readStoredAdminToken()
     }
   })
 }
 
+/**
+ * 当前是否具备主理人权限。
+ *
+ * MOB-P1-69：Cookie 会话模式下返回的是一个**占位符**而不是真实令牌 ——
+ * 既有的 60 余处 `Boolean(getAdminToken())` 守卫语义一字不变，
+ * 而真正发请求的地方会因为「这是占位符」而不去设置 Authorization 头
+ * （浏览器会自动带上 HttpOnly Cookie，令牌从此不落在 JS 能读到的地方）。
+ */
 export function getAdminToken(): string {
+  if (hasCookieSession()) {
+    adminTokenRef.value = COOKIE_SESSION_MARKER
+    return COOKIE_SESSION_MARKER
+  }
   const stored = readStoredAdminToken()
   if (adminTokenRef.value !== stored) {
     adminTokenRef.value = stored
@@ -64,38 +90,140 @@ export function getAdminToken(): string {
   return adminTokenRef.value
 }
 
+/** 该「令牌」是否只是 Cookie 会话占位符（不可作为凭据发送） */
+export function isCookieSessionOnly(token: string): boolean {
+  return token === COOKIE_SESSION_MARKER
+}
+
+/** 兼容路径：服务端未下发 Cookie 时才落盘明文令牌 */
 export function setAdminToken(token: string): void {
   const clean = token.trim()
+  if (!clean || isCookieSessionOnly(clean)) return
   try {
     localStorage.setItem(ADMIN_TOKEN_KEY, clean)
   } catch {}
   adminTokenRef.value = clean
 }
 
+/** MOB-P1-69：标记「已建立 Cookie 会话」，并清掉历史遗留的明文令牌 */
+function markCookieSession(): void {
+  try {
+    localStorage.setItem(ADMIN_SESSION_KEY, '1')
+  } catch {}
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY)
+  } catch {}
+  adminTokenRef.value = COOKIE_SESSION_MARKER
+}
+
 export function removeAdminToken(): void {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
   } catch {}
+  try {
+    localStorage.removeItem(ADMIN_SESSION_KEY)
+  } catch {}
   adminTokenRef.value = ''
+  // MOB-P1-69：让服务端把 HttpOnly Cookie 一并清掉
+  void fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'same-origin' }).catch(() => {})
+}
+
+/**
+ * MOB-P1-69：探测服务端是否认账当前浏览器带的 HttpOnly Cookie。
+ *
+ * 只回传角色、不回传任何凭据，因此可以安全地在启动时调用。
+ */
+async function probeSessionCookie(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/session`, { credentials: 'same-origin' })
+    if (!res.ok) return false
+    const json = await res.json()
+    const data = json && typeof json === 'object' && 'data' in json ? json.data : json
+    return Boolean(data && (data as { is_admin?: boolean }).is_admin)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * MOB-P1-69：登录 / 配对成功后建立会话。
+ *
+ * 优先使用服务端下发的 HttpOnly Cookie（令牌 JS 读不到 ⇒ 一次 XSS 也偷不走）；
+ * 若服务端仍是旧版（不下发 Cookie），自动回落到旧的明文令牌路径，保证不兼容中断。
+ */
+export async function establishSession(token: string): Promise<void> {
+  const clean = token.trim()
+  if (!clean || isCookieSessionOnly(clean)) return
+  const cookieOK = await probeSessionCookie()
+  if (cookieOK) {
+    markCookieSession()
+    return
+  }
+  setAdminToken(clean)
+}
+
+/** MOB-P1-69：启动时确认 Cookie 会话是否仍然有效（刷新页面后恢复主理人视角） */
+export async function refreshSessionState(): Promise<boolean> {
+  const ok = await probeSessionCookie()
+  if (ok) {
+    markCookieSession()
+    return true
+  }
+  // 探针失败 = 会话已失效（Cookie 过期 / 已被登出 / 服务端是旧版）。
+  // 这时必须把标记清掉，否则 UI 会一直以为「还是主人」，
+  // 直到下一次请求 401 才反应过来 —— 主理人视角会挂在不该出现的界面上。
+  if (hasCookieSession()) {
+    try {
+      localStorage.removeItem(ADMIN_SESSION_KEY)
+    } catch {}
+    adminTokenRef.value = readStoredAdminToken()
+  }
+  return false
 }
 
 // 通用请求处理
+// MOB-P1-101：移动网络断连时 fetch 可能挂起数分钟（iOS 默认 ~300s），
+// 这里为所有 JSON 请求加上统一超时，避免页面永远转圈。
+const REQUEST_TIMEOUT_MS = 25_000
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getAdminToken()
   const authHeaders: Record<string, string> = {}
-  if (token) {
+  // MOB-P1-69：Cookie 会话模式下不发送令牌头 —— 同源请求会自动带上 HttpOnly Cookie
+  if (token && !isCookieSessionOnly(token)) {
     authHeaders['Authorization'] = `Bearer ${token}`
     authHeaders['X-Device-Token'] = token
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...(options?.headers as Record<string, string> | undefined),
-    },
-  })
+  const timeoutController = new AbortController()
+  const timer = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
+  let signal: AbortSignal | undefined = timeoutController.signal
+  if (options?.signal) {
+    signal =
+      typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function'
+        ? AbortSignal.any([options.signal, timeoutController.signal])
+        : options.signal
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      ...options,
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...(options?.headers as Record<string, string> | undefined),
+      },
+    })
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('请求超时，请检查网络后重试')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!res.ok) {
     if (res.status === 401 && !url.includes('/auth/verify')) {
@@ -123,7 +251,21 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // 1. Life Entries
-let entriesAbortController: AbortController | null = null
+// MOB-P0-17：原先所有 fetchEntries 调用共用一个模块级 AbortController，
+// 归档页（按年分页）会连带 abort 掉首页时间流的请求，导致首页被清空。
+// 现在按「查询作用域」隔离控制器，不同作用域互不干扰。
+const entriesAbortControllers = new Map<string, AbortController>()
+
+function entriesScope(params?: {
+  type?: string
+  category?: string
+  year?: string
+}): string {
+  if (params?.year && params.year !== 'all') return `year:${params.year}`
+  if (params?.category && params.category !== 'all') return `category:${params.category}`
+  if (params?.type && params.type !== 'all') return `type:${params.type}`
+  return 'default'
+}
 
 const ENTRIES_ETAG_KEY = 'looseleaf_entries_etag'
 let entriesETag = ''
@@ -157,12 +299,17 @@ export async function fetchEntries(params?: {
   year?: string
   signal?: AbortSignal
 }): Promise<LifeEntry[] | null> {
-  // 竞态保护：未指定外部 signal 时自动终止上一次未完成的请求 (FE-08)
-  if (!params?.signal) {
-    if (entriesAbortController) {
-      entriesAbortController.abort()
+  // 竞态保护：同一作用域内的上一次未完成请求会被终止；不同作用域互不影响。
+  const scope = entriesScope(params)
+  let signal = params?.signal
+  if (!signal) {
+    const previous = entriesAbortControllers.get(scope)
+    if (previous) {
+      previous.abort()
     }
-    entriesAbortController = new AbortController()
+    const controller = new AbortController()
+    entriesAbortControllers.set(scope, controller)
+    signal = controller.signal
   }
 
   const query = new URLSearchParams()
@@ -173,13 +320,13 @@ export async function fetchEntries(params?: {
   if (params?.year && params.year !== 'all') query.set('year', params.year)
 
   const url = `${API_BASE}/entries?${query.toString()}`
-  const signal = params?.signal || entriesAbortController?.signal
 
   const token = getAdminToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
-  if (token) {
+  // MOB-P1-69：Cookie 会话模式下不发送令牌头
+  if (token && !isCookieSessionOnly(token)) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
@@ -222,7 +369,9 @@ export async function fetchEntries(params?: {
     return data?.entries || []
   } catch (err: any) {
     if (err?.name === 'AbortError') {
-      return []
+      // MOB-P0-17：中断表示「本次结果作废」，必须返回 null（与 304 同义），
+      // 绝不能返回 [] —— 否则调用方会把既有时间流整片清空。
+      return null
     }
     throw err
   }
@@ -385,16 +534,43 @@ export async function migrateStorageMedia(): Promise<{
 }
 
 // 统一文件上传接口：上传物理文件至后端 POST /api/v1/files/upload，返回相对路径 object_key 与临时签名 URL
+// MOB-P0-16：补上超时与取消能力 —— 移动网络下弱网上传会无限挂起，
+// 进度条永远停在某个百分比，用户既看不到错误也无法放弃。
+const UPLOAD_TIMEOUT_MS = 120_000
+
 export async function uploadUnifiedFile(
   file: File,
   folder: string = 'avatar',
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal
 ): Promise<UnifiedUploadResult> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const formData = new FormData()
     formData.append('file', file)
     formData.append('folder', folder)
+
+    let settled = false
+    const fail = (message: string) => {
+      if (settled) return
+      settled = true
+      reject(new Error(message))
+    }
+
+    if (signal) {
+      if (signal.aborted) {
+        fail('上传已取消')
+        return
+      }
+      signal.addEventListener('abort', () => {
+        try {
+          xhr.abort()
+        } catch {
+          // ignore
+        }
+        fail('上传已取消')
+      })
+    }
 
     if (xhr.upload && onProgress) {
       xhr.upload.onprogress = (e) => {
@@ -406,6 +582,8 @@ export async function uploadUnifiedFile(
     }
 
     xhr.onload = () => {
+      if (settled) return
+      settled = true
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const res = JSON.parse(xhr.responseText)
@@ -428,12 +606,22 @@ export async function uploadUnifiedFile(
     }
 
     xhr.onerror = () => {
-      reject(new Error('网络中断，上传请求失败'))
+      fail('网络中断，上传请求失败')
     }
 
+    xhr.ontimeout = () => {
+      fail('上传超时，请检查网络后重试')
+    }
+
+    xhr.onabort = () => {
+      fail('上传已取消')
+    }
+
+    xhr.timeout = UPLOAD_TIMEOUT_MS
     xhr.open('POST', `${API_BASE}/files/upload`, true)
     const token = getAdminToken()
-    if (token) {
+    // MOB-P1-69：Cookie 会话模式下不发送令牌头（同源 XHR 会自动带上 Cookie）
+    if (token && !isCookieSessionOnly(token)) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
       xhr.setRequestHeader('X-Admin-Key', token)
     }
@@ -647,7 +835,8 @@ export async function confirmPairingTicket(data: PairConfirmPayload): Promise<Pa
     body: JSON.stringify(data),
   })
   if (res.device_token) {
-    setAdminToken(res.device_token)
+    // MOB-P1-69：优先建立 HttpOnly Cookie 会话
+    await establishSession(res.device_token)
   }
   return res
 }
@@ -657,7 +846,8 @@ export async function pollPairingTicketStatus(ticket: string): Promise<PairStatu
     `${API_BASE}/auth/pair/status?ticket=${encodeURIComponent(ticket)}`
   )
   if (res.web_token) {
-    setAdminToken(res.web_token)
+    // MOB-P1-69：优先建立 HttpOnly Cookie 会话
+    await establishSession(res.web_token)
   }
   return res
 }
@@ -775,7 +965,8 @@ export async function verifyMasterPasscode(
     }),
   })
   if (res.token) {
-    setAdminToken(res.token)
+    // MOB-P1-69：优先建立 HttpOnly Cookie 会话
+    await establishSession(res.token)
   }
   return res
 }
@@ -1152,7 +1343,8 @@ export async function restoreBackupByFile(
 
     xhr.open('POST', `${API_BASE}/system/backup/restore`, true)
     const token = getAdminToken()
-    if (token) {
+    // MOB-P1-69：Cookie 会话模式下不发送令牌头
+    if (token && !isCookieSessionOnly(token)) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
       xhr.setRequestHeader('X-Device-Token', token)
     }
@@ -1163,7 +1355,8 @@ export async function restoreBackupByFile(
 export async function downloadBackup(filename: string): Promise<void> {
   const token = getAdminToken()
   const authHeaders: Record<string, string> = {}
-  if (token) {
+  // MOB-P1-69：Cookie 会话模式下不发送令牌头
+  if (token && !isCookieSessionOnly(token)) {
     authHeaders['Authorization'] = `Bearer ${token}`
     authHeaders['X-Device-Token'] = token
   }

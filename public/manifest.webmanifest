@@ -1,16 +1,46 @@
 {
   "name": "散页",
   "short_name": "散页",
-  "description": "个人生活手账与时光档案",
+  "description": "散页个人生活手账与时光档案",
+  "id": "/",
+  "scope": "/",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#f9f8f5",
   "theme_color": "#f9f8f5",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["lifestyle", "productivity", "photo"],
   "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    { "name": "时间流", "url": "/#home" },
+    { "name": "心愿", "url": "/#wishes" },
+    { "name": "足迹", "url": "/#atlas" }
   ]
 }

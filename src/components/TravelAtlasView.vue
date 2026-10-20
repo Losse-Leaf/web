@@ -734,7 +734,7 @@ onMounted(() => {
               <!-- 顶栏：分区题名、省份主名 与 朱砂/铅字方印 -->
               <div class="flex items-start justify-between gap-2">
                 <div class="space-y-0.5 min-w-0">
-                  <div class="flex items-center gap-1.5 text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                  <div class="flex items-center gap-1.5 text-[11px] font-mono-archive text-[var(--ink-muted)]">
                     <span>{{ seal.regionName }}</span>
                     <span v-if="seal.isLit" class="text-[#b94a3b] font-serif-editorial">
                       · {{ seal.visitedCities.length }}/{{ seal.totalPrefectures }}城
@@ -789,7 +789,7 @@ onMounted(() => {
                     :title="`点击翻阅 ${city.name} 城市回忆抽屉`"
                   >
                     <span>{{ city.shortName }}</span>
-                    <span v-if="city.visitCount > 1" class="text-[10px] font-mono-archive opacity-75">
+                    <span v-if="city.visitCount > 1" class="text-[11px] font-mono-archive opacity-75">
                       ×{{ city.visitCount }}
                     </span>
                   </button>
@@ -821,7 +821,7 @@ onMounted(() => {
                 v-if="seal.isLit"
                 class="pt-2 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)]"
               >
-                <span class="font-mono-archive text-[10px]">
+                <span class="font-mono-archive text-[11px]">
                   {{ seal.latestVisitedAt || seal.firstVisitedAt || '已留步' }} · 累计 {{ seal.totalVisits }} 次
                 </span>
                 <button
@@ -1086,7 +1086,7 @@ onMounted(() => {
                   {{ PROVINCE_SHORT_MAP[prov.name] || prov.name }}
                 </span>
                 <span>{{ prov.name }}</span>
-                <span class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
                   ({{ prov.count }})
                 </span>
               </button>
@@ -1112,7 +1112,7 @@ onMounted(() => {
                 <div class="space-y-3">
                   <!-- 存根抬头与仿真条形码 -->
                   <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
+                    <span class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
                       存根 #{{ city.code.slice(0, 4) }}
                     </span>
                     <!-- 仿真条形码 -->
@@ -1152,7 +1152,7 @@ onMounted(() => {
                 <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[11px] font-serif-editorial text-[var(--ink-muted)] tracking-wider">
                   <span>散页客票 · 山川行迹</span>
                   <span>头等舱 · 登程</span>
-                  <span class="hidden sm:inline font-mono-archive text-[10px]">编号 {{ city.code }}</span>
+                  <span class="hidden sm:inline font-mono-archive text-[11px]">编号 {{ city.code }}</span>
                 </div>
 
                 <!-- 路线段：起步 ➔ 到达 -->
@@ -1199,7 +1199,7 @@ onMounted(() => {
                     <div class="border-2 border-[#b94a3b]/85 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative shadow-[inset_0_0_6px_rgba(185,74,59,0.18)] bg-[#b94a3b]/[0.02]">
                       <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center select-none">
                         <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
-                        <span class="text-[9px] font-serif-editorial font-bold my-0.5">
+                        <span class="text-[11px] font-serif-editorial font-bold my-0.5">
                           {{ city.latestVisitedAt || city.firstVisitedAt || '留步' }}
                         </span>
                         <span class="text-[8px] font-serif-editorial border-t border-[#b94a3b]/60 px-1 pt-0.5">
@@ -1207,7 +1207,7 @@ onMounted(() => {
                         </span>
                       </div>
                       <!-- 右侧波浪邮戳切线 -->
-                      <div class="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 text-[#b94a3b]/70 font-mono-archive text-[10px] select-none">
+                      <div class="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 text-[#b94a3b]/70 font-mono-archive text-[11px] select-none">
                         <span>〰〰</span>
                         <span>〰〰</span>
                         <span>〰〰</span>
@@ -1315,7 +1315,7 @@ onMounted(() => {
 
                 <div class="space-y-3">
                   <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-mono-archive text-[var(--ink-muted)]">存根 #{{ city.code.slice(0, 4) }}</span>
+                    <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">存根 #{{ city.code.slice(0, 4) }}</span>
                     <div class="flex items-center gap-[1.5px] h-3.5 opacity-65">
                       <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
                       <div class="w-[2px] h-full bg-[var(--ink-primary)]"></div>
@@ -1380,7 +1380,7 @@ onMounted(() => {
                     <div class="border-2 border-[#b94a3b]/85 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative shadow-[inset_0_0_6px_rgba(185,74,59,0.18)] bg-[#b94a3b]/[0.02]">
                       <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center select-none">
                         <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
-                        <span class="text-[9px] font-serif-editorial font-bold my-0.5">{{ city.latestVisitedAt }}</span>
+                        <span class="text-[11px] font-serif-editorial font-bold my-0.5">{{ city.latestVisitedAt }}</span>
                         <span class="text-[8px] font-serif-editorial border-t border-[#b94a3b]/60 px-1 pt-0.5">
                           {{ formatVisitStampCount(city.visitCount) }}
                         </span>
@@ -1488,7 +1488,7 @@ onMounted(() => {
             </p>
 
             <div class="pt-2 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)]">
-              <div class="flex items-center gap-2 font-mono-archive text-[10px]">
+              <div class="flex items-center gap-2 font-mono-archive text-[11px]">
                 <span v-if="(fp.entries_count || 0) > 0" class="px-1.5 py-0.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-secondary)]">
                   {{ fp.entries_count }} 篇游记手记
                 </span>

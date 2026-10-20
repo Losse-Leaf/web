@@ -6,10 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="《散页》— 个人生活志。日常、资产、心愿、行迹与造物，记录真实可感的生活。" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- MOB-P2-84：black-translucent 让 App 自己的纸面背景透到状态栏下，
+         与 viewport-fit=cover 的全屏设计一致（default 会画一条不透明状态栏）。 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="散页" />
+    <!-- MOB-P2-82：主题色（浅/深两套），运行时由 useTheme 动态同步到当前外观 -->
+    <meta name="theme-color" content="#f9f8f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141312" media="(prefers-color-scheme: dark)" />
+    <!-- MOB-P1-98：预加载两套关键字体（正文衬线 + 等宽），避免首屏字体闪动 -->
+    <link rel="preload" href="/fonts/Newsreader-2.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/JetBrainsMono-3.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/favicon.svg?v=1.1.0" />
+    <!-- MOB-P2-82：iOS 不支持 SVG 作为主屏图标，必须用 PNG -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>散页 · 个人生活志</title>
   </head>
   <body class="bg-[#f9f8f5] text-[#181716] min-h-screen selection:bg-[#a24f2b]/15 selection:text-[#a24f2b]">

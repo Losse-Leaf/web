@@ -2,7 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeStream from './LifeStream.vue'
-import MiniAtlasWidget from './MiniAtlasWidget.vue'
+// MOB-P2-77：足迹宫格只在有足迹数据时才渲染，
+// 而它静态 import 的城市字典（375 城 / 34KB）会把字典拖进首屏 chunk。
+// 这里改为异步组件，让字典随该组件按需加载。
+import { defineAsyncComponent } from 'vue'
+const MiniAtlasWidget = defineAsyncComponent(() => import('./MiniAtlasWidget.vue'))
 import { fetchOnThisDayEntries } from '../utils/api'
 import { getBeijingDotDate, getBeijingYear, parseOccurredDate } from '../utils/format'
 
@@ -137,14 +141,14 @@ const headerLocation = computed(() => {
       class="relative mt-6 p-4 sm:p-5 rounded-xs border border-[var(--accent-warm)]/35 bg-[var(--bg-subtle)]/65 space-y-3.5 shadow-2xs"
     >
       <!-- 四角复古裁切基准线 -->
-      <span class="pointer-events-none select-none absolute top-1.5 left-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌜</span>
-      <span class="pointer-events-none select-none absolute top-1.5 right-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌝</span>
-      <span class="pointer-events-none select-none absolute bottom-1.5 left-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌞</span>
-      <span class="pointer-events-none select-none absolute bottom-1.5 right-2 text-[10px] text-[var(--accent-warm)]/50 font-mono-archive">⌟</span>
+      <span class="pointer-events-none select-none absolute top-1.5 left-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌜</span>
+      <span class="pointer-events-none select-none absolute top-1.5 right-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌝</span>
+      <span class="pointer-events-none select-none absolute bottom-1.5 left-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌞</span>
+      <span class="pointer-events-none select-none absolute bottom-1.5 right-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌟</span>
 
       <div class="flex items-center justify-between text-xs font-mono-archive px-1">
         <div class="flex items-center gap-2.5 text-[var(--accent-warm)]">
-          <span class="vermilion-seal px-1.5 py-0.5 text-[10px] tracking-widest font-semibold">岁月回响</span>
+          <span class="vermilion-seal px-1.5 py-0.5 text-[11px] tracking-widest font-semibold">岁月回响</span>
           <span class="tracking-widest font-medium">那年今日 · ON THIS DAY</span>
         </div>
         <span class="text-[11px] text-[var(--ink-muted)]">

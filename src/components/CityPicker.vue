@@ -55,6 +55,42 @@ const handleBlur = () => {
     isOpen.value = false
   }, 160)
 }
+
+// MOB-P1-104：下拉的固定定位坐标（跟随输入框）
+const inputEl = ref<HTMLInputElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
+
+const updateDropdownPosition = () => {
+  const el = inputEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  dropdownStyle.value = {
+    left: `${rect.left}px`,
+    top: `${rect.bottom + 4}px`,
+    width: `${rect.width}px`,
+  }
+}
+
+watch(isOpen, (open) => {
+  if (!open) return
+  updateDropdownPosition()
+  window.addEventListener('scroll', updateDropdownPosition, true)
+  window.addEventListener('resize', updateDropdownPosition)
+})
+
+// 输入框位置随弹窗滚动变化时同步更新
+const stopWatchers: Array<() => void> = []
+watch(
+  () => isOpen.value,
+  (open) => {
+    if (!open) {
+      stopWatchers.forEach((stop) => stop())
+      stopWatchers.length = 0
+      window.removeEventListener('scroll', updateDropdownPosition, true)
+      window.removeEventListener('resize', updateDropdownPosition)
+    }
+  }
+)
 </script>
 
 <template>
@@ -62,6 +98,7 @@ const handleBlur = () => {
     <div class="relative">
       <MapPin class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--ink-muted)] pointer-events-none" />
       <input
+        ref="inputEl"
         v-model="keyword"
         type="text"
         :placeholder="placeholder || '输入城市名称或拼音进行检索...'"
@@ -72,23 +109,29 @@ const handleBlur = () => {
       />
     </div>
 
-    <!-- 下拉联想纸签 -->
-    <div
-      v-if="isOpen && filteredList.length > 0"
-      class="absolute left-0 right-0 top-full mt-1 z-50 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-lg max-h-56 overflow-y-auto divide-y divide-[var(--border-subtle)]/50"
-    >
+    <!-- 下拉联想纸签
+         MOB-P1-104：原先是绝对定位在输入框下方，而父级（新建条目弹窗）是
+         `overflow-y-auto` 的滚动容器 ⇒ 下拉被容器裁剪，靠下的候选根本看不到。
+         这里 Teleport 到 body 并按输入框的实际位置做固定定位，彻底脱离裁剪链。 -->
+    <Teleport to="body">
       <div
-        v-for="city in filteredList"
-        :key="city.code"
-        @mousedown.prevent="handleSelect(city)"
-        class="px-3 py-2 hover:bg-[var(--bg-subtle)] cursor-pointer flex items-center justify-between transition-colors"
+        v-if="isOpen && filteredList.length > 0"
+        class="fixed z-[1100] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-lg max-h-56 overflow-y-auto divide-y divide-[var(--border-subtle)]/50"
+        :style="dropdownStyle"
       >
-        <div class="flex items-center gap-2">
-          <span class="font-medium text-[var(--ink-primary)] font-serif-editorial">{{ city.name }}</span>
-          <span class="text-[10px] text-[var(--ink-muted)]">({{ city.province }})</span>
+        <div
+          v-for="city in filteredList"
+          :key="city.code"
+          @pointerdown.prevent="handleSelect(city)"
+          class="px-3 py-2.5 hover:bg-[var(--bg-subtle)] cursor-pointer flex items-center justify-between transition-colors"
+        >
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-[var(--ink-primary)] font-serif-editorial">{{ city.name }}</span>
+            <span class="text-[11px] text-[var(--ink-muted)]">({{ city.province }})</span>
+          </div>
+          <span class="text-[11px] text-[var(--ink-muted)]">{{ city.code }}</span>
         </div>
-        <span class="text-[10px] text-[var(--ink-muted)]">{{ city.code }}</span>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>

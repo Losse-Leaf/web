@@ -689,7 +689,7 @@ const spectrumItems = computed(() => {
         <div class="p-5 sm:p-6 space-y-2">
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span>01 · 个人净资产</span>
-            <span class="text-[10px]">实时核算</span>
+            <span class="text-[11px]">实时核算</span>
           </div>
           <div class="font-serif-editorial text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--ink-primary)]">
             {{ (assetsOverview?.net_worth ?? estimatedNetWorth) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.net_worth ?? estimatedNetWorth)) }}
@@ -711,7 +711,7 @@ const spectrumItems = computed(() => {
               v-if="!isEditingLiquidBalance"
               @click.stop="openEditLiquidBalance"
               type="button"
-              class="text-[10px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-2 cursor-pointer transition-colors"
+              class="text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-2 cursor-pointer transition-colors"
             >
               校准底数
             </button>
@@ -858,7 +858,7 @@ const spectrumItems = computed(() => {
           class="px-5 sm:px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono-archive hover:bg-[var(--bg-subtle)]/35 transition-colors"
         >
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="px-1.5 py-0.5 text-[10px] rounded-xs border border-[var(--accent-warm)]/35 text-[var(--accent-warm)] bg-[var(--accent-warm)]/5 shrink-0">
+            <span class="px-1.5 py-0.5 text-[11px] rounded-xs border border-[var(--accent-warm)]/35 text-[var(--accent-warm)] bg-[var(--accent-warm)]/5 shrink-0">
               {{ item.channelName }} · 每月 {{ item.tx.repayment_day || 10 }} 日
             </span>
             <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
@@ -1130,7 +1130,7 @@ const spectrumItems = computed(() => {
               class="py-2.5 flex items-center justify-between group hover:bg-[var(--bg-subtle)]/40 px-2 rounded-xs transition-colors"
             >
               <div class="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
-                <span class="text-[10px] font-mono-archive tracking-wider text-[var(--ink-muted)] border border-[var(--border-subtle)] bg-[var(--bg-archive)] px-1.5 py-0.5 rounded-xs shrink-0 select-none">
+                <span class="text-[11px] font-mono-archive tracking-wider text-[var(--ink-muted)] border border-[var(--border-subtle)] bg-[var(--bg-archive)] px-1.5 py-0.5 rounded-xs shrink-0 select-none">
                   {{ tx.category }}
                 </span>
                 <span class="font-serif-editorial text-sm sm:text-base text-[var(--ink-primary)] truncate">
@@ -1138,11 +1138,11 @@ const spectrumItems = computed(() => {
                 </span>
                 <span
                   v-if="tx.is_installment"
-                  class="text-[10px] font-mono-archive tracking-wider text-[var(--accent-warm)] border border-[var(--accent-warm)]/40 px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/5 shrink-0 select-none"
+                  class="text-[11px] font-mono-archive tracking-wider text-[var(--accent-warm)] border border-[var(--accent-warm)]/40 px-1.5 py-0.2 rounded-xs bg-[var(--accent-warm)]/5 shrink-0 select-none"
                 >
                   分期
                 </span>
-                <span v-if="tx.payment_method" class="text-[10px] font-mono-archive text-[var(--ink-muted)] hidden lg:inline shrink-0">
+                <span v-if="tx.payment_method" class="text-[11px] font-mono-archive text-[var(--ink-muted)] hidden lg:inline shrink-0">
                   [{{ tx.payment_method }}]
                 </span>
                 <span v-if="tx.note" class="text-xs font-serif-editorial text-[var(--ink-muted)] truncate hidden md:inline">
@@ -1214,13 +1214,13 @@ const spectrumItems = computed(() => {
               <span class="text-[var(--ink-secondary)] truncate">{{ gear.category || '固定资产' }}</span>
               <span
                 v-if="gear.status === 'sold'"
-                class="vermilion-seal px-1.5 py-0.2 text-[10px] shrink-0 font-mono-archive"
+                class="vermilion-seal px-1.5 py-0.2 text-[11px] shrink-0 font-mono-archive"
               >
                 已回血
               </span>
               <span
                 v-else
-                class="px-1.5 py-0.5 rounded-xs text-[10px] shrink-0 border bg-emerald-900/10 text-[var(--accent-moss)] border-[var(--accent-moss)]/30 font-mono-archive"
+                class="px-1.5 py-0.5 rounded-xs text-[11px] shrink-0 border bg-emerald-900/10 text-[var(--accent-moss)] border-[var(--accent-moss)]/30 font-mono-archive"
               >
                 在役自用
               </span>
@@ -1265,16 +1265,16 @@ const spectrumItems = computed(() => {
           </div>
 
           <!-- 卡片底栏：三栏式资产指标底款（购入原值 · 服役时长 · 日均成本/回血） -->
-          <div class="pt-3.5 border-t border-[var(--border-subtle)]/70 grid grid-cols-3 gap-4 font-mono-archive text-xs">
+          <div class="pt-3.5 border-t border-[var(--border-subtle)]/70 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 font-mono-archive text-xs">
             <div class="space-y-0.5">
-              <span class="block text-[10px] text-[var(--ink-muted)]">购入原值</span>
+              <span class="block text-[11px] text-[var(--ink-muted)]">购入原值</span>
               <span class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
                 ¥{{ formatMoney(gear.price_cents || 0) }}
               </span>
             </div>
 
             <div class="space-y-0.5">
-              <span class="block text-[10px] text-[var(--ink-muted)]">
+              <span class="block text-[11px] text-[var(--ink-muted)]">
                 {{ gear.purchase_date ? `购于 ${gear.purchase_date}` : '服役时长' }}
               </span>
               <span class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
@@ -1287,13 +1287,13 @@ const spectrumItems = computed(() => {
 
             <div class="space-y-0.5">
               <template v-if="gear.status === 'sold' && gear.sold_price_cents">
-                <span class="block text-[10px] text-[var(--ink-muted)]">二手回血</span>
+                <span class="block text-[11px] text-[var(--ink-muted)]">二手回血</span>
                 <span class="font-serif-editorial text-base font-medium text-[var(--accent-moss)]">
                   +¥{{ formatMoney(gear.sold_price_cents) }}
                 </span>
               </template>
               <template v-else>
-                <span class="block text-[10px] text-[var(--ink-muted)]">日均持有成本</span>
+                <span class="block text-[11px] text-[var(--ink-muted)]">日均持有成本</span>
                 <span class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
                   <template v-if="gearHoldingStatsMap.get(gear.id || '')">
                     ¥{{ formatMoney(gearHoldingStatsMap.get(gear.id || '')?.dailyCents || 0) }}<span class="text-[11px] font-normal text-[var(--ink-muted)]">/天</span>
@@ -1313,7 +1313,7 @@ const spectrumItems = computed(() => {
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
       @click.self="isAddGearModalOpen = false"
     >
-      <div class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] p-6 rounded-xs w-full max-w-lg space-y-4 max-h-[90dvh] overflow-y-auto">
+      <div class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] p-6 rounded-xs w-full max-w-lg space-y-4 max-h-[90dvh] overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]">
         <div class="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
           <div>
             <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">

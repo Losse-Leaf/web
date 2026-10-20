@@ -3,6 +3,7 @@ import { ref, watch, nextTick } from 'vue'
 import { X, KeyRound, Check, Eye, EyeOff } from 'lucide-vue-next'
 import { verifyMasterPasscode } from '../utils/api'
 import { audio } from '../utils/audio'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -55,6 +56,9 @@ const handleSubmit = async () => {
     isSubmitting.value = false
   }
 }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -64,7 +68,7 @@ const handleSubmit = async () => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-sm rounded-xs shadow-2xl p-6 sm:p-7 space-y-5 text-left"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-sm rounded-xs shadow-2xl p-6 sm:p-7 space-y-5 text-left pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <div class="flex items-start justify-between pb-3 border-b border-[var(--border-subtle)]">
         <div class="flex items-center gap-2.5">

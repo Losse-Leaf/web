@@ -32,7 +32,10 @@ const loadAllEntriesForYear = async (yr: string) => {
     let collected: LifeEntry[] = []
     while (true) {
       const pageData = await fetchEntries({ year: yr, page, page_size: 100 })
-      if (!pageData || !Array.isArray(pageData) || pageData.length === 0) break
+      // MOB-P0-17：null 代表「本次请求被中断 / 命中缓存协商」，
+      // 必须整体放弃，绝不能把半截数据写进状态。
+      if (pageData === null) return
+      if (!Array.isArray(pageData) || pageData.length === 0) break
       collected = [...collected, ...pageData]
       if (pageData.length < 100) break
       page++
@@ -45,11 +48,23 @@ const loadAllEntriesForYear = async (yr: string) => {
   }
 }
 
+// MOB-P0-17：原先 watch 监听 [selectedYear, refreshKey, entries]，
+// 而 refreshKey 在每次增删改条目时都会自增 ⇒ 编辑一条记录就整年重拉（数 MB）。
+// 现在：只监听「选中年份 + 刷新信号」，并对刷新信号做去抖；entries 变化不再触发重拉。
+let reloadTimer: number | null = null
+const scheduleReloadForYear = (yr: string) => {
+  if (reloadTimer) clearTimeout(reloadTimer)
+  reloadTimer = window.setTimeout(() => {
+    reloadTimer = null
+    void loadAllEntriesForYear(yr)
+  }, 600)
+}
+
 watch(
-  [selectedYear, () => props.refreshKey, () => props.entries],
+  [selectedYear, () => props.refreshKey],
   ([yr]) => {
     if (yr) {
-      loadAllEntriesForYear(yr)
+      scheduleReloadForYear(yr)
     }
   },
   { immediate: true }
@@ -183,13 +198,15 @@ const formatMonthDay = (occurredAt?: string) => {
     </header>
 
     <!-- 年份切换（文本式，非按钮 Card）与 年度生活年鉴入口 (FE-14) -->
-    <div class="flex items-center justify-between gap-4 mb-8 font-mono-archive text-sm">
-      <div class="flex items-center gap-6">
+    <!-- MOB-P1-103：窄屏（360px）下年份条 + 年鉴按钮同排会溢出并被 body overflow-x 裁掉，
+         导致「翻阅年度年鉴」按钮根本点不到。这里改为纵向排列 + 年份条可横向滚动。 -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 font-mono-archive text-sm">
+      <div class="flex items-center gap-4 sm:gap-6 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 snap-x">
         <button
           v-for="y in years"
           :key="y"
           @click="selectedYear = y"
-          class="transition-colors cursor-pointer py-1"
+          class="transition-colors cursor-pointer py-1 shrink-0 snap-start"
           :class="selectedYear === y 
             ? 'text-[var(--ink-primary)] font-bold border-b-2 border-[var(--ink-primary)]' 
             : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
@@ -201,7 +218,7 @@ const formatMonthDay = (occurredAt?: string) => {
       <button
         @click="isAlmanacOpen = true"
         type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer"
+        class="inline-flex items-center gap-1.5 px-3 py-2 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer self-start sm:self-auto shrink-0"
         title="翻阅五幕式年度生活年鉴"
       >
         <BookOpen class="w-3.5 h-3.5 text-[var(--accent-warm)]" />

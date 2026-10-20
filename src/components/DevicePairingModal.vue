@@ -26,6 +26,7 @@ import {
 import { audio } from '../utils/audio'
 import { askConfirm } from '../composables/useConfirm'
 import { parseOccurredDate } from '../utils/format'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -277,6 +278,9 @@ onUnmounted(() => {
   if (countdownTimer) clearInterval(countdownTimer)
   stopPairingPolling()
 })
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -286,7 +290,7 @@ onUnmounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-xl min-h-[440px] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
+      class="w-full max-w-xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl p-4 sm:p-8 text-left space-y-6 max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200 pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 弹窗标题 -->
       <div class="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
@@ -328,7 +332,7 @@ onUnmounted(() => {
             : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
         >
           <span>已信任设备组</span>
-          <span class="px-1.5 py-0.2 rounded-xs bg-[var(--bg-subtle)] text-[10px]">{{ devices.length }}</span>
+          <span class="px-1.5 py-0.2 rounded-xs bg-[var(--bg-subtle)] text-[11px]">{{ devices.length }}</span>
         </button>
       </div>
 
@@ -384,7 +388,7 @@ onUnmounted(() => {
                   :src="currentTicket.qr_code_data_url"
                   alt="散页纸墨风配对二维码"
                   class="w-36 h-36 sm:w-40 sm:h-40 object-contain block"
-                />
+                 loading="lazy" decoding="async">
                 <div
                   v-else
                   class="w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-3"
@@ -393,7 +397,7 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="mt-2 text-[10px] font-mono-archive text-[var(--ink-muted)] text-center">
+              <div class="mt-2 text-[11px] font-mono-archive text-[var(--ink-muted)] text-center">
                 <span>纸墨二维码 · 5分钟内有效</span>
               </div>
             </div>
@@ -533,19 +537,19 @@ onUnmounted(() => {
                   <button
                     type="button"
                     @click="startRenameDevice(dev)"
-                    class="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[10px] font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] border border-transparent hover:border-[var(--border-subtle)] rounded-xs cursor-pointer transition-colors"
+                    class="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[11px] font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] border border-transparent hover:border-[var(--border-subtle)] rounded-xs cursor-pointer transition-colors"
                     title="修改设备显示名称"
                   >
                     <Edit2 class="w-2.5 h-2.5" />
                     <span>改名</span>
                   </button>
                 </template>
-                <span class="text-[10px] font-mono-archive uppercase px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-muted)]">
+                <span class="text-[11px] font-mono-archive uppercase px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-muted)]">
                   {{ dev.platform }}
                 </span>
                 <span
                   v-if="dev.device_id"
-                  class="text-[10px] font-mono-archive px-1.5 py-0.2 rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--ink-secondary)] select-all"
+                  class="text-[11px] font-mono-archive px-1.5 py-0.2 rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[var(--ink-secondary)] select-all"
                   title="设备唯一标识"
                 >
                   {{ dev.device_id }}

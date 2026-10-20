@@ -197,14 +197,14 @@ onBeforeUnmount(() => {
         >
           <div class="truncate flex items-center gap-1.5">
             <span class="truncate">{{ opt.label }}</span>
-            <span v-if="opt.sublabel" class="text-[10px] text-[var(--ink-muted)] truncate">
+            <span v-if="opt.sublabel" class="text-[11px] text-[var(--ink-muted)] truncate">
               {{ opt.sublabel }}
             </span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <span
               v-if="opt.badge"
-              class="text-[10px] px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]"
+              class="text-[11px] px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]"
             >
               {{ opt.badge }}
             </span>

@@ -16,6 +16,7 @@ import { getBeijingDateString } from '../utils/format'
 import { matchCityFromLocation } from '../utils/cities'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -362,6 +363,9 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -371,7 +375,7 @@ onUnmounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left space-y-6"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left space-y-6 pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 弹窗顶栏 -->
       <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4">
@@ -443,17 +447,17 @@ onUnmounted(() => {
                 :src="form.avatar_url"
                 alt="头像预览"
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
+               loading="lazy" decoding="async">
               <div
                 v-else
                 class="w-full h-full flex flex-col items-center justify-center bg-[var(--bg-subtle)] text-[var(--ink-muted)] space-y-1 select-none"
               >
                 <User class="w-8 h-8 stroke-1" />
-                <span class="text-[10px] font-mono-archive">选择肖像</span>
+                <span class="text-[11px] font-mono-archive">选择肖像</span>
               </div>
 
               <!-- 悬浮蒙版 -->
-              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-mono-archive gap-1">
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-mono-archive gap-1">
                 <Camera class="w-4 h-4" />
                 <span>更换肖像</span>
               </div>
@@ -461,7 +465,7 @@ onUnmounted(() => {
               <!-- 上传中进度覆盖层 -->
               <div
                 v-if="isUploadingAvatar"
-                class="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center text-white text-[10px] font-mono-archive p-2 text-center"
+                class="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center text-white text-[11px] font-mono-archive p-2 text-center"
               >
                 <Loader2 class="w-4 h-4 animate-spin text-[var(--accent-warm)] mb-1" />
                 <span>{{ avatarUploadProgress }}%</span>
@@ -729,7 +733,7 @@ onUnmounted(() => {
             <div class="flex items-start justify-between gap-4">
               <div class="space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="text-[10px] font-mono-archive px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]">
+                  <span class="text-[11px] font-mono-archive px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[var(--ink-muted)]">
                     {{ item.category }}
                   </span>
                   <span class="font-serif-editorial text-base text-[var(--ink-primary)] font-medium">
@@ -738,10 +742,10 @@ onUnmounted(() => {
                   <span v-if="item.status" class="text-[11px] font-mono-archive" :class="isGearSold(item.status) ? 'text-amber-600' : 'text-[var(--accent-warm)]'">
                     · {{ formatGearStatus(item.status) }}
                   </span>
-                  <span v-if="item.price_cents" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                  <span v-if="item.price_cents" class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
                     (购入 ¥{{ (item.price_cents / 100).toFixed(2) }})
                   </span>
-                  <span v-if="item.sold_price_cents" class="text-[10px] font-mono-archive text-emerald-700">
+                  <span v-if="item.sold_price_cents" class="text-[11px] font-mono-archive text-emerald-700">
                     (回血 ¥{{ ((item.sold_price_cents || 0) / 100).toFixed(2) }})
                   </span>
                 </div>

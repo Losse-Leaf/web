@@ -1,85 +1,180 @@
 /**
  * 客户端智能图片压制管线 (Web 端对齐 macOS / Android 压制契约)
- * - 最大边限制至 2560px
- * - 质量 85% JPEG 压缩
+ * - 最大边限制至 2048px（与 Android 端 ImagePipeline.MAX_EDGE 一致）
+ * - 质量 82% JPEG 压缩（与 Android 端 JPEG_QUALITY 一致）
  * - 过滤非位图 (GIF, SVG 直接透传)
+ *
+ * MOB-P0-16 修复要点：
+ * 1. EXIF 方向：统一用 createImageBitmap(file, { imageOrientation: 'from-image' })，
+ *    否则 Safari 竖拍照片会被旋转 90° 上传。
+ * 2. Safari 黑图：旧实现�� drawImage 之前就 revokeObjectURL，Safari 可能重解析
+ *    blob URL 得到空白画布；现在保证 URL 在解码完成后再释放。
+ * 3. 内存：createImageBitmap 可选 resizeWidth 直接按目标尺寸解码，
+ *    避免 12MP 原图（≈48MB）在堆里完整展开。
+ */
+
+export const MAX_EDGE = 2048
+export const JPEG_QUALITY = 0.82
+/** 小于该体积且尺寸达标的小图直接透传，避免无意义的二次编码 */
+const PASSTHROUGH_SIZE = 200 * 1024
+
+interface DecodedImage {
+  width: number
+  height: number
+  draw: (ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) => void
+  release: () => void
+}
+
+/** 优先使用 createImageBitmap（可指定方向与缩放，内存友好），回退到 <img> 解码 */
+async function decodeImage(file: File, targetMaxEdge: number): Promise<DecodedImage | null> {
+  // 1) 现代路径：createImageBitmap + imageOrientation + 直接按目标尺寸解码
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const probe = await createImageBitmap(file)
+      const sourceMax = Math.max(probe.width, probe.height)
+      if (sourceMax <= targetMaxEdge) {
+        // 尺寸已达标：仍需应用 EXIF 方向（from-image 会旋转像素）
+        const oriented = await createImageBitmap(file, { imageOrientation: 'from-image' })
+        probe.close()
+        return {
+          width: oriented.width,
+          height: oriented.height,
+          draw: (ctx) => ctx.drawImage(oriented, 0, 0, oriented.width, oriented.height),
+          release: () => oriented.close(),
+        }
+      }
+      probe.close()
+
+      // 超大图：直接按目标尺寸解码，峰值内存 ≈ 目标尺寸而非原图尺寸
+      const scale = targetMaxEdge / sourceMax
+      const resized = await createImageBitmap(file, {
+        imageOrientation: 'from-image',
+        resizeWidth: Math.round(probe.width * scale),
+        resizeHeight: Math.round(probe.height * scale),
+        resizeQuality: 'high',
+      }).catch(() => null)
+
+      if (resized) {
+        return {
+          width: resized.width,
+          height: resized.height,
+          draw: (ctx) => ctx.drawImage(resized, 0, 0, resized.width, resized.height),
+          release: () => resized.close(),
+        }
+      }
+    } catch {
+      // 落到下面的 <img> 回退路径
+    }
+  }
+
+  // 2) 回退路径：<img> + objectURL（注意必须在解码完成后再释放 URL）
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const sourceMax = Math.max(img.naturalWidth, img.naturalHeight)
+      const scale = sourceMax > targetMaxEdge ? targetMaxEdge / sourceMax : 1
+      const width = Math.max(1, Math.round(img.naturalWidth * scale))
+      const height = Math.max(1, Math.round(img.naturalHeight * scale))
+      resolve({
+        width,
+        height,
+        draw: (ctx) => ctx.drawImage(img, 0, 0, width, height),
+        release: () => URL.revokeObjectURL(url),
+      })
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(null)
+    }
+    img.src = url
+  })
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  quality: number
+): Promise<Blob | null> {
+  if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas) {
+    return canvas.convertToBlob({ type: 'image/jpeg', quality })
+  }
+  return new Promise((resolve) => {
+    ;(canvas as HTMLCanvasElement).toBlob(
+      (blob) => resolve(blob),
+      'image/jpeg',
+      quality
+    )
+  })
+}
+
+/**
+ * 压缩单张图片（失败时原样透传，绝不丢图）
+ * @param file 原始文件
+ * @param maxEdge 最大边（默认 2048，与 Android 端一致）
+ * @param quality JPEG 质量（默认 0.82，与 Android 端一致）
  */
 export async function compressClientImage(
   file: File,
-  maxEdge: number = 2560,
-  quality: number = 0.85
+  maxEdge: number = MAX_EDGE,
+  quality: number = JPEG_QUALITY
 ): Promise<File> {
   // 非图片或动画 GIF / SVG 直接透传
   if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') {
     return file
   }
 
-  // 小于 300KB 的小图无需再压
-  if (file.size <= 300 * 1024) {
+  // 极小文件无需再压
+  if (file.size <= PASSTHROUGH_SIZE) {
     return file
   }
 
-  return new Promise((resolve) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
+  const decoded = await decodeImage(file, maxEdge)
+  if (!decoded) return file
 
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      let { width, height } = img
-
-      // 尺寸判定
-      if (width <= maxEdge && height <= maxEdge && file.size < 1024 * 1024) {
-        // 尺寸与体积已在理想范围
-        resolve(file)
-        return
-      }
-
-      const currentMax = Math.max(width, height)
-      if (currentMax > maxEdge) {
-        const scale = maxEdge / currentMax
-        width = Math.round(width * scale)
-        height = Math.round(height * scale)
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-
-      if (!ctx) {
-        resolve(file)
-        return
-      }
-
-      ctx.imageSmoothingEnabled = true
-      ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(img, 0, 0, width, height)
-
-      canvas.toBlob(
-        (blob) => {
-          if (!blob || blob.size >= file.size) {
-            // 如果压缩后反而变大，则使用原文件
-            resolve(file)
-            return
-          }
-
-          const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name
-          const compressedFile = new File([blob], `${baseName}.jpg`, {
-            type: 'image/jpeg',
-            lastModified: file.lastModified,
-          })
-          resolve(compressedFile)
-        },
-        'image/jpeg',
-        quality
-      )
+  try {
+    // 尺寸与体积均已理想：直接透传原图（避免二次编码劣化）
+    if (decoded.width <= maxEdge && decoded.height <= maxEdge && file.size < 1024 * 1024) {
+      return file
     }
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      resolve(file)
+    let canvas: HTMLCanvasElement | OffscreenCanvas
+    let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+    try {
+      if (typeof OffscreenCanvas !== 'undefined') {
+        const offscreen = new OffscreenCanvas(decoded.width, decoded.height)
+        canvas = offscreen
+        ctx = offscreen.getContext('2d')
+      } else {
+        const element = document.createElement('canvas')
+        element.width = decoded.width
+        element.height = decoded.height
+        canvas = element
+        ctx = element.getContext('2d')
+      }
+    } catch {
+      return file
     }
 
-    img.src = url
-  })
+    if (!ctx) return file
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    decoded.draw(ctx)
+
+    const blob = await canvasToBlob(canvas, quality)
+    if (!blob || blob.size >= file.size) {
+      // 压缩后反而更大：使用原文件
+      return file
+    }
+
+    const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name
+    return new File([blob], `${baseName}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    })
+  } catch {
+    return file
+  } finally {
+    decoded.release()
+  }
 }

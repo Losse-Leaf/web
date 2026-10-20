@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { X, AlertTriangle } from 'lucide-vue-next'
 import { useConfirm } from '../composables/useConfirm'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 // 全站确认 / 提示弹窗（单一实例，在 App.vue 根部挂载一次）
 const { confirmRequest, respond } = useConfirm()
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => !!confirmRequest.value)
 </script>
 
 <template>

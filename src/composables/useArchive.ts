@@ -20,6 +20,8 @@ function getInitialEntries(): LifeEntry[] {
 }
 
 const entries = ref<LifeEntry[]>(getInitialEntries())
+/** MOB-P1-70：本地缓存是否可用（配额耗尽 / 隐私模式时为 false） */
+export const cacheAvailable = ref(true)
 const currentCategory = ref<ArchiveCategory>('all')
 
 // 节流写入本地存储并附带时间戳 (FE-06)
@@ -29,7 +31,13 @@ function throttledSaveEntries(list: LifeEntry[]) {
   saveTimer = window.setTimeout(() => {
     try {
       localStorage.setItem(ENTRIES_CACHE_KEY, JSON.stringify({ cached_at: Date.now(), data: list }))
-    } catch {}
+    } catch (err) {
+      // MOB-P1-70：配额耗尽 / Safari 私密模式会抛 QuotaExceededError / SecurityError，
+      // 原先被空 catch 吞掉 —— 用户以为有离线缓存，其实并没有。
+      // 这里至少把状态暴露出来，让界面能提示「离线缓存不可用」。
+      console.warn('本地缓存写入失败（配额不足或隐私模式）:', err)
+      cacheAvailable.value = false
+    }
   }, 400)
 }
 

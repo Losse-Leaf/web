@@ -14,6 +14,7 @@ import { formatMoney } from '../utils/format'
 import { audio } from '../utils/audio'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { CityMemoryDrawerData, ProvinceMemoryDrawerData, Attachment } from '../types'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -197,6 +198,9 @@ const handleDeleteFootprint = async (fp: any) => {
     showAlert({ title: '删除失败', message: err.message || '网络连接异常', danger: true })
   }
 }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -227,7 +231,7 @@ const handleDeleteFootprint = async (fp: any) => {
             <h2 class="font-serif-editorial text-2xl sm:text-3xl font-medium text-[var(--ink-primary)]">
               {{ displayName }}
             </h2>
-            <span class="px-1.5 py-0.5 text-[10px] font-mono-archive border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
+            <span class="px-1.5 py-0.5 text-[11px] font-mono-archive border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
               {{ isProvinceMode ? '省级抽屉' : '城市抽屉' }}
             </span>
           </div>
@@ -281,7 +285,7 @@ const handleDeleteFootprint = async (fp: any) => {
         <section class="space-y-3 p-4 bg-[var(--bg-subtle)]/40 border border-[var(--border-subtle)] rounded-xs font-mono-archive text-xs">
           <div class="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]/60">
             <span class="text-[11px] text-[var(--ink-muted)]">CHAPTER I · 履迹简志</span>
-            <span class="px-2 py-0.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs text-[10px] font-medium">
+            <span class="px-2 py-0.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs text-[11px] font-medium">
               <template v-if="isProvinceMode">
                 去过 {{ totalCitiesCount }} 座城市 · 累计到访 {{ drawerData.visit_stats.total_visits }} 次
               </template>
@@ -293,7 +297,7 @@ const handleDeleteFootprint = async (fp: any) => {
 
           <!-- 省级模式下的去过城市清单（点击可下钻至该城市的独立回忆抽屉 RC-93） -->
           <div v-if="isProvinceMode && citiesSummary.length > 0" class="pt-1 pb-1">
-            <span class="text-[10px] text-[var(--ink-muted)] block mb-1.5">
+            <span class="text-[11px] text-[var(--ink-muted)] block mb-1.5">
               到访城市清单 (点击城市切换至市级回忆抽屉 ↗)
             </span>
             <div class="flex flex-wrap gap-1.5">
@@ -305,20 +309,20 @@ const handleDeleteFootprint = async (fp: any) => {
                 class="px-2 py-0.5 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[11px] text-[var(--ink-secondary)] inline-flex items-center gap-1 cursor-pointer transition-colors"
               >
                 <span class="font-medium text-[var(--ink-primary)]">{{ c.city_name }}</span>
-                <span class="text-[10px] text-[var(--ink-muted)]">({{ c.visit_count }}次)</span>
+                <span class="text-[11px] text-[var(--ink-muted)]">({{ c.visit_count }}次)</span>
               </button>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3 pt-1 border-t border-[var(--border-subtle)]/40">
             <div>
-              <span class="text-[var(--ink-muted)] block text-[10px]">首次探访</span>
+              <span class="text-[var(--ink-muted)] block text-[11px]">首次探访</span>
               <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
                 {{ formatDate(drawerData.visit_stats.first_visited_at) || '未记录' }}
               </span>
             </div>
             <div>
-              <span class="text-[var(--ink-muted)] block text-[10px]">最近到访</span>
+              <span class="text-[var(--ink-muted)] block text-[11px]">最近到访</span>
               <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
                 {{ formatDate(drawerData.visit_stats.latest_visited_at) || '未记录' }}
               </span>
@@ -349,7 +353,7 @@ const handleDeleteFootprint = async (fp: any) => {
                     {{ fp.title }}
                   </span>
                 </div>
-                <div class="flex items-center gap-1.5 text-[10px] font-mono-archive">
+                <div class="flex items-center gap-1.5 text-[11px] font-mono-archive">
                   <span v-if="(fp.entries_count || 0) > 0" class="px-1.5 py-0.2 rounded-xs bg-[var(--bg-subtle)] text-[var(--ink-secondary)] border border-[var(--border-subtle)]">
                     {{ fp.entries_count }} 篇游记
                   </span>
@@ -407,14 +411,14 @@ const handleDeleteFootprint = async (fp: any) => {
               :key="att.id || att.url"
               type="button"
               @click="activeLightboxUrl = att.url"
-              class="w-32 h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs overflow-hidden cursor-zoom-in transition-colors"
+              class="w-24 h-24 sm:w-32 sm:h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs overflow-hidden cursor-zoom-in transition-colors"
             >
               <img
                 :src="att.url"
                 loading="lazy"
                 class="w-full h-full object-cover editorial-image"
                 alt="旅途菲林"
-              />
+               decoding="async">
             </button>
           </div>
           <p v-else class="text-xs font-serif-editorial text-[var(--ink-muted)] italic">
@@ -444,7 +448,7 @@ const handleDeleteFootprint = async (fp: any) => {
               @click="emit('selectEntry', entry)"
               class="p-3 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs cursor-pointer transition-colors space-y-1"
             >
-              <div class="flex items-center justify-between font-mono-archive text-[10px] text-[var(--ink-muted)]">
+              <div class="flex items-center justify-between font-mono-archive text-[11px] text-[var(--ink-muted)]">
                 <span>{{ formatDate(entry.occurred_at) }}</span>
                 <span>{{ entry.type }}</span>
               </div>
@@ -500,7 +504,7 @@ const handleDeleteFootprint = async (fp: any) => {
         :src="activeLightboxUrl"
         class="max-w-full max-h-[90vh] object-contain rounded-xs shadow-2xl"
         alt="旅途底片大图"
-      />
+       loading="lazy" decoding="async">
     </div>
   </div>
 </template>

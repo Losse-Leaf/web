@@ -42,18 +42,61 @@ const getEntryFirstImage = (entry: LifeEntry): string => {
   return ''
 }
 
+// MOB-P1-67：附件列表记忆化 ——
+// 模板里每条记录会调用 getEntryImages 3~5 次，每次都 filter 出新数组。
+const imagesMemo = new WeakMap<LifeEntry, { id: number; url: string }[]>()
+
 const getEntryImages = (entry: LifeEntry): { id: number; url: string }[] => {
-  if (entry.attachments && entry.attachments.length > 0) {
-    return entry.attachments.filter((a) => Boolean(a.url)) as { id: number; url: string }[]
-  }
-  return []
+  const cached = imagesMemo.get(entry)
+  if (cached) return cached
+  const list =
+    entry.attachments && entry.attachments.length > 0
+      ? (entry.attachments.filter((a) => Boolean(a.url)) as { id: number; url: string }[])
+      : []
+  imagesMemo.set(entry, list)
+  return list
 }
 
-// 跨月物候封签判定 (RC-48)
+// MOB-P1-67：跨月封签判定同样每次都要解析日期 —— 解析结果按 occurred_at 缓存。
+const dateKeyMemo = new Map<string, string>()
+
 const getEntryMonthKey = (entry: LifeEntry): string => {
-  const { year, month } = parseOccurredDate(entry.occurred_at)
-  return `${year}.${month}`
+  const raw = entry.occurred_at || ''
+  const cached = dateKeyMemo.get(raw)
+  if (cached) return cached
+  const { year, month } = parseOccurredDate(raw)
+  const key = `${year}.${month}`
+  if (dateKeyMemo.size > 500) dateKeyMemo.clear()
+  dateKeyMemo.set(raw, key)
+  return key
 }
+
+// MOB-P1-67：窗口化渲染 ——
+// 原先一次性渲染全部条目（每条还带图片网格与 v-html 富文本），
+// 几百条记录就会产生数千个 DOM 节点，移动端滚动持续掉帧。
+// 现在只渲染「已展开」的窗口，滚动到底再展开下一批。
+const INITIAL_WINDOW = 40
+const WINDOW_STEP = 40
+const visibleCount = ref(INITIAL_WINDOW)
+
+const visibleEntries = computed(() =>
+  filteredEntries.value.slice(0, visibleCount.value)
+)
+
+const hasMoreEntries = computed(() => visibleCount.value < filteredEntries.value.length)
+
+const loadMoreEntries = () => {
+  if (!hasMoreEntries.value) return
+  visibleCount.value += WINDOW_STEP
+}
+
+// 切换分类 / 数据源变化后重置窗口
+watch(
+  () => [props.currentCategory, props.entries, props.dateFilter] as const,
+  () => {
+    visibleCount.value = INITIAL_WINDOW
+  }
+)
 
 const isFirstEntryOfMonth = (index: number): boolean => {
   if (index === 0) return true
@@ -222,7 +265,7 @@ const getGapDays = (index: number): number => {
         <span class="pointer-events-none select-none absolute bottom-2 left-2.5 text-xs text-[var(--ink-muted)]/60 font-mono-archive">⌞</span>
         <span class="pointer-events-none select-none absolute bottom-2 right-2.5 text-xs text-[var(--ink-muted)]/60 font-mono-archive">⌟</span>
 
-        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-mono-archive tracking-widest uppercase vermilion-seal">
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-mono-archive tracking-widest uppercase vermilion-seal">
           <span>EX LIBRIS · 散页藏书票</span>
         </div>
 
@@ -259,7 +302,7 @@ const getGapDays = (index: number): number => {
       v-else
       class="relative pl-6 sm:pl-10 border-l border-[var(--border-subtle)] ml-3 sm:ml-5 space-y-12 sm:space-y-16 py-2"
     >
-      <template v-for="(entry, index) in filteredEntries" :key="entry.id">
+      <template v-for="(entry, index) in visibleEntries" :key="entry.id">
         <!-- 跨月自然物候封签 (Month Tab) -->
         <div
           v-if="isFirstEntryOfMonth(index)"
@@ -310,7 +353,7 @@ const getGapDays = (index: number): number => {
             <span v-if="formatEntryTime(entry)" class="text-[var(--ink-muted)]">{{ formatEntryTime(entry) }}</span>
             <span class="text-[var(--border-divider)] select-none">/</span>
             <span
-              class="px-1.5 py-0.2 rounded-xs border text-[10px] font-medium transition-colors"
+              class="px-1.5 py-0.2 rounded-xs border text-[11px] font-medium transition-colors"
               :class="{
                 'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel',
                 'border-emerald-700/40 bg-emerald-700/8 text-emerald-700': entry.type === 'transaction' || entry.is_transaction,
@@ -362,7 +405,7 @@ const getGapDays = (index: number): number => {
             class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 group-hover:border-[var(--border-divider)] transition-colors max-w-2xl"
           >
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
+              <span class="text-[11px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
                 造物手记 · {{ entry.project?.title || '长期创造' }}
               </span>
               <span v-if="entry.project?.status" class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
@@ -385,7 +428,7 @@ const getGapDays = (index: number): number => {
                 :alt="entry.title"
                 class="w-full max-h-[420px] object-cover editorial-image"
                 loading="lazy"
-              />
+               decoding="async">
             </div>
             <div
               class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial"
@@ -410,7 +453,7 @@ const getGapDays = (index: number): number => {
             v-else-if="getEntryCategory(entry) === 'wish'"
             class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 group-hover:border-[var(--accent-warm)]/60 transition-colors max-w-2xl"
           >
-            <div class="flex items-center justify-between text-[10px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
+            <div class="flex items-center justify-between text-[11px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
               <span>心愿印记 · {{ entry.wish?.kind === 'travel' ? '远方旅程' : entry.wish?.kind === 'milestone' ? '阶段目标' : '心仪好物' }}</span>
               <span v-if="entry.wish?.status" class="text-[var(--ink-muted)]">
                 {{ entry.wish.status === 'fulfilled' ? '已圆满归册' : entry.wish.status === 'relinquished' ? '已理性拔草' : '期许中' }}
@@ -432,7 +475,7 @@ const getGapDays = (index: number): number => {
                 :alt="entry.title"
                 class="w-full max-h-[420px] object-cover editorial-image"
                 loading="lazy"
-              />
+               decoding="async">
             </div>
             <div
               class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial"
@@ -474,8 +517,8 @@ const getGapDays = (index: number): number => {
                   :alt="entry.title"
                   class="w-full max-h-[580px] object-contain sm:object-cover rounded-xs editorial-image group-hover/img:scale-[1.008] transition-transform duration-500 mx-auto"
                   loading="lazy"
-                />
-                <div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-xs">
+                 decoding="async">
+                <div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[11px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-xs">
                   <Maximize2 class="w-3 h-3" />
                   <span>暗房灯箱</span>
                 </div>
@@ -497,8 +540,8 @@ const getGapDays = (index: number): number => {
                     :alt="entry.title"
                     class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
                     loading="lazy"
-                  />
-                  <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[9px] font-mono-archive rounded-xs opacity-0 group-hover/single:opacity-100 transition-opacity">
+                   decoding="async">
+                  <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[11px] font-mono-archive rounded-xs opacity-0 group-hover/single:opacity-100 transition-opacity">
                     EXP. {{ String(imgIdx + 1).padStart(2, '0') }}
                   </div>
                 </div>
@@ -520,8 +563,8 @@ const getGapDays = (index: number): number => {
                     :alt="entry.title"
                     class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
                     loading="lazy"
-                  />
-                  <div class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[9px] font-mono-archive rounded-xs opacity-0 group-hover/single:opacity-100 transition-opacity">
+                   decoding="async">
+                  <div class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[11px] font-mono-archive rounded-xs opacity-0 group-hover/single:opacity-100 transition-opacity">
                     EXP. {{ String(imgIdx + 1).padStart(2, '0') }}
                   </div>
                 </div>
@@ -553,6 +596,20 @@ const getGapDays = (index: number): number => {
           </div>
         </article>
       </template>
+    </div>
+
+    <!-- MOB-P1-67：窗口化加载更多 -->
+    <div v-if="hasMoreEntries" class="flex flex-col items-center gap-3 py-8">
+      <button
+        type="button"
+        @click="loadMoreEntries"
+        class="px-5 py-2.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer font-mono-archive text-xs"
+      >
+        继续翻阅更早的记录（已展开 {{ visibleCount }} / {{ filteredEntries.length }}）
+      </button>
+      <span class="text-[11px] text-[var(--ink-muted)] font-mono-archive">
+        更早的记录会按需展开，避免一次性铺满整页
+      </span>
     </div>
 
     <!-- 暗房底片灯箱 -->

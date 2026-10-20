@@ -354,7 +354,7 @@ onMounted(() => {
         <div class="flex gap-2 items-start">
           
           <!-- 左侧星期标签 (周一、周三、周五) -->
-          <div class="relative w-6 h-[98px] font-mono-archive text-[10px] text-[var(--ink-muted)] shrink-0 select-none">
+          <div class="relative w-6 h-[98px] font-mono-archive text-[11px] text-[var(--ink-muted)] shrink-0 select-none">
             <span
               v-for="lbl in weekLabels"
               :key="lbl.index"

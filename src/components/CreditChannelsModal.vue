@@ -10,6 +10,7 @@ import {
 import type { CreditChannel } from '../types'
 import { askConfirm } from '../composables/useConfirm'
 import PaperSelect from './PaperSelect.vue'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -140,6 +141,9 @@ const handleDeleteChannel = async (ch: CreditChannel) => {
 onMounted(() => {
   loadChannels()
 })
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -149,7 +153,7 @@ onMounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-xl rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto text-left"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-xl rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90dvh] overflow-y-auto text-left pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 弹窗标头 -->
       <div class="flex items-start justify-between pb-4 border-b border-[var(--border-subtle)]">
@@ -208,7 +212,7 @@ onMounted(() => {
                   type="text"
                   class="font-medium text-[var(--ink-primary)] text-sm bg-[var(--bg-archive)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs outline-none focus:border-[var(--ink-primary)]"
                 />
-                <span v-if="ch.is_builtin" class="text-[10px] px-1.5 py-0.2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
+                <span v-if="ch.is_builtin" class="text-[11px] px-1.5 py-0.2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
                   系统内置
                 </span>
               </div>

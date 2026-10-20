@@ -27,6 +27,8 @@ interface UploadItem {
   errorMsg?: string
   attachmentId?: number
   objectKey?: string
+  /** MOB-P0-16：允许用户主动取消正在进行的上传 */
+  abort?: AbortController
 }
 
 const items = ref<UploadItem[]>(
@@ -56,6 +58,16 @@ const notifyChange = () => {
   emit('update:attachments', ids)
 }
 
+// MOB-P0-16：原先所有文件同时进入 handleFileProcess（并发全分辨率解码），
+// 一次选 6 张 12MP 照片 ≈ 290MB ⇒ iOS Safari 直接内存崩溃。
+// 现在改为「串行队列」：一次只解码 + 上传一张，峰值内存与单张照片同量级。
+let fileQueue: Promise<void> = Promise.resolve()
+
+const enqueueFile = (file: File) => {
+  fileQueue = fileQueue.then(() => handleFileProcess(file)).catch(() => {})
+  return fileQueue
+}
+
 const handleFileProcess = async (file: File) => {
   // 单文件 50MB 上限，与后端统一中转接口及 docs 契约一致 (FE-16)
   if (file.size > 50 * 1024 * 1024) {
@@ -63,7 +75,7 @@ const handleFileProcess = async (file: File) => {
     return
   }
 
-  // 客户端智能压制（限制 2560px / 85% 质量 JPEG，非图片原样透传）
+  // 客户端智能压制（限制 2048px / 82% 质量 JPEG，与 Android 端契约一致）
   const compressedFile = await compressClientImage(file)
   const previewUrl = URL.createObjectURL(compressedFile)
   const item: UploadItem = {
@@ -83,14 +95,22 @@ const handleFileProcess = async (file: File) => {
 const startUpload = async (item: UploadItem) => {
   if (!item.file) return
 
+  const controller = new AbortController()
+  item.abort = controller
+
   try {
     item.status = 'uploading'
     item.progress = 10
     item.errorMsg = undefined
 
-    const res = await uploadUnifiedFile(item.file, 'entry', (pct) => {
-      item.progress = Math.max(10, pct)
-    })
+    const res = await uploadUnifiedFile(
+      item.file,
+      'entry',
+      (pct) => {
+        item.progress = Math.max(10, pct)
+      },
+      controller.signal
+    )
 
     item.attachmentId = res.attachment_id
     item.objectKey = res.object_key
@@ -99,28 +119,43 @@ const startUpload = async (item: UploadItem) => {
     audio.playShutter()
     notifyChange()
   } catch (err: any) {
+    if (controller.signal.aborted) {
+      item.status = 'error'
+      item.errorMsg = '上传已取消'
+      return
+    }
     item.status = 'error'
     item.errorMsg = err.message || '上传失败'
+  } finally {
+    item.abort = undefined
+  }
+}
+
+const cancelUpload = (item: UploadItem) => {
+  try {
+    item.abort?.abort()
+  } catch {
+    // ignore
   }
 }
 
 const onFilesSelected = (e: Event) => {
   const target = e.target as HTMLInputElement
   if (!target.files) return
-  Array.from(target.files).forEach((f) => handleFileProcess(f))
+  Array.from(target.files).forEach((f) => enqueueFile(f))
   target.value = ''
 }
 
 const onDrop = (e: DragEvent) => {
   isDragging.value = false
   if (!e.dataTransfer?.files) return
-  Array.from(e.dataTransfer.files).forEach((f) => handleFileProcess(f))
+  Array.from(e.dataTransfer.files).forEach((f) => enqueueFile(f))
 }
 
 const uploadFiles = (files: File[]) => {
   files.forEach((f) => {
     if (f.type.startsWith('image/')) {
-      handleFileProcess(f)
+      enqueueFile(f)
     }
   })
 }
@@ -159,6 +194,11 @@ const removeItem = (item: UploadItem) => {
 
 onUnmounted(() => {
   items.value.forEach((it) => {
+    try {
+      it.abort?.abort()
+    } catch {
+      // ignore
+    }
     if (it.previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(it.previewUrl)
     }
@@ -189,7 +229,7 @@ onUnmounted(() => {
         ref="fileInputRef"
         type="file"
         multiple
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
         class="hidden"
         @change="onFilesSelected"
       />
@@ -205,12 +245,12 @@ onUnmounted(() => {
             :src="item.previewUrl"
             :alt="item.name"
             class="w-full h-full object-cover"
-          />
+           loading="lazy" decoding="async">
 
           <!-- 进度遮罩 -->
           <div
             v-if="item.status === 'uploading'"
-            class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white text-[10px] font-mono-archive"
+            class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white text-[11px] font-mono-archive"
           >
             <span>{{ item.progress }}%</span>
             <div class="w-16 h-1 bg-white/30 rounded-full mt-1 overflow-hidden">
@@ -219,6 +259,13 @@ onUnmounted(() => {
                 :style="{ width: `${item.progress}%` }"
               />
             </div>
+            <button
+              type="button"
+              @click.stop="cancelUpload(item)"
+              class="mt-1 px-2 py-0.5 text-[11px] bg-white/20 rounded-full cursor-pointer"
+            >
+              取消
+            </button>
           </div>
 
           <!-- 失败状态 -->
@@ -226,7 +273,7 @@ onUnmounted(() => {
             v-if="item.status === 'error'"
             class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white p-1 text-center"
           >
-            <span class="text-[10px] text-red-300 truncate max-w-full">
+            <span class="text-[11px] text-red-300 truncate max-w-full">
               {{ item.errorMsg || '上传失败' }}
             </span>
             <button
@@ -239,14 +286,15 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <!-- 删除按钮 -->
+          <!-- 删除按钮（MOB-P1-89：触屏没有 hover，必须常驻可见，否则手机上永远删不掉照片） -->
           <button
             type="button"
             @click.stop="removeItem(item)"
-            class="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            class="absolute top-1 right-1 w-7 h-7 bg-black/65 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity cursor-pointer"
             title="删除"
+            aria-label="删除这张照片"
           >
-            <X class="w-3 h-3" />
+            <X class="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -257,11 +305,11 @@ onUnmounted(() => {
           class="w-24 h-24 border border-dashed border-[var(--border-subtle)] hover:border-[var(--ink-secondary)] rounded-xs flex flex-col items-center justify-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer shrink-0"
         >
           <Plus class="w-4 h-4" />
-          <span class="text-[10px] font-mono-archive">添加照片</span>
+          <span class="text-[11px] font-mono-archive">添加照片</span>
         </button>
 
         <div v-if="items.length === 0" class="text-xs text-[var(--ink-muted)] font-serif-editorial ml-2">
-          点击、拖拽或直接粘贴 (⌘V / Ctrl+V) 照片到此处
+          点击添加照片（可从相册选择或直接拍摄）
         </div>
       </div>
     </div>

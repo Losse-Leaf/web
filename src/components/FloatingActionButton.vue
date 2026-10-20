@@ -10,7 +10,7 @@ const emit = defineEmits<{
   <aside
     aria-label="快捷操作"
     class="fixed z-40"
-    style="bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); right: calc(1.5rem + env(safe-area-inset-right, 0px));"
+    style="bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)); right: calc(1.5rem + env(safe-area-inset-right, 0px));"
   >
     <button
       @click="emit('click')"

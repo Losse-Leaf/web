@@ -422,7 +422,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 星期表头 -->
-        <div class="grid grid-cols-7 text-center text-[10px] text-[var(--ink-muted)]">
+        <div class="grid grid-cols-7 text-center text-[11px] text-[var(--ink-muted)]">
           <span v-for="w in ['日', '一', '二', '三', '四', '五', '六']" :key="w" class="py-0.5">
             {{ w }}
           </span>
@@ -508,7 +508,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- 快捷时刻纸签 -->
-          <div class="flex items-center justify-between gap-1 text-[10px]">
+          <div class="flex items-center justify-between gap-1 text-[11px]">
             <button
               v-for="preset in [
                 { label: '晨 09:00', h: 9, m: 0 },

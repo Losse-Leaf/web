@@ -7,6 +7,7 @@ import { getBeijingDateString, getBeijingISOString } from '../utils/format'
 import type { Wish, CreditChannel } from '../types'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -196,6 +197,9 @@ const handleSubmit = async () => {
     isSubmitting.value = false
   }
 }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => (props.isOpen && !!props.wish))
 </script>
 
 <template>
@@ -334,7 +338,7 @@ const handleSubmit = async () => {
 
           <div v-if="isInstallment" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-subtle)]">
             <div>
-              <label class="block text-[10px] text-[var(--ink-muted)] mb-1">分期渠道</label>
+              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">分期渠道</label>
               <PaperSelect
                 v-model="selectedChannelCode"
                 size="sm"
@@ -347,7 +351,7 @@ const handleSubmit = async () => {
               />
             </div>
             <div>
-              <label class="block text-[10px] text-[var(--ink-muted)] mb-1">分期期数</label>
+              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">分期期数</label>
               <PaperSelect
                 v-model="installmentMonths"
                 size="sm"

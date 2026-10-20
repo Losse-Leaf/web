@@ -30,7 +30,7 @@ const currentYear = computed(() => getBeijingYear())
             <span class="text-[var(--ink-primary)] font-semibold tracking-wider font-serif-editorial text-sm">
               《{{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}》
             </span>
-            <span class="text-[10px] tracking-[0.18em] uppercase text-[var(--ink-muted)] border border-[var(--border-subtle)] px-1.5 py-0.2 rounded-xs">
+            <span class="text-[11px] tracking-[0.18em] uppercase text-[var(--ink-muted)] border border-[var(--border-subtle)] px-1.5 py-0.2 rounded-xs">
               COLOPHON · 版本底款
             </span>
           </div>

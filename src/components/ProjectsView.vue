@@ -293,7 +293,7 @@ const isGitHubUrl = (url?: string) => {
           </div>
 
           <div class="flex items-center gap-3">
-            <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[10px] bg-[var(--bg-archive)] font-mono-archive">
+            <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[11px] bg-[var(--bg-archive)] font-mono-archive">
               {{ proj.status === 'Archived' ? '已封存' : proj.status === 'Maintained' ? '长期维护' : '进行中' }}
             </span>
             <template v-if="isAdmin">
@@ -387,14 +387,14 @@ const isGitHubUrl = (url?: string) => {
                 <span class="font-serif-editorial font-medium text-[var(--ink-primary)] truncate">
                   {{ entry.title || '造物手记' }}
                 </span>
-                <span class="text-[10px] font-mono-archive text-[var(--ink-muted)] shrink-0 ml-2">
+                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)] shrink-0 ml-2">
                   {{ (entry.occurred_at || entry.created_at || '').slice(0, 10) }}
                 </span>
               </div>
               <p class="text-xs font-serif-editorial text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
                 {{ entry.content }}
               </p>
-              <div class="pt-1 flex items-center justify-end text-[10px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)]">
+              <div class="pt-1 flex items-center justify-end text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)]">
                 <span>翻阅详情</span>
                 <ChevronRight class="w-3 h-3" />
               </div>

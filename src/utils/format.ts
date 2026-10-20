@@ -162,11 +162,11 @@ export function renderEditorialContent(content?: string): string {
       }
       if (/^[-*]\s+\[\s\]\s+/.test(line)) {
         const inner = formatEditorialInline(line.replace(/^[-*]\s+\[\s\]\s+/, ''))
-        return `<div class="my-1.5 flex items-baseline gap-2.5"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--ink-muted)]/80 bg-[var(--bg-archive)] text-[10px] font-mono-archive leading-none select-none shrink-0 text-transparent">&#9744;</span><span class="text-[var(--ink-primary)]">${inner}</span></div>`
+        return `<div class="my-1.5 flex items-baseline gap-2.5"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--ink-muted)]/80 bg-[var(--bg-archive)] text-[11px] font-mono-archive leading-none select-none shrink-0 text-transparent">&#9744;</span><span class="text-[var(--ink-primary)]">${inner}</span></div>`
       }
       if (/^[-*]\s+\[[xX]\]\s+/.test(line)) {
         const inner = formatEditorialInline(line.replace(/^[-*]\s+\[[xX]\]\s+/, ''))
-        return `<div class="my-1.5 flex items-baseline gap-2.5 text-[var(--ink-muted)]"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--accent-warm)] bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[10px] font-mono-archive leading-none select-none shrink-0">&#10003;</span><span class="line-through decoration-[var(--accent-warm)]/45">${inner}</span></div>`
+        return `<div class="my-1.5 flex items-baseline gap-2.5 text-[var(--ink-muted)]"><span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-xs border border-[var(--accent-warm)] bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[11px] font-mono-archive leading-none select-none shrink-0">&#10003;</span><span class="line-through decoration-[var(--accent-warm)]/45">${inner}</span></div>`
       }
       if (!line.trim()) {
         return '<div class="h-3"></div>'

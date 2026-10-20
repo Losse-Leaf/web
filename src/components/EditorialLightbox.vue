@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { X, Camera, MapPin, Calendar } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -15,6 +15,74 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+/**
+ * MOB-P2-83：移动端灯箱手势
+ * - 双指捏合 → 缩放（1× ~ 4×）
+ * - 单指下滑 → 关闭（这是 iOS/Android 相册的标准手势）
+ * - 单击 → 关闭（未放大时）
+ * 桌面端保持原有行为。
+ */
+const scale = ref(1)
+const offsetX = ref(0)
+const offsetY = ref(0)
+const dragging = ref(false)
+const swipeY = ref(0)
+const pinchStartDistance = ref(0)
+const pinchStartScale = ref(1)
+const panStart = ref({ x: 0, y: 0 })
+
+const reset = () => {
+  scale.value = 1
+  offsetX.value = 0
+  offsetY.value = 0
+  swipeY.value = 0
+  dragging.value = false
+}
+
+const distance = (t1: Touch, t2: Touch) =>
+  Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+
+const onTouchStart = (e: TouchEvent) => {
+  if (e.touches.length === 2) {
+    pinchStartDistance.value = distance(e.touches[0], e.touches[1])
+    pinchStartScale.value = scale.value
+  } else if (e.touches.length === 1) {
+    dragging.value = true
+    panStart.value = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+}
+
+const onTouchMove = (e: TouchEvent) => {
+  if (e.touches.length === 2 && pinchStartDistance.value > 0) {
+    e.preventDefault()
+    const d = distance(e.touches[0], e.touches[1])
+    const next = Math.min(4, Math.max(1, pinchStartScale.value * (d / pinchStartDistance.value)))
+    scale.value = next
+  } else if (e.touches.length === 1 && dragging.value) {
+    const dy = e.touches[0].clientY - panStart.value.y
+    const dx = e.touches[0].clientX - panStart.value.x
+    if (scale.value > 1.02) {
+      // 放大状态下：拖拽平移
+      e.preventDefault()
+      offsetX.value = dx
+      offsetY.value = dy
+    } else {
+      // 未放大：向下拖拽准备关闭
+      if (dy > 0) swipeY.value = dy
+    }
+  }
+}
+
+const onTouchEnd = () => {
+  pinchStartDistance.value = 0
+  if (!dragging.value) return
+  dragging.value = false
+  if (scale.value <= 1.02 && swipeY.value > 90) {
+    emit('close')
+  }
+  swipeY.value = 0
+}
+
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && props.isOpen) {
     emit('close')
@@ -27,6 +95,7 @@ watch(
     if (open) {
       window.addEventListener('keydown', handleKeydown)
       document.body.style.overflow = 'hidden'
+      reset()
     } else {
       window.removeEventListener('keydown', handleKeydown)
       document.body.style.overflow = ''
@@ -59,22 +128,34 @@ onBeforeUnmount(() => {
         @click="emit('close')"
         class="inline-flex items-center gap-1.5 px-3 py-1 text-xs text-[#ece9e1] hover:text-[#d8764b] border border-white/10 hover:border-white/30 rounded-xs transition-colors cursor-pointer"
       >
-        <span>ESC 关闭</span>
+        <span class="hidden sm:inline">ESC 关闭</span>
+        <span class="sm:hidden">关闭</span>
         <X class="w-3.5 h-3.5" />
       </button>
     </header>
 
-    <!-- 中央装裱大图视口 -->
+    <!-- 中央装裱大图视口（MOB-P2-83：捏合缩放 / 下滑关闭） -->
     <main
       class="flex-grow flex items-center justify-center p-2 sm:p-6 overflow-hidden"
       @click.self="emit('close')"
     >
-      <div class="relative max-w-5xl max-h-[76dvh] sm:max-h-[76vh] flex flex-col items-center">
+      <div
+        class="relative max-w-5xl max-h-[76dvh] sm:max-h-[76vh] flex flex-col items-center"
+        :style="{
+          transform: `translate(${offsetX}px, ${offsetY + swipeY}px) scale(${scale})`,
+          transition: dragging ? 'none' : 'transform 180ms cubic-bezier(0.16,1,0.3,1)',
+          opacity: swipeY > 0 ? Math.max(0.3, 1 - swipeY / 400) : 1
+        }"
+        @touchstart.passive="onTouchStart"
+        @touchmove.passive="onTouchMove"
+        @touchend="onTouchEnd"
+        @touchcancel="onTouchEnd"
+      >
         <img
           :src="imageUrl"
           :alt="title || '底片装裱'"
           class="max-w-full max-h-[76dvh] sm:max-h-[76vh] object-contain rounded-xs shadow-[0_25px_60px_rgba(0,0,0,0.6)] ring-1 ring-white/10 select-none"
-        />
+          loading="lazy" decoding="async">
       </div>
     </main>
 

@@ -123,7 +123,7 @@ onMounted(() => {
       </div>
 
       <!-- 34 省活字印章矩阵 (紧凑博古小格) -->
-      <div class="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-12 gap-2">
+      <div class="grid grid-cols-5 sm:grid-cols-9 md:grid-cols-12 gap-2">
         <div
           v-for="seal in miniProvinceSeals"
           :key="seal.name"
@@ -146,20 +146,20 @@ onMounted(() => {
             {{ seal.shortName }}
           </div>
           <span
-            class="text-[10px] font-serif-editorial truncate max-w-full"
+            class="text-[11px] font-serif-editorial truncate max-w-full"
             :class="seal.isLit ? 'text-[var(--ink-primary)] font-medium' : 'text-[var(--ink-muted)]'"
           >
             {{ seal.name }}
           </span>
           <span
             v-if="seal.isLit"
-            class="text-[9px] font-mono-archive text-[#b94a3b] leading-tight mt-0.5"
+            class="text-[11px] font-mono-archive text-[#b94a3b] leading-tight mt-0.5"
           >
             {{ seal.cityCount }}城
           </span>
           <span
             v-else
-            class="text-[9px] font-serif-editorial text-[var(--ink-muted)]/50 leading-tight mt-0.5"
+            class="text-[11px] font-serif-editorial text-[var(--ink-muted)]/50 leading-tight mt-0.5"
           >
             待访
           </span>
@@ -178,7 +178,7 @@ onMounted(() => {
       >
         <MapPin class="w-3 h-3 text-[#b94a3b]" />
         <span>{{ c.city_name }}</span>
-        <span class="text-[10px] text-[var(--ink-muted)]">({{ c.visit_count }}次)</span>
+        <span class="text-[11px] text-[var(--ink-muted)]">({{ c.visit_count }}次)</span>
       </button>
       <button
         @click="emit('navigateAtlas')"

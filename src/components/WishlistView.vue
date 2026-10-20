@@ -402,12 +402,12 @@ onMounted(() => {
               :alt="w.title"
               loading="lazy"
               class="w-16 h-16 object-cover rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)] shrink-0"
-            />
+             decoding="async">
           </div>
 
           <!-- 达成归册印记 / 拔草印记 -->
-          <div v-if="w.status === 'fulfilled'" class="pt-1 flex flex-wrap items-center gap-2 font-mono-archive text-[10px]">
-            <span class="vermilion-seal px-2 py-0.5 text-[10px]">
+          <div v-if="w.status === 'fulfilled'" class="pt-1 flex flex-wrap items-center gap-2 font-mono-archive text-[11px]">
+            <span class="vermilion-seal px-2 py-0.5 text-[11px]">
               圆满归册
             </span>
             <span v-if="w.fulfilled_at" class="text-[var(--ink-muted)]">
@@ -415,14 +415,14 @@ onMounted(() => {
             </span>
           </div>
 
-          <div v-else-if="w.status === 'relinquished'" class="pt-1 flex items-center gap-1.5 font-mono-archive text-[10px]">
+          <div v-else-if="w.status === 'relinquished'" class="pt-1 flex items-center gap-1.5 font-mono-archive text-[11px]">
             <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xs border border-emerald-600/30 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
               <ShieldCheck class="w-3 h-3" />
               <span>已理性拔草释怀 · 守住生活秩序</span>
             </span>
           </div>
 
-          <div v-else-if="w.target_date" class="pt-1 flex items-center gap-1 font-mono-archive text-[10px] text-[var(--ink-muted)]">
+          <div v-else-if="w.target_date" class="pt-1 flex items-center gap-1 font-mono-archive text-[11px] text-[var(--ink-muted)]">
             <Calendar class="w-3 h-3" />
             <span>愿景目标期: {{ w.target_date.slice(0, 10) }}</span>
           </div>
@@ -430,7 +430,7 @@ onMounted(() => {
 
         <!-- 底部操作按钮 -->
         <div class="pt-3 border-t border-[var(--border-subtle)]/60 flex items-center justify-between font-mono-archive text-[11px]">
-          <span class="text-[10px] text-[var(--ink-muted)]">
+          <span class="text-[11px] text-[var(--ink-muted)]">
             {{ w.created_at ? w.created_at.slice(0, 10) : '' }} 许下
           </span>
 

@@ -23,7 +23,7 @@ const DevicePairingModal = defineAsyncComponent(() => import('./components/Devic
 const UpdateCheckModal = defineAsyncComponent(() => import('./components/UpdateCheckModal.vue'))
 const CategoryManagerModal = defineAsyncComponent(() => import('./components/CategoryManagerModal.vue'))
 const PasscodeModal = defineAsyncComponent(() => import('./components/PasscodeModal.vue'))
-import { getAdminToken, removeAdminToken } from './utils/api'
+import { getAdminToken, removeAdminToken, refreshSessionState } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
 import { useTransactions } from './composables/useTransactions'
@@ -39,6 +39,7 @@ import type {
   CuratorProfile,
   SystemStatus,
 } from './types'
+import { BookOpen, Heart, MapPin, Compass, User } from 'lucide-vue-next'
 import { entryMatchesCategory } from './types'
 import { parseOccurredDate } from './utils/format'
 import {
@@ -69,6 +70,15 @@ const syncProfileCache = (profile: CuratorProfile) => {
 
 // 1. 基础视图与主题模式
 const currentView = ref<string>('home')
+
+/** MOB-P1-107：移动端底部标签栏的 5 个主板块 */
+const mobileNavItems = [
+  { key: 'home', label: '时间流', icon: BookOpen },
+  { key: 'wishes', label: '心愿', icon: Heart },
+  { key: 'atlas', label: '足迹', icon: MapPin },
+  { key: 'projects', label: '项目', icon: Compass },
+  { key: 'about', label: '主理人', icon: User }
+]
 const { theme, toggleTheme } = useTheme()
 const siteConfig = ref<SiteConfig | null>(null)
 const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile())
@@ -134,10 +144,66 @@ const isStorageBackupOpen = ref(false)
 const storageBackupInitialTab = ref<'backup' | 'storage'>('backup')
 const isStatsOpen = ref(false)
 const isSearchOpen = ref(false)
+
+// MOB-P1-101：离线感知（此前完全没有 navigator.onLine 的使用，
+// 断网时用户只看到「旧数据」，却不知道已经离线）
+const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+
+const setupOnlineListeners = () => {
+  if (typeof window === 'undefined') return
+  window.addEventListener('online', () => { isOnline.value = true })
+  window.addEventListener('offline', () => { isOnline.value = false })
+}
+
 const isPairingOpen = ref(false)
 const isUpdateCheckOpen = ref(false)
 
 const isPasscodeModalOpen = ref(false)
+
+// MOB-P2-84：PWA 安装引导
+// Android Chrome 会触发 beforeinstallprompt（可主动弹出安装 CTA）；
+// iOS Safari 永远不会触发，只能提示用户「分享 → 添加到主屏幕」。
+const deferredInstallPrompt = ref<any>(null)
+const isIOS = typeof navigator !== 'undefined' &&
+  /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream
+const showInstallTip = ref(false)
+
+const setupInstallPrompt = () => {
+  if (typeof window === 'undefined') return
+  window.addEventListener('beforeinstallprompt', (e: any) => {
+    e.preventDefault()
+    deferredInstallPrompt.value = e
+    showInstallTip.value = true
+  })
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt.value = null
+    showInstallTip.value = false
+  })
+}
+
+const promptInstall = async () => {
+  const p = deferredInstallPrompt.value
+  if (!p) return
+  deferredInstallPrompt.value = null
+  showInstallTip.value = false
+  try {
+    await p.prompt()
+  } catch {
+    // 用户拒绝或环境不支持，忽略
+  }
+}
+
+// MOB-P1-93：是否处于「某个弹窗打开」状态（用于隐藏悬浮按钮）
+const anyModalOpen = computed(
+  () =>
+    isSearchOpen.value ||
+    isStorageBackupOpen.value ||
+    isNewEntryOpen.value ||
+    isStatsOpen.value ||
+    isPairingOpen.value ||
+    isUpdateCheckOpen.value ||
+    isPasscodeModalOpen.value
+)
 const passcodeModalPrompt = ref('')
 const passcodeModalCallback = ref<(() => void) | null>(null)
 const wishesRefreshKey = ref(0)
@@ -425,7 +491,12 @@ const handleHashChange = async () => {
 const { loadCategories, isCategoryManagerOpen } = useCategories()
 
 onMounted(async () => {
+  setupOnlineListeners()
+  setupInstallPrompt()
   loadCategories()
+  // MOB-P1-69：刷新页面后先用服务端探针确认 HttpOnly Cookie 会话是否仍然有效，
+  // 免得「已经登录」的主理人被当成访客看待（令牌本身 JS 读不到，只能问服务端）
+  await refreshSessionState()
   await handleHashChange()
   window.addEventListener('hashchange', handleHashChange)
 
@@ -576,7 +647,8 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     />
 
     <!-- 主视图区 -->
-    <main class="flex-grow">
+    <!-- MOB-P1-107：为移动端底部标签栏留出空间 -->
+    <main class="flex-grow pb-16 md:pb-0">
       
       <!-- 1. HOME 视图：克制开篇封面 + 最近一年生活刻度热力图 + 近况生活流 -->
       <HomeView
@@ -665,7 +737,73 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     />
 
     <!-- 全局快捷新增浮动操作按钮 (桌面端 + 移动端右下角) -->
-    <FloatingActionButton @click="openNewEntry()" />
+    <!-- MOB-P2-84：安装到主屏幕的引导 -->
+    <div
+      v-if="showInstallTip"
+      class="fixed bottom-20 inset-x-3 z-[1200] mx-auto max-w-sm bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl px-4 py-3 flex items-center gap-3"
+    >
+      <div class="flex-1 min-w-0">
+        <p class="text-xs text-[var(--ink-primary)] font-serif-editorial mb-1">把散页放到主屏幕</p>
+        <p v-if="!isIOS" class="text-[11px] text-[var(--ink-muted)] font-mono-archive">随时打开，像本地手记一样离线可用</p>
+        <p v-else class="text-[11px] text-[var(--ink-muted)] font-mono-archive">点击 Safari 分享按钮 → 添加到主屏幕</p>
+      </div>
+      <button
+        v-if="!isIOS"
+        type="button"
+        @click="promptInstall"
+        class="px-3 py-1.5 text-xs bg-[var(--accent-warm)] text-white rounded-xs cursor-pointer shrink-0"
+      >
+        安装
+      </button>
+      <button
+        type="button"
+        @click="showInstallTip = false"
+        class="px-2 py-1.5 text-xs text-[var(--ink-muted)] cursor-pointer shrink-0"
+      >
+        稍后
+      </button>
+    </div>
+
+    <!-- MOB-P1-101：离线横幅 -->
+    <div
+      v-if="!isOnline"
+      class="fixed top-0 inset-x-0 z-[1200] bg-[var(--accent-warm)] text-white text-xs px-4 py-1.5 flex items-center justify-center gap-2"
+    >
+      <span>当前离线 · 记录会先保存在本机，联网后自动同步</span>
+    </div>
+
+    <!-- MOB-P1-93：任一弹窗打开时隐藏悬浮按钮 ——
+         iOS 的 vh/dvh 不随软键盘收缩，FAB 会一直压在弹窗底部输入框上 -->
+    <!-- MOB-P1-107：FAB 上移，避开移动端底部标签栏 -->
+    <div class="md:hidden h-0" />
+    <FloatingActionButton v-if="!anyModalOpen" @click="openNewEntry()" />
+
+    <!--
+      MOB-P1-107：移动端底部标签栏。
+      此前移动端只有左上角汉堡菜单 → 每次切换主板块都要「开菜单 → 滚动 → 点」三步；
+      底部标签栏让 5 个主板块一触即达，与 Android 端的底栏策略保持一致。
+      桌面端（md 及以上）仍走顶部导航，不显示此栏。
+    -->
+    <nav
+      v-if="!anyModalOpen"
+      class="md:hidden fixed bottom-0 inset-x-0 z-[1150] bg-[var(--bg-archive)]/96 backdrop-blur-md border-t border-[var(--border-subtle)] pb-[env(safe-area-inset-bottom)]"
+      aria-label="主导航"
+    >
+      <div class="grid grid-cols-5">
+        <button
+          v-for="item in mobileNavItems"
+          :key="item.key"
+          type="button"
+          @click="navigateTo(item.key)"
+          :aria-current="currentView === item.key ? 'page' : undefined"
+          class="flex flex-col items-center justify-center gap-0.5 py-2 min-h-[52px] transition-colors"
+          :class="currentView === item.key ? 'text-[var(--accent-warm)]' : 'text-[var(--ink-muted)]'"
+        >
+          <component :is="item.icon" class="w-4 h-4" :stroke-width="1.6" />
+          <span class="text-[10px] font-mono-archive tracking-wider">{{ item.label }}</span>
+        </button>
+      </div>
+    </nav>
 
     <!-- 1. 全局即时模糊搜索弹窗 (Cmd+K) -->
     <SearchModal

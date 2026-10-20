@@ -27,7 +27,10 @@ function throttledSaveTransactions(list: Transaction[]) {
   saveTxTimer = window.setTimeout(() => {
     try {
       localStorage.setItem(TX_CACHE_KEY, JSON.stringify({ cached_at: Date.now(), data: list }))
-    } catch {}
+    } catch (err) {
+      // MOB-P1-70：配额耗尽 / 私密模式时明确记录，而不是静默吞掉
+      console.warn('本地缓存写入失败（配额不足或隐私模式）:', err)
+    }
   }, 400)
 }
 

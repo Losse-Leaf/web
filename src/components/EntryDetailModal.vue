@@ -11,6 +11,7 @@ import { updateLifeEntry, deleteLifeEntry, getAdminToken } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
 import { parseOccurredDate, renderEditorialContent, getBeijingISOString } from '../utils/format'
 import { showAlert } from '../composables/useConfirm'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   entry: LifeEntry | null
@@ -225,6 +226,9 @@ const getKindLabel = (type: string) => {
   }
   return map[type] || '日常'
 }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => !!props.entry)
 </script>
 
 <template>
@@ -234,7 +238,7 @@ const getKindLabel = (type: string) => {
     @click.self="emit('close')"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-10 text-left relative transition-all"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-10 text-left relative transition-all pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 顶部关闭与操作工具栏 -->
       <div class="flex items-center justify-between pb-6 border-b border-[var(--border-subtle)] mb-8">
@@ -482,7 +486,7 @@ const getKindLabel = (type: string) => {
             v-if="displayImages.length >= 4 && galleryViewMode === 'contact'"
             class="p-2.5 sm:p-3.5 bg-[#181716] text-[#F9F8F5] rounded-xs border border-[var(--border-subtle)] space-y-2.5 shadow-inner"
           >
-            <div class="flex items-center justify-between text-[10px] font-mono-archive text-[#a8a29e] tracking-widest px-0.5">
+            <div class="flex items-center justify-between text-[11px] font-mono-archive text-[#a8a29e] tracking-widest px-0.5">
               <span>KODAK TRI-X 400 · CONTACT PROOF SHEET</span>
               <span>{{ parseOccurredDate(entry.occurred_at).dotDate }} · {{ displayImages.length }} FRAMES</span>
             </div>
@@ -506,9 +510,9 @@ const getKindLabel = (type: string) => {
                     :alt="entry.title"
                     class="w-full h-full object-cover group-hover/frame:scale-105 transition-transform duration-300"
                     loading="lazy"
-                  />
+                   decoding="async">
                 </div>
-                <div class="flex items-center justify-between text-[9px] font-mono-archive text-[#a8a29e] px-0.5">
+                <div class="flex items-center justify-between text-[11px] font-mono-archive text-[#a8a29e] px-0.5">
                   <span>FRAME {{ String(idx + 1).padStart(2, '0') }}A</span>
                   <span class="text-[var(--accent-warm)]/90">▲ {{ idx + 1 }}</span>
                 </div>
@@ -533,7 +537,7 @@ const getKindLabel = (type: string) => {
                 :alt="entry.title"
                 class="w-full max-h-[680px] object-cover editorial-image"
                 loading="lazy"
-              />
+               decoding="async">
             </div>
           </div>
         </div>

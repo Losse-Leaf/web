@@ -6,6 +6,7 @@ import { audio } from '../utils/audio'
 import { searchGlobalArchive } from '../utils/api'
 import { filterEntriesBySearch } from '../composables/useArchive'
 import { parseOccurredDate, formatMoney } from '../utils/format'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -145,6 +146,9 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -155,7 +159,7 @@ onUnmounted(() => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-2xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[88dvh] sm:max-h-[80vh] text-left animate-in fade-in zoom-in-95 duration-200"
+      class="w-full max-w-2xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[88dvh] sm:max-h-[80vh] text-left animate-in fade-in zoom-in-95 duration-200 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]"
     >
       <!-- 搜索输入栏 -->
       <div class="p-4 border-b border-[var(--border-subtle)] flex items-center gap-3">
@@ -257,7 +261,7 @@ onUnmounted(() => {
             >
               <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
                 <span>{{ fp.city_name }} · {{ fp.title || '旅程足迹' }}</span>
-                <span class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
                   {{ (fp.visited_at || '').slice(0, 10) }}
                 </span>
               </div>
@@ -307,7 +311,7 @@ onUnmounted(() => {
             >
               <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
                 <span class="truncate">{{ proj.title }}</span>
-                <span class="text-[10px] font-mono-archive text-[var(--ink-muted)]">{{ proj.status }}</span>
+                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">{{ proj.status }}</span>
               </div>
               <p v-if="proj.description" class="text-[11px] text-[var(--ink-secondary)] line-clamp-1 font-serif-editorial">
                 {{ proj.description }}

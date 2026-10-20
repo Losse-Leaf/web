@@ -26,6 +26,7 @@ import { useCategories } from '../composables/useCategories'
 import { getBeijingDateTimeString, getBeijingISOString } from '../utils/format'
 import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 export type EntryKind = 'life' | 'travel' | 'project' | 'wish' | 'transaction'
 
@@ -771,6 +772,9 @@ const handleSubmit = async () => {
     isSubmitting.value = false
   }
 }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -780,7 +784,7 @@ const handleSubmit = async () => {
     @click.self="handleClose"
   >
     <div
-      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl min-h-[480px] max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
+      class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_16px_50px_rgba(0,0,0,0.12)] w-full max-w-xl max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto rounded-xs p-4 sm:p-8 text-left transition-all duration-200 relative pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
       @paste="handleModalPaste"
     >
       <!-- 顶部轻量标头 -->
