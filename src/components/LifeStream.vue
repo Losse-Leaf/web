@@ -35,9 +35,15 @@ const lightboxPayload = ref({
   date: '',
 })
 
+// 列表里显示用**缩略图**（几十 KB），点开灯箱时才用原图。
+// 关键：原图动辄 1.5MB，从对象存储拉一次要 4 秒；滚动列表时每张新卡片都在拉原图，
+// 网络与解码把主线程打满，表现为「滑动卡」「点开转圈」。
+const thumbnailUrlOf = (att: { url: string; thumbnail_url?: string }): string =>
+  att.thumbnail_url || att.url
+
 const getEntryFirstImage = (entry: LifeEntry): string => {
   if (entry.attachments && entry.attachments.length > 0 && entry.attachments[0].url) {
-    return entry.attachments[0].url
+    return thumbnailUrlOf(entry.attachments[0])
   }
   return ''
 }
@@ -51,7 +57,9 @@ const getEntryImages = (entry: LifeEntry): { id: number; url: string }[] => {
   if (cached) return cached
   const list =
     entry.attachments && entry.attachments.length > 0
-      ? (entry.attachments.filter((a) => Boolean(a.url)) as { id: number; url: string }[])
+      ? (entry.attachments
+          .filter((a) => Boolean(a.url))
+          .map((a) => ({ id: a.id, url: thumbnailUrlOf(a) })) as { id: number; url: string }[])
       : []
   imagesMemo.set(entry, list)
   return list

@@ -191,7 +191,8 @@ const handleDelete = async () => {
 const displayImages = computed(() => {
   if (!props.entry) return []
   if (props.entry.attachments && props.entry.attachments.length > 0) {
-    return props.entry.attachments.map((a) => a.url).filter(Boolean)
+    // 详情页同样用缩略图；点开灯箱（EditorialLightbox）才拉原图
+    return props.entry.attachments.map((a) => a.thumbnail_url || a.url).filter(Boolean)
   }
   return []
 })

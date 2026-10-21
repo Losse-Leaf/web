@@ -504,6 +504,22 @@ export async function searchGlobalArchive(
   }
 }
 
+/**
+ * 从正文派生标题（朋友圈式发布：只填正文，标题取首行）
+ *
+ * 关键：这条规则必须与**后端、mac 端一致**，
+ * 否则同一条记录在不同端标题会不一样，搜索与索引也对不上。
+ */
+export function deriveTitleFromContent(content: string, maxLength = 40): string {
+  if (!content) return ''
+  const firstLine = content.split('\n')[0] ?? ''
+  const trimmed = firstLine.trim()
+  if (!trimmed) return ''
+  const chars = Array.from(trimmed)
+  if (chars.length > maxLength) return chars.slice(0, maxLength).join('') + '…'
+  return trimmed
+}
+
 export async function createLifeEntry(data: {
   type: string
   title?: string
@@ -518,9 +534,14 @@ export async function createLifeEntry(data: {
   featured?: boolean
   attachment_ids?: number[]
 }): Promise<LifeEntry> {
+  // 朋友圈式发布：标题为空时从正文首行派生（与后端同一套规则）
+  const payload = {
+    ...data,
+    title: (data.title ?? '').trim() || deriveTitleFromContent(data.content ?? ''),
+  }
   const result = await request<LifeEntry>(`${API_BASE}/entries`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   })
   resetEntriesETag()
   return result

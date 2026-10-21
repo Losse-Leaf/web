@@ -67,6 +67,14 @@ export interface Attachment {
   width?: number
   height?: number
   url: string
+  /**
+   * 缩略图地址（中枢自己的路由，稳定可缓存）
+   *
+   * 关键：列表与详情用缩略图，**只有灯箱（点开大图）才用原图**。
+   * 原图动辄 1.5MB，从对象存储拉一次要 4 秒；滚动列表时每张新卡片都在拉原图，
+   * 网络与解码把主线程打满，表现为「滑动卡」「点开转圈」。
+   */
+  thumbnail_url?: string
   created_at?: string
 }
 
