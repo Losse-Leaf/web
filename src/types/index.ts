@@ -4,6 +4,7 @@ export type EntryType =
   | 'project'
   | 'wish'
   | 'transaction'
+  | 'gear'
 
 export type ArchiveCategory =
   | 'all'
@@ -12,6 +13,7 @@ export type ArchiveCategory =
   | 'project'
   | 'wish'
   | 'transaction'
+  | 'gear'
 
 export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
   const t = (entry.type || '').toLowerCase()
@@ -24,6 +26,9 @@ export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
   }
   if (t === 'wish' || Boolean(entry.wish_id)) {
     return 'wish'
+  }
+  if (t === 'gear' || Boolean(entry.gear_id)) {
+    return 'gear'
   }
   if (t === 'travel' || Boolean(entry.city_code)) {
     return 'travel'
@@ -45,6 +50,9 @@ export const entryMatchesCategory = (entry: LifeEntry, category: ArchiveCategory
   }
   if (category === 'wish') {
     return cat === 'wish' || Boolean(entry.wish_id)
+  }
+  if (category === 'gear') {
+    return cat === 'gear' || Boolean(entry.gear_id)
   }
   return cat === category
 }
@@ -75,6 +83,8 @@ export interface LifeEntry {
   project?: Project
   wish_id?: number
   wish?: Wish
+  /** 器物伴生散页（器物 id 为字符串） */
+  gear_id?: string
   footprint_id?: number
   attachments?: Attachment[]
 
@@ -321,6 +331,8 @@ export interface Wish {
   budget: number // 分
   actual_cost: number // 分
   target_date?: string | null
+  /** 许下心愿的时刻（可回填为过去日期以支撑「补档」） */
+  planted_at?: string | null
   status: 'wanting' | 'fulfilled' | 'shelved' | 'relinquished'
   fulfilled_at?: string | null
   transaction_id?: number
