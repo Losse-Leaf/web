@@ -512,8 +512,14 @@ const handleSubmit = async () => {
     }
     const amountInCents = Math.round(amtFloat * 100)
     const repaymentDay = effectiveRepaymentDay.value
+    // 关键：与后端 / mac 端**同口径**（整除截断，不四舍五入）。
+    // 原先用 Math.round，而 Go 与 Swift 的整数除法都是向零截断 ——
+    // 三端对同一笔账算出不同的 installment_monthly_pay，
+    // 落库后两端负债口径分叉（总额 ¥9,169.00 分 12 期：
+    // 截断 76,408 分 vs 四舍五入 76,409 分，差 1 分，
+    // 还了 6 期就差 6 分）。
     const installmentPay = isInstallment.value
-      ? Math.round(amountInCents / (installmentMonths.value || 1))
+      ? Math.floor(amountInCents / (installmentMonths.value || 1))
       : undefined
 
     const matchedChannel = displayCreditChannels.value.find(
