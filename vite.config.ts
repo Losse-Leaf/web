@@ -14,7 +14,7 @@ export default defineConfig({
     // 接口数据走 NetworkFirst（离线时回落到最近一次成功的响应）。
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'icons/apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: '散页',
         short_name: '散页',
