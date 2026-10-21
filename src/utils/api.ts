@@ -62,6 +62,18 @@ function hasCookieSession(): boolean {
 
 const adminTokenRef = ref<string>(hasCookieSession() ? COOKIE_SESSION_MARKER : readStoredAdminToken())
 
+/**
+ * MOB-P1-xx：**响应式**的会话态。
+ *
+ * 之前 `Boolean(getAdminToken())` 这类 computed 在 Cookie 会话模式下**永远不失效** ——
+ * `getAdminToken()` 在 Cookie 分支里只**写** `adminTokenRef`、不**读**它，
+ * 于是 computed 收集不到任何响应式依赖，缓存的 true 永远留着。
+ * 结果：登出 / 401 之后，界面仍显示主人专属入口，点进去立刻再 401。
+ *
+ * 现在把「是否有会话」放进一个 ref，computed 读它就能正常建立依赖。
+ */
+const sessionActiveRef = ref<boolean>(hasCookieSession() || readStoredAdminToken() !== '')
+
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key === ADMIN_TOKEN_KEY || e.key === ADMIN_SESSION_KEY || e.key === null) {
@@ -79,6 +91,9 @@ if (typeof window !== 'undefined') {
  * （浏览器会自动带上 HttpOnly Cookie，令牌从此不落在 JS 能读到的地方）。
  */
 export function getAdminToken(): string {
+  // 读一下响应式的会话态 —— 这一句是让 `Boolean(getAdminToken())` 形式的
+  // computed 能正常失效的关键（见 sessionActiveRef 的说明）。
+  void sessionActiveRef.value
   if (hasCookieSession()) {
     adminTokenRef.value = COOKIE_SESSION_MARKER
     return COOKIE_SESSION_MARKER
@@ -103,6 +118,7 @@ export function setAdminToken(token: string): void {
     localStorage.setItem(ADMIN_TOKEN_KEY, clean)
   } catch {}
   adminTokenRef.value = clean
+  sessionActiveRef.value = true
 }
 
 /** MOB-P1-69：标记「已建立 Cookie 会话」，并清掉历史遗留的明文令牌 */
@@ -114,6 +130,7 @@ function markCookieSession(): void {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
   } catch {}
   adminTokenRef.value = COOKIE_SESSION_MARKER
+  sessionActiveRef.value = true
 }
 
 export function removeAdminToken(): void {
@@ -124,8 +141,34 @@ export function removeAdminToken(): void {
     localStorage.removeItem(ADMIN_SESSION_KEY)
   } catch {}
   adminTokenRef.value = ''
-  // MOB-P1-69：让服务端把 HttpOnly Cookie 一并清掉
+  sessionActiveRef.value = false
+  // MOB-P1-69：让服务端把 HttpOnly Cookie 一并清掉。
+  //
+  // MOB-P1-xx：注意这里的语义 —— 清除本地态（token / 会话标记）已由上面完成，
+  // 而服务端 LogoutSession 只清浏览器 Cookie、**不吊销** devices 表里的设备令牌
+  // （后端注释里写明这是有意设计）。所以这次登出是「清浏览器里的凭据」，
+  // 不是「吊销设备」。若把这两件事混为一谈，一个只读接口的偶发 401
+  // 就会把用户整个踢出主人态。
   void fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'same-origin' }).catch(() => {})
+}
+
+/**
+ * MOB-P1-xx：只清**本地**凭据，不发登出请求。
+ *
+ * 401 只说明「这次请求没被认账」（令牌轮换、网关鉴权抖动……），
+ * 不代表整个浏览器会话该被清掉 —— 之前 401 一律走 removeAdminToken()，
+ * 而 removeAdminToken() 会连带 POST /auth/logout 把 HttpOnly Cookie 打死，
+ * 于是一次只读接口的偶发 401 就把用户静默踢出主人态。
+ */
+export function clearLocalCredential(): void {
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY)
+  } catch {}
+  try {
+    localStorage.removeItem(ADMIN_SESSION_KEY)
+  } catch {}
+  adminTokenRef.value = ''
+  sessionActiveRef.value = false
 }
 
 /**
@@ -133,15 +176,27 @@ export function removeAdminToken(): void {
  *
  * 只回传角色、不回传任何凭据，因此可以安全地在启动时调用。
  */
-async function probeSessionCookie(): Promise<boolean> {
+type SessionProbe =
+  | { kind: 'admin' }
+  | { kind: 'not-admin' }
+  /** 探针本身失败（离线 / 网关 5xx / 旧服务端没这个路由）—— **不能**据此判定会话失效 */
+  | { kind: 'unknown' }
+
+async function probeSessionCookie(): Promise<SessionProbe> {
   try {
     const res = await fetch(`${API_BASE}/auth/session`, { credentials: 'same-origin' })
-    if (!res.ok) return false
+    // 401/403 才是「服务端明确说不认账」
+    if (res.status === 401 || res.status === 403) return { kind: 'not-admin' }
+    // 5xx / 404（旧服务端未实现该路由）属于「探针不可用」，不是「会话失效」
+    if (!res.ok) return { kind: 'unknown' }
     const json = await res.json()
     const data = json && typeof json === 'object' && 'data' in json ? json.data : json
-    return Boolean(data && (data as { is_admin?: boolean }).is_admin)
+    return (data && (data as { is_admin?: boolean }).is_admin)
+      ? { kind: 'admin' }
+      : { kind: 'not-admin' }
   } catch {
-    return false
+    // 网络不可达 —— 探针没跑成，不代表 Cookie 失效
+    return { kind: 'unknown' }
   }
 }
 
@@ -154,29 +209,45 @@ async function probeSessionCookie(): Promise<boolean> {
 export async function establishSession(token: string): Promise<void> {
   const clean = token.trim()
   if (!clean || isCookieSessionOnly(clean)) return
-  const cookieOK = await probeSessionCookie()
-  if (cookieOK) {
+  const probe = await probeSessionCookie()
+  if (probe.kind === 'admin') {
     markCookieSession()
     return
   }
+  // 'unknown'（探针没跑成）与 'not-admin' 都先回落���明文令牌路径 ——
+  // 登录动作本身说明服务端认这个密钥，先用它保证可用；
+  // 下次 refreshSessionState 会按探针的真实结果校正。
   setAdminToken(clean)
 }
 
 /** MOB-P1-69：启动时确认 Cookie 会话是否仍然有效（刷新页面后恢复主理人视角） */
 export async function refreshSessionState(): Promise<boolean> {
-  const ok = await probeSessionCookie()
-  if (ok) {
+  const probe = await probeSessionCookie()
+
+  if (probe.kind === 'admin') {
     markCookieSession()
     return true
   }
-  // 探针失败 = 会话已失效（Cookie 过期 / 已被登出 / 服务端是旧版）。
-  // 这时必须把标记清掉，否则 UI 会一直以为「还是主人」，
+
+  // MOB-P1-xx：探针**没跑成**（离线 / 网关 5xx / 旧服务端没有这个路由）
+  // 不等于「会话已失效」。
+  // 之前一律当作失效 ⇒ 一次网络抖动就把主理人视角清掉，
+  // 而 HttpOnly Cookie 其实还在、服务端仍然认账 ⇒ 网络一恢复主人态又凭空回来，
+  // 行为来回跳变。
+  if (probe.kind === 'unknown') {
+    // 保留现状（不增不减），让 UI 维持当前认知，等网络恢复后自然校正。
+    return hasCookieSession() || readStoredAdminToken() !== ''
+  }
+
+  // 服务端**明确**说不认账（401/403，或返回了 is_admin=false）
+  // ⇒ 这时必须把标记清掉，否则 UI 会一直以为「还是主人」，
   // 直到下一次请求 401 才反应过来 —— 主理人视角会挂在不该出现的界面上。
   if (hasCookieSession()) {
     try {
       localStorage.removeItem(ADMIN_SESSION_KEY)
     } catch {}
     adminTokenRef.value = readStoredAdminToken()
+    sessionActiveRef.value = adminTokenRef.value !== ''
   }
   return false
 }
@@ -227,7 +298,13 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     if (res.status === 401 && !url.includes('/auth/verify')) {
-      removeAdminToken()
+      // MOB-P1-xx：401 只清**本地**凭据，不做全局登出。
+      //
+      // 之前这里走 removeAdminToken()，而它会连带 POST /auth/logout 把 HttpOnly Cookie 打死
+      // ⇒ 任何一次只读接口的偶发 401（令牌轮换、网关鉴权抖动）都会把用户静默踢出主人态。
+      // 服务端的 LogoutSession 只清浏览器 Cookie、并不吊销 devices 表里的设备令牌，
+      // 所以那次「登出」既粗暴又没真正吊销任何东西。
+      clearLocalCredential()
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
       }
