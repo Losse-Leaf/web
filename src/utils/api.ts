@@ -532,6 +532,15 @@ export async function createLifeEntry(data: {
   wish_id?: number | null
   footprint_id?: number | null
   attachment_ids?: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   */
+  clear_attachments?: boolean
 }): Promise<LifeEntry> {
   // 朋友圈式发布：标题为空时从正文首行派生（与后端同一套规则）
   const payload = {
@@ -560,6 +569,15 @@ export async function updateLifeEntry(
     wish_id?: number | null
     footprint_id?: number | null
     attachment_ids?: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   */
+  clear_attachments?: boolean
   }
 ): Promise<LifeEntry> {
   const result = await request<LifeEntry>(`${API_BASE}/entries/${id}`, {
@@ -796,6 +814,15 @@ export async function createWish(data: {
   /** 许下心愿的时刻（可选，支持补录过去的心愿） */
   planted_at?: string
   attachment_ids?: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   */
+  clear_attachments?: boolean
 }): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes`, {
     method: 'POST',
@@ -803,7 +830,21 @@ export async function createWish(data: {
   })
 }
 
-export async function updateWish(id: number, data: Partial<Wish> & { attachment_ids?: number[] }): Promise<Wish> {
+export async function updateWish(
+  id: number,
+  data: Partial<Wish> & {
+    attachment_ids?: number[]
+    /**
+     * 显式声明「本次要解除全部参考图绑定」
+     *
+     * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+     * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+     * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+     * 于是在没有附件 UI 的 mac 编辑弹窗里改个标题也会把照片解绑。
+     */
+    clear_attachments?: boolean
+  }
+): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -830,6 +871,15 @@ export async function resolveWish(
     create_footprint?: boolean
     entry_content?: string
     attachment_ids?: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   */
+  clear_attachments?: boolean
     is_installment?: boolean
     installment_channel_code?: string
     installment_months?: number
@@ -844,7 +894,17 @@ export async function resolveWish(
 
 export async function updateTransaction(
   id: number,
-  data: Partial<Transaction>
+  data: Partial<Transaction> & {
+    /**
+     * 显式声明「本次要取消分期」
+     *
+     * 关键：单传 `is_installment: false` **不足以**表达「取消分期」——
+     * 后端的新契约是「不带 clear_installment 就保持原值」，
+     * 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传；
+     * 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
+     */
+    clear_installment?: boolean
+  }
 ): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions/${id}`, {
     method: 'PUT',
@@ -1199,6 +1259,15 @@ export async function createFootprint(data: {
   life_entry_id?: number
   wish_id?: number
   attachment_ids?: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   */
+  clear_attachments?: boolean
 }): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints`, {
     method: 'POST',

@@ -548,6 +548,15 @@ const saveEdit = async () => {
     occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
     city_code: editCityCode.value || undefined,
     is_installment: editType.value === 'expense' && editIsInstallment.value,
+    // 关键：**显式声明**「本次要取消分期」。
+    // 后端的新契约是「is_installment=false 且不带 clear_installment → 保持原值」，
+    // 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传 ——
+    // 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
+    // 这里是 web 端**唯一**能真正取消分期的入口，所以必须带上这个信号。
+    clear_installment:
+      editType.value === 'expense' && !editIsInstallment.value
+        ? Boolean(editingTx.value?.is_installment)
+        : false,
     installment_channel_code:
       editType.value === 'expense' && editIsInstallment.value
         ? editInstallmentChannel.value

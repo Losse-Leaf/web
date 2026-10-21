@@ -112,6 +112,14 @@ const handleSubmit = async () => {
         target_date: targetDate.value || undefined,
         planted_at: plantedAt.value || undefined,
         attachment_ids: attachmentIds.value,
+        // 关键：**显式声明**「本次要解除全部参考图绑定」。
+        // 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+        // 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传 ——
+        // 于是在没有附件 UI 的 mac 编辑弹窗里改个标题，
+        // 服务端也会把该心愿的照片解绑（跨端更刺眼：
+        // 用 web 传了图，再用 mac 改个字，图片就没了）。
+        // 这里要真正清空图片时必须带上这个信号。
+        clear_attachments: attachmentIds.value.length === 0,
       })
       emit('saved', updated)
     } else {
