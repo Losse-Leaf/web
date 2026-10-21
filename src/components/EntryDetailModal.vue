@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle, LayoutGrid, Rows3, Bookmark } from 'lucide-vue-next'
+import { X, Edit2, Trash2, ArrowUpRight, Check, AlertTriangle, LayoutGrid, Rows3 } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -56,30 +56,6 @@ const handleEditCitySelect = (city: { code: string; name: string }) => {
   }
 }
 
-const toggleFeaturedDirectly = async () => {
-  if (!props.entry) return
-  if (!getAdminToken()) {
-    emit('requestAuth', () => toggleFeaturedDirectly())
-    return
-  }
-  try {
-    const updated = await updateLifeEntry(props.entry.id, {
-      type: props.entry.type,
-      title: props.entry.title || '',
-      content: props.entry.content || '',
-      location: props.entry.location || undefined,
-      city_code: props.entry.city_code || undefined,
-      city_name: props.entry.city_name || undefined,
-      project_id: props.entry.project_id || undefined,
-      occurred_at: props.entry.occurred_at,
-      featured: !props.entry.featured,
-      attachment_ids: (props.entry.attachments || []).map((a) => a.id),
-    })
-    emit('updated', updated)
-  } catch (err: any) {
-    showAlert(`切换精选失败: ${err?.message || '网络异常'}`)
-  }
-}
 
 const startEdit = () => {
   if (!props.entry) return
@@ -102,7 +78,6 @@ const startEdit = () => {
   editCityName.value = props.entry.city_name || matched?.name || ''
   editProjectId.value = props.entry.project_id || null
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
-  editFeatured.value = Boolean(props.entry.featured)
 
   // 统一经 parseOccurredDate 还原北京时间后再回填 (RC-134)
   editOccurredAt.value = props.entry.occurred_at
@@ -147,7 +122,6 @@ const handleSaveEdit = async () => {
       city_name: finalCityName,
       project_id: editProjectId.value,
       occurred_at: getBeijingISOString(editOccurredAt.value),
-      featured: editFeatured.value,
       attachment_ids: editAttachmentIds.value,
     })
 
@@ -254,15 +228,6 @@ const getKindLabel = (type: string) => {
 
         <div class="flex items-center gap-3">
           <template v-if="isAdmin && !isEditing">
-            <button
-              @click="toggleFeaturedDirectly"
-              class="text-xs font-mono-archive transition-colors cursor-pointer flex items-center gap-1 py-1 px-2 border rounded-xs"
-              :class="entry.featured ? 'text-[var(--accent-warm)] border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8' : 'text-[var(--ink-muted)] border-transparent hover:border-[var(--border-subtle)]'"
-              :title="entry.featured ? '取消精选' : '标记为精选'"
-            >
-              <Bookmark class="w-3.5 h-3.5" :class="{ 'fill-current': entry.featured }" />
-              <span>{{ entry.featured ? '已精选' : '精选' }}</span>
-            </button>
             <button
               @click="startEdit"
               class="text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer flex items-center gap-1 py-1 px-2 border border-transparent hover:border-[var(--border-subtle)] rounded-xs"

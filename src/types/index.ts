@@ -96,8 +96,6 @@ export interface LifeEntry {
   footprint_id?: number
   attachments?: Attachment[]
 
-  featured?: boolean
-
   // 记账投影支持
   amount?: number
   tx_type?: 'income' | 'expense'
@@ -185,7 +183,6 @@ export interface Project {
   category: string
   github_url: string
   status: string
-  featured?: boolean
   order?: number
 }
 

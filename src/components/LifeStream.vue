@@ -349,7 +349,7 @@ const getGapDays = (index: number): number => {
             <div
               class="w-2.5 h-2.5 rounded-full bg-[var(--bg-archive)] border-2 border-[var(--ink-secondary)] group-hover:border-[var(--accent-warm)] group-hover:scale-125 transition-all"
               :class="{
-                'border-[var(--accent-warm)] bg-[var(--accent-warm)]/20': entry.featured || getEntryCategory(entry) === 'wish',
+                'border-[var(--accent-warm)] bg-[var(--accent-warm)]/20': getEntryCategory(entry) === 'wish',
                 'border-emerald-600': entry.type === 'transaction' || entry.is_transaction,
               }"
             ></div>

@@ -531,7 +531,6 @@ export async function createLifeEntry(data: {
   project_id?: number | null
   wish_id?: number | null
   footprint_id?: number | null
-  featured?: boolean
   attachment_ids?: number[]
 }): Promise<LifeEntry> {
   // 朋友圈式发布：标题为空时从正文首行派生（与后端同一套规则）
@@ -560,7 +559,6 @@ export async function updateLifeEntry(
     project_id?: number | null
     wish_id?: number | null
     footprint_id?: number | null
-    featured?: boolean
     attachment_ids?: number[]
   }
 ): Promise<LifeEntry> {
@@ -874,7 +872,6 @@ export async function createProject(data: {
   category?: string
   github_url?: string
   status?: string
-  featured?: boolean
   order?: number
 }): Promise<Project> {
   return request<Project>(`${API_BASE}/projects`, {
@@ -893,7 +890,6 @@ export async function updateProject(
     category?: string
     github_url?: string
     status?: string
-    featured?: boolean
     order?: number
   }
 ): Promise<Project> {

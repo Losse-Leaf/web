@@ -73,7 +73,6 @@ const userManuallyChangedCity = ref(false)
 const occurredAt = ref(getBeijingDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const selectedFootprintId = ref<number | null>(null)
-const featured = ref(false)
 const attachmentIds = ref<number[]>([])
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 
@@ -90,7 +89,6 @@ interface EntryDraftPayload {
   city_name: string
   entryType: EntryKind
   projectId: number | null
-  featured: boolean
 }
 
 const saveDraftToStorage = () => {
@@ -106,7 +104,6 @@ const saveDraftToStorage = () => {
     city_name: selectedCityName.value,
     entryType: selectedKind.value,
     projectId: selectedProjectId.value,
-    featured: featured.value,
   }
   try {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
@@ -138,7 +135,6 @@ const restoreDraftFromStorage = (): boolean => {
     if (parsed.projectId !== undefined && !props.initialProjectId) {
       selectedProjectId.value = parsed.projectId
     }
-    featured.value = Boolean(parsed.featured)
     hasRestoredDraft.value = true
     isResettingForm = false
     return true
@@ -157,7 +153,6 @@ const clearSavedDraft = (resetFields = false) => {
     isResettingForm = true
     title.value = ''
     content.value = ''
-    featured.value = false
     isResettingForm = false
   }
 }
@@ -378,7 +373,7 @@ watch(
 )
 
 watch(
-  [title, content, location, selectedCityCode, selectedCityName, selectedKind, selectedProjectId, featured],
+  [title, content, location, selectedCityCode, selectedCityName, selectedKind, selectedProjectId],
   () => {
     saveDraftToStorage()
   }
@@ -442,7 +437,6 @@ const resetForm = () => {
   selectedKind.value = normalizeKind(props.initialKind)
   title.value = ''
   content.value = ''
-  featured.value = false
   if (props.initialCityCode && props.initialCityName) {
     userManuallyChangedCity.value = true
     selectedCityCode.value = props.initialCityCode
@@ -758,7 +752,6 @@ const handleSubmit = async () => {
       project_id: selectedProjectId.value,
       wish_id: selectedWishId.value,
       footprint_id: selectedFootprintId.value || undefined,
-      featured: featured.value,
       attachment_ids: attachmentIds.value,
     })
 
@@ -1470,18 +1463,6 @@ const handleSubmit = async () => {
               type="text"
               class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
-          </div>
-
-          <!-- 标记为精选印记 -->
-          <div class="flex items-center gap-2 pt-1">
-            <label class="flex items-center gap-2 text-xs font-mono-archive text-[var(--ink-secondary)] cursor-pointer select-none">
-              <input
-                v-model="featured"
-                type="checkbox"
-                class="w-3.5 h-3.5 rounded-xs accent-[var(--accent-warm)] cursor-pointer"
-              />
-              <span>标记为精选</span>
-            </label>
           </div>
         </template>
 
