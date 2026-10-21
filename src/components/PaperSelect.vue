@@ -67,14 +67,17 @@ const updatePosition = () => {
   if (!triggerRef.value || !isOpen.value) return
   const rect = triggerRef.value.getBoundingClientRect()
   const viewportHeight = window.innerHeight
+  const viewportWidth = window.innerWidth
   const spaceBelow = viewportHeight - rect.bottom
   const estimatedHeight = Math.min(props.options.length * 36 + 12, 240)
   const openUpward = spaceBelow < estimatedHeight && rect.top > estimatedHeight
+  const width = Math.max(rect.width, 140)
+  const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8))
 
   dropdownStyle.value = {
     position: 'fixed',
-    left: `${rect.left}px`,
-    width: `${Math.max(rect.width, 140)}px`,
+    left: `${left}px`,
+    width: `${width}px`,
     zIndex: '9999',
     ...(openUpward
       ? { bottom: `${viewportHeight - rect.top + 4}px` }
