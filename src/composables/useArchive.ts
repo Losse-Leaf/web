@@ -59,17 +59,29 @@ export function useArchive() {
   let entriesFetchSeq = 0
 
   // 刷新拉取后端数据 (Stale-While-Revalidate，带竞态防御与请求时序保护 FE-08, FE-10)
+  //
+  // 关键：必须**分页拉全量**。原先只拉第 1 页 100 条，档案一旦超过 100 条，
+  // 时间流就会被静默截断 —— 而「心愿 / 造物 / 器物」的伴生散页恰好排在时间流末尾，
+  // 用户会看到「刚创建的心愿不在时间流里」。
   const loadRemoteEntries = async () => {
     const seq = ++entriesFetchSeq
     try {
-      const data = await fetchEntries({ page: 1, page_size: 100 })
-      if (seq !== entriesFetchSeq) return
-      // 命中 304 缓存协商：保持已有数据引用，跳过重渲染与磁盘写入 (FE-10)
-      if (data === null) return
-      if (Array.isArray(data)) {
-        entries.value = data
-        throttledSaveEntries(data)
+      const collected: LifeEntry[] = []
+      let page = 1
+      // 最多 50 页（每页 100 条）作为保险丝，防止后端异常时无限翻页
+      while (page <= 50) {
+        const data = await fetchEntries({ page, page_size: 100 })
+        if (seq !== entriesFetchSeq) return
+        // 命中 304 缓存协商：保持已有数据引用，跳过重渲染与磁盘写入 (FE-10)
+        if (data === null) return
+        if (!Array.isArray(data)) break
+        collected.push(...data)
+        if (data.length < 100) break
+        page += 1
       }
+      if (seq !== entriesFetchSeq) return
+      entries.value = collected
+      throttledSaveEntries(collected)
     } catch (err: any) {
       if (err?.name === 'AbortError') return
       console.warn('Backend entries unreachable, serving local cache:', err)

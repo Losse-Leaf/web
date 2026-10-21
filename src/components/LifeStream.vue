@@ -138,6 +138,7 @@ const categoryFilters = computed<{ key: ArchiveCategory; label: string }[]>(() =
     { key: 'travel', label: '游历' },
     { key: 'project', label: '造物' },
     { key: 'wish', label: '心愿' },
+    { key: 'gear', label: '器物' },
   ]
   if (isAdmin.value) {
     base.push({ key: 'transaction', label: '账目' })
@@ -182,6 +183,7 @@ const getCategoryName = (entry: LifeEntry) => {
     project: '造物',
     wish: '心愿',
     transaction: '账目',
+    gear: '器物',
   }
   return map[cat] || '日常'
 }
@@ -355,9 +357,9 @@ const getGapDays = (index: number): number => {
             <span
               class="px-1.5 py-0.2 rounded-xs border text-[11px] font-medium transition-colors"
               :class="{
-                'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel',
+                'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel' || getEntryCategory(entry) === 'gear',
                 'border-emerald-700/40 bg-emerald-700/8 text-emerald-700': entry.type === 'transaction' || entry.is_transaction,
-                'border-[var(--border-subtle)] text-[var(--ink-secondary)]': !entry.is_transaction && getEntryCategory(entry) !== 'wish' && getEntryCategory(entry) !== 'travel',
+                'border-[var(--border-subtle)] text-[var(--ink-secondary)]': !entry.is_transaction && getEntryCategory(entry) !== 'wish' && getEntryCategory(entry) !== 'travel' && getEntryCategory(entry) !== 'gear',
               }"
             >
               {{ getCategoryName(entry) }}

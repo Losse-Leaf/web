@@ -697,6 +697,8 @@ export async function createWish(data: {
   city_name?: string
   budget?: number
   target_date?: string
+  /** 许下心愿的时刻（可选，支持补录过去的心愿） */
+  planted_at?: string
   attachment_ids?: number[]
 }): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes`, {

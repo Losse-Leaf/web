@@ -394,7 +394,13 @@ const handleTxDeleted = (id: number) => {
 
 const handleGearChanged = async () => {
   try {
-    const [profRes] = await Promise.allSettled([fetchCuratorProfile(), loadRemoteTransactions()])
+    const [profRes] = await Promise.allSettled([
+      fetchCuratorProfile(),
+      loadRemoteTransactions(),
+      // 关键：器物在时间流里有伴生散页（添置 / 转手都会改写它），
+      // 不刷新时间流就看不到「添置器物 · xxx」。
+      loadRemoteEntries(),
+    ])
     if (profRes.status === 'fulfilled' && profRes.value) {
       syncProfileCache(profRes.value)
     }
@@ -421,6 +427,9 @@ const handleProjectUpdated = (updated: Project) => {
 
 const handleProjectDeleted = (id: number) => {
   projects.value = projects.value.filter((p) => p.id !== id)
+  // 关键：造物的伴生散页会随项目一并软删除，时间流必须重新拉取，
+  // 否则时间流里会留下一条再也点不回项目的孤儿记录。
+  loadRemoteEntries()
 }
 
 const refreshData = async () => {

@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { X, Sparkles } from 'lucide-vue-next'
 import { createWish, updateWish, getAdminToken } from '../utils/api'
+import { getBeijingDateString } from '../utils/format'
 import type { Wish, Attachment } from '../types'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -28,6 +29,8 @@ const cityName = ref('')
 const cityCode = ref('')
 const budgetYuan = ref('')
 const targetDate = ref('')
+/** 补档：许下日期（可回填为过去），默认今天 */
+const plantedAt = ref(getBeijingDateString())
 const attachments = ref<Attachment[]>([])
 const attachmentIds = ref<number[]>([])
 const isSubmitting = ref(false)
@@ -50,6 +53,7 @@ watch(
       cityCode.value = w.city_code || ''
       budgetYuan.value = w.budget > 0 ? (w.budget / 100).toFixed(2) : ''
       targetDate.value = w.target_date ? w.target_date.slice(0, 10) : ''
+      plantedAt.value = w.planted_at ? w.planted_at.slice(0, 10) : getBeijingDateString()
       attachments.value = w.attachments ? [...w.attachments] : []
       attachmentIds.value = attachments.value.map((a) => a.id)
     } else {
@@ -61,6 +65,7 @@ watch(
       cityCode.value = ''
       budgetYuan.value = ''
       targetDate.value = ''
+      plantedAt.value = getBeijingDateString()
       attachments.value = []
       attachmentIds.value = []
     }
@@ -105,6 +110,7 @@ const handleSubmit = async () => {
         city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
+        planted_at: plantedAt.value || undefined,
         attachment_ids: attachmentIds.value,
       })
       emit('saved', updated)
@@ -118,6 +124,7 @@ const handleSubmit = async () => {
         city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
+        planted_at: plantedAt.value || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
       })
       emit('saved', created)
@@ -279,6 +286,14 @@ const handleSubmit = async () => {
               v-model="targetDate"
               clearable
             />
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">许下日期</label>
+            <PaperDatePicker v-model="plantedAt" />
+            <p class="mt-1 text-[10px] font-mono-archive text-[var(--ink-muted)]">
+              可选择过去的日期补录旧心愿
+            </p>
           </div>
         </div>
 
