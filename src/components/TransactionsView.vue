@@ -533,6 +533,19 @@ const saveEdit = async () => {
     return
   }
   const amountCents = Math.round(amtFloat * 100)
+  // ── 分期三态（后端契约）──────────────────────────────────
+  // 关键：原先的判定是 `editType === 'expense' && !editIsInstallment`，
+  // 于是「把一笔分期支出改成收入」时 clear_installment 变成 false ——
+  // 服务端收到 is_installment=false 但没有显式声明 ⇒ 走「保持原值」分支
+  // ⇒ **这笔账依然挂着分期标记**，只是一条「分期收入」，荒谬。
+  //
+  // 现在按三态分别处理：
+  //   仍是分期   → is_installment: true
+  //   取消分期   → is_installment: false + clear_installment: true
+  //   与分期无关 → is_installment: false 且不带 clear_installment（服务端保持原值）
+  const wasInstallment = Boolean(editingTx.value?.is_installment)
+  const wantInstallment = editType.value === 'expense' && editIsInstallment.value
+  const cancelInstallment = !wantInstallment && wasInstallment
   const monthlyPay =
     editIsInstallment.value && editInstallmentMonths.value > 0
       ? Math.round(amountCents / editInstallmentMonths.value)
@@ -547,16 +560,13 @@ const saveEdit = async () => {
     payment_method: editPaymentMethod.value.trim() || undefined,
     occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
     city_code: editCityCode.value || undefined,
-    is_installment: editType.value === 'expense' && editIsInstallment.value,
+    is_installment: wantInstallment,
     // 关键：**显式声明**「本次要取消分期」。
     // 后端的新契约是「is_installment=false 且不带 clear_installment → 保持原值」，
     // 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传 ——
     // 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
     // 这里是 web 端**唯一**能真正取消分期的入口，所以必须带上这个信号。
-    clear_installment:
-      editType.value === 'expense' && !editIsInstallment.value
-        ? Boolean(editingTx.value?.is_installment)
-        : false,
+    clear_installment: cancelInstallment,
     installment_channel_code:
       editType.value === 'expense' && editIsInstallment.value
         ? editInstallmentChannel.value
