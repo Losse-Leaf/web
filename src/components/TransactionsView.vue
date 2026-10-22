@@ -348,6 +348,26 @@ const calcInstallmentRemainingDebt = (tx: Transaction): number => {
   return Math.max(0, total - paidMonths * monthlyPay)
 }
 
+/**
+ * 某一期**实际**要还多少
+ *
+ * 关键（DEC-02 口径 A）：尾差落在**最后一期** ——
+ * 前 N-1 期取整除，最后一期吃掉余数。
+ * 所以「每期 ¥76,408」这个说法在**最后一期**是不准确的（实际 ¥76,412）。
+ * 这里的「每期」若照抄整除值，用户按它还款会在最后一期差几分钱。
+ */
+const calcInstallmentPeriodAmount = (tx: Transaction): number => {
+  const total = tx.installment_total_amount || tx.amount || 0
+  const months = tx.installment_months || 0
+  const monthlyPay = tx.installment_monthly_pay || (months > 0 ? Math.floor(total / months) : 0)
+  const remain = tx.installment_remain_months ?? months
+  if (months > 0 && remain === 1) {
+    // 最后一期：总额 − 已还的整除期 × 月供（含尾差）
+    return Math.max(0, total - (months - 1) * monthlyPay)
+  }
+  return monthlyPay
+}
+
 const totalInstallmentLiabilities = computed(() => {
   return transactionsList.value
     .filter((t) => t.is_installment)
@@ -884,7 +904,7 @@ const spectrumItems = computed(() => {
               {{ item.tx.title }}
             </span>
             <span class="text-[11px] text-[var(--ink-muted)]">
-              总额 ¥{{ formatMoney(item.tx.installment_total_amount || item.tx.amount) }} · 每期 ¥{{ formatMoney(item.tx.installment_monthly_pay || 0) }}
+              总额 ¥{{ formatMoney(item.tx.installment_total_amount || item.tx.amount) }} · 每期 ¥{{ formatMoney(calcInstallmentPeriodAmount(item.tx)) }}
             </span>
           </div>
 
