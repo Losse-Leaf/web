@@ -34,6 +34,7 @@ import {
   getAdminToken,
   establishSession,
   removeAdminToken,
+  clearApiCache,
   fetchPairQRCode,
 } from '../utils/api'
 import type { SystemStatus, BootstrapResult } from '../types'
@@ -321,11 +322,13 @@ const handlePasscodeLogin = async () => {
 }
 
 // 退出主人身份
-const handleLogout = () => {
+const handleLogout = async () => {
   audio.playTink()
   removeAdminToken()
   clearEnteredArchive()
   isCurator.value = false
+  // 与页脚登出保持一致：清掉 API 快照与 Workbox 运行时缓存。
+  await clearApiCache()
 }
 
 const todayDisplay = computed(() => {

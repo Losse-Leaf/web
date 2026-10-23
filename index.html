@@ -5,7 +5,7 @@
     <!-- 站点图标（浏览器标签页）：由根目录原图简化而来的矢量 ——
          写实照片缩到 16px 就糊成一团，标签页里读不出「旧纸 + 干花」。
          PWA 安装图标 / Apple Touch 图标仍用原图本身（见 manifest 与 apple-touch-icon）。 -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.3.8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="《散页》— 个人生活志。日常、资产、心愿、行迹与造物，记录真实可感的生活。" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,9 +16,10 @@
     <!-- MOB-P2-82：主题色（浅/深两套），运行时由 useTheme 动态同步到当前外观 -->
     <meta name="theme-color" content="#f9f8f5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#141312" media="(prefers-color-scheme: dark)" />
-    <!-- MOB-P1-98：预加载两套关键字体（正文衬线 + 等宽），避免首屏字体闪动 -->
-    <link rel="preload" href="/fonts/Newsreader-2.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/JetBrainsMono-3.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- MOB-P1-98 / P0-3：正文衬线字体由 vite.config.ts 在构建时注入
+         真实 hashed 路径（不再手写 /fonts/* 固定路径，避免构建后 404）。
+         等宽字体不是首屏关键，不再 preload。 -->
+    <!-- looseleaf:newsreader-preload -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- MOB-P2-82：iOS 不支持 SVG 作为主屏图标，必须用 PNG -->
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />

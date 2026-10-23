@@ -357,7 +357,14 @@ export function resetEntriesETag(): void {
   } catch {}
 }
 
-export function clearApiCache(): void {
+/**
+ * 清空 localStorage 中的 API 快照，并删除 Workbox 运行时缓存。
+ *
+ * 恢复备份 / 登出时必须 await：Cache Storage 的删除是异步的，
+ * 如果先 reload 再删，旧的 looseleaf-api 响应仍可能被新页面命中。
+ * 这里只删除本项目命名空间（looseleaf-*），不碰 Workbox 预缓存。
+ */
+export async function clearApiCache(): Promise<void> {
   resetEntriesETag()
   try {
     localStorage.removeItem('looseleaf_cached_entries')
@@ -366,6 +373,19 @@ export function clearApiCache(): void {
     localStorage.removeItem('looseleaf_transactions_cache')
     localStorage.removeItem('looseleaf_curator_profile')
   } catch {}
+
+  if (typeof caches === 'undefined') return
+
+  try {
+    const cacheNames = await caches.keys()
+    await Promise.all(
+      cacheNames
+        .filter((name) => name.startsWith('looseleaf-'))
+        .map((name) => caches.delete(name)),
+    )
+  } catch {
+    // 隐私模式 / 无 Cache Storage 权限时静默失败，不阻塞恢复或登出。
+  }
 }
 
 export async function fetchEntries(params?: {
@@ -1457,7 +1477,7 @@ export async function restoreBackupByFilename(
       body: JSON.stringify({ filename }),
     }
   )
-  clearApiCache()
+  await clearApiCache()
   return res
 }
 
@@ -1479,11 +1499,11 @@ export async function restoreBackupByFile(
       }
     }
 
-    xhr.onload = () => {
+    xhr.onload = async () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const res = JSON.parse(xhr.responseText)
-          clearApiCache()
+          await clearApiCache()
           if (res.data) {
             resolve(res.data)
           } else {

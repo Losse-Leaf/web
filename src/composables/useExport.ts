@@ -2,6 +2,13 @@ import type { LifeEntry, Transaction, Project, CuratorProfile } from '../types'
 import { loadCuratorProfile } from '../utils/profile'
 import { parseOccurredDate, getBeijingDateString } from '../utils/format'
 
+/**
+ * 备份 JSON 的 schema 版本，与产品版本（package.json / __APP_VERSION__）无关。
+ * 只有导出结构发生不兼容变更时才递增；导入端凭这个字段判断兼容性，
+ * 不能用 1.3.x 这样的产品版本冒充。
+ */
+export const EXPORT_SCHEMA_VERSION = '1.1.0'
+
 export function useExport() {
   const triggerDownload = (filename: string, content: string, mime: string) => {
     const blob = new Blob([content], { type: mime })
@@ -23,7 +30,7 @@ export function useExport() {
     profile?: CuratorProfile
   }) => {
     const backup = {
-      version: '1.1.0',
+      version: EXPORT_SCHEMA_VERSION,
       exported_at: new Date().toISOString(),
       generator: '散页 · 个人生活志',
       profile: data.profile || loadCuratorProfile(),

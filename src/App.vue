@@ -6,6 +6,7 @@ import FooterArchive from './components/FooterArchive.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 import FloatingActionButton from './components/FloatingActionButton.vue'
+import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue'
 
 // 异步按需分包加载非首屏重型视图与管理模态框，彻底消除 >500kB 单包警告并加速首屏 (FE-23)
 const ArchiveView = defineAsyncComponent(() => import('./components/ArchiveView.vue'))
@@ -231,10 +232,11 @@ const handleAuthenticated = async () => {
   await refreshData()
 }
 
-const handleLogout = () => {
+const handleLogout = async () => {
   removeAdminToken()
   clearEnteredArchive()
-  refreshData()
+  // 登出时把 API 快照与 Workbox 运行时缓存一并清掉，避免下一位访客看到主理人数据。
+  await clearApiCache()
   window.location.reload()
 }
 
@@ -409,8 +411,8 @@ const handleGearChanged = async () => {
   }
 }
 
-const handleRestored = () => {
-  clearApiCache()
+const handleRestored = async () => {
+  await clearApiCache()
   resetEntriesETag()
   window.location.reload()
 }
@@ -620,6 +622,9 @@ watch(() => siteConfig.value?.site_name, (newName) => {
 </script>
 
 <template>
+  <!-- P0-5：PWA 新版本提示（全局，不阻塞欢迎扉页与档案本体） -->
+  <PwaUpdatePrompt />
+
   <!-- 1. 独立全屏大屏页面：欢迎扉页 / 迎宾与登入门户 (类似全屏登录页架构，点击后方才进入真正网站) -->
   <WelcomePortal
     v-if="!hasEnteredArchive"

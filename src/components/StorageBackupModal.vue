@@ -241,7 +241,7 @@ const handleRestoreFromList = async (item: BackupItem) => {
   audio.playTink()
   try {
     const res = await restoreBackupByFilename(item.filename)
-    clearApiCache()
+    await clearApiCache()
     audio.playPaperFlip()
     showAlertMsg('success', res.message || '系统已成功恢复至指定快照')
     setTimeout(() => {
@@ -310,7 +310,7 @@ const handleRestoreUpload = async () => {
     const res = await restoreBackupByFile(selectedFile.value, (percent) => {
       uploadProgress.value = percent
     })
-    clearApiCache()
+    await clearApiCache()
     audio.playPaperFlip()
     showAlertMsg('success', res.message || '已成功恢复上传的备份文件')
     clearSelectedFile()

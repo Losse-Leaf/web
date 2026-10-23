@@ -3,6 +3,7 @@ name: Web CI / Quality Gate
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -24,6 +25,33 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      - name: Verify Version Consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          # web 仓库在 CI 中拿不到 ../backend/WEB_VERSION，
+          # 因此用仓库内的 WEB_VERSION 作为发布版本的镜像文件（与 backend/WEB_VERSION 同值）。
+          FILE_VERSION="$(tr -d '[:space:]' < WEB_VERSION)"
+          FILE_VERSION="${FILE_VERSION#v}"
+
+          if [ "$PKG_VERSION" != "$FILE_VERSION" ]; then
+            echo "::error::package.json version ($PKG_VERSION) != WEB_VERSION ($FILE_VERSION)"
+            exit 1
+          fi
+
+          # 打 release tag 时，package.json 必须与 tag 完全一致。
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+            TAG_VERSION="${TAG_VERSION#v}"
+            if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::package.json version ($PKG_VERSION) != release tag ($TAG_VERSION)"
+              exit 1
+            fi
+          fi
+
+          echo "Version OK: $PKG_VERSION (WEB_VERSION=$FILE_VERSION, ref=$GITHUB_REF)"
 
       - name: Install Dependencies
         run: npm ci

@@ -24,6 +24,7 @@ const emit = defineEmits<{
 const checking = ref(false)
 const checkResult = ref<UpdateCheckResult | null>(null)
 const checkError = ref('')
+const appVersion = __APP_VERSION__
 
 const runUpdateCheck = async (force = false) => {
   checking.value = true
@@ -83,7 +84,7 @@ onMounted(() => {
           <div class="p-3 bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] rounded-xs space-y-1">
             <div class="text-[11px] text-[var(--ink-muted)]">当前运行版本</div>
             <div class="text-base text-[var(--ink-primary)] font-serif-editorial font-medium">
-              {{ checkResult?.current_version || 'dev' }}
+              {{ checkResult?.current_version || appVersion || 'dev' }}
             </div>
           </div>
           <div class="p-3 bg-[var(--bg-subtle)]/70 border border-[var(--border-subtle)] rounded-xs space-y-1">
