@@ -27,7 +27,7 @@ const note = ref('')
 const spec = ref('')
 const cityName = ref('')
 const cityCode = ref('')
-const budgetYuan = ref('')
+const budgetYuan = ref<string | number>('')
 const targetDate = ref('')
 /** 补档：许下日期（可回填为过去），默认今天 */
 const plantedAt = ref(getBeijingDateString())
@@ -90,12 +90,15 @@ const handleSubmit = async () => {
     return
   }
 
-  let budgetCents = 0
-  if (budgetYuan.value.trim()) {
-    const val = parseFloat(budgetYuan.value.trim())
-    if (!isNaN(val) && val >= 0) {
-      budgetCents = Math.round(val * 100)
-    }
+  const budgetValue = Number(budgetYuan.value)
+  if (!Number.isFinite(budgetValue) || budgetValue < 0) {
+    errorMsg.value = '请输入有效的非负预算金额'
+    return
+  }
+  const budgetCents = Math.round(budgetValue * 100)
+  if (!Number.isSafeInteger(budgetCents)) {
+    errorMsg.value = '预算金额过大，请调小后重试'
+    return
   }
 
   try {

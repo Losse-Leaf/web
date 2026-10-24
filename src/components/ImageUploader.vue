@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, reactive, onUnmounted } from 'vue'
 import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { audio } from '../utils/audio'
@@ -86,7 +86,7 @@ const handleFileProcess = async (file: File) => {
   // 客户端智能压制（限制 2048px / 82% 质量 JPEG，与 Android 端契约一致）
   const compressedFile = await compressClientImage(file)
   const previewUrl = URL.createObjectURL(compressedFile)
-  const item: UploadItem = {
+  const item = reactive<UploadItem>({
     id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     file: compressedFile,
     name: compressedFile.name,
@@ -94,7 +94,7 @@ const handleFileProcess = async (file: File) => {
     previewUrl,
     progress: 0,
     status: 'idle',
-  }
+  })
 
   items.value.push(item)
   await startUpload(item)
