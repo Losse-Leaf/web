@@ -32,6 +32,8 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
+import { getBeijingNow } from '../utils/format'
+
 const popoverRef = ref<HTMLElement | null>(null)
 const popoverStyle = ref<Record<string, string>>({})
 
@@ -39,26 +41,26 @@ const pad = (n: number) => String(n).padStart(2, '0')
 
 // 解析当前 modelValue 为年/月/日/时/分
 const parseValue = (raw: string) => {
-  const now = new Date()
+  const now = getBeijingNow()
   if (!raw || !raw.trim()) {
     return {
-      year: now.getFullYear(),
-      month: now.getMonth() + 1,
-      day: now.getDate(),
-      hour: now.getHours(),
-      minute: now.getMinutes(),
+      year: now.getUTCFullYear(),
+      month: now.getUTCMonth() + 1,
+      day: now.getUTCDate(),
+      hour: now.getUTCHours(),
+      minute: now.getUTCMinutes(),
       hasValue: false,
     }
   }
   const clean = raw.trim().replace(' ', 'T')
   const [datePart, timePart] = clean.split('T')
   const dSegs = (datePart || '').split('-').map((x) => parseInt(x, 10))
-  const year = dSegs[0] || now.getFullYear()
-  const month = dSegs[1] || now.getMonth() + 1
-  const day = dSegs[2] || now.getDate()
+  const year = dSegs[0] || now.getUTCFullYear()
+  const month = dSegs[1] || now.getUTCMonth() + 1
+  const day = dSegs[2] || now.getUTCDate()
 
-  let hour = now.getHours()
-  let minute = now.getMinutes()
+  let hour = now.getUTCHours()
+  let minute = now.getUTCMinutes()
   if (timePart) {
     const tSegs = timePart.split(':').map((x) => parseInt(x, 10))
     if (!isNaN(tSegs[0])) hour = Math.min(23, Math.max(0, tSegs[0]))
@@ -130,10 +132,10 @@ const calendarCells = computed<CalendarCell[]>(() => {
   const daysInMonth = new Date(y, m, 0).getDate()
   const daysInPrevMonth = new Date(y, m - 1, 0).getDate()
 
-  const now = new Date()
-  const todayY = now.getFullYear()
-  const todayM = now.getMonth() + 1
-  const todayD = now.getDate()
+  const now = getBeijingNow()
+  const todayY = now.getUTCFullYear()
+  const todayM = now.getUTCMonth() + 1
+  const todayD = now.getUTCDate()
 
   const hasVal = Boolean(props.modelValue && props.modelValue.trim())
   const cells: CalendarCell[] = []
@@ -239,14 +241,14 @@ const applyPresetTime = (h: number, m: number) => {
 }
 
 const selectTodayOrNow = () => {
-  const now = new Date()
-  viewYear.value = now.getFullYear()
-  viewMonth.value = now.getMonth() + 1
-  selectedYear.value = now.getFullYear()
-  selectedMonth.value = now.getMonth() + 1
-  selectedDay.value = now.getDate()
-  selectedHour.value = now.getHours()
-  selectedMinute.value = now.getMinutes()
+  const now = getBeijingNow()
+  viewYear.value = now.getUTCFullYear()
+  viewMonth.value = now.getUTCMonth() + 1
+  selectedYear.value = now.getUTCFullYear()
+  selectedMonth.value = now.getUTCMonth() + 1
+  selectedDay.value = now.getUTCDate()
+  selectedHour.value = now.getUTCHours()
+  selectedMinute.value = now.getUTCMinutes()
   emitFormatted()
   if (!props.enableTime) {
     isOpen.value = false

@@ -625,6 +625,8 @@ const handleSubmit = async () => {
       }
 
       audio.playShutter()
+      // 参考图已随心愿落库绑定，标记后上传器卸载不再回收这些文件
+      imageUploaderRef.value?.markCommitted()
       clearSavedDraft()
       emit('wishCreated', createdWish)
       handleClose()
@@ -675,6 +677,7 @@ const handleSubmit = async () => {
         })
 
         audio.playShutter()
+        imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
         emit('projectCreated', createdProj)
         emit('entryCreated', createdEntry)
@@ -712,6 +715,7 @@ const handleSubmit = async () => {
           attachment_ids: attachmentIds.value,
         })
         audio.playShutter()
+        imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
         emit('entryCreated', createdEntry)
         handleClose()
@@ -762,6 +766,7 @@ const handleSubmit = async () => {
     })
 
     audio.playShutter()
+    imageUploaderRef.value?.markCommitted()
     clearSavedDraft()
     emit('entryCreated', created)
     handleClose()

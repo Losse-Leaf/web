@@ -283,7 +283,7 @@ const formatDate = (dateStr?: string) => {
                   {{ w.title }}
                 </span>
                 <span v-if="isAdmin" class="text-[11px] text-[var(--accent-moss)] font-medium">
-                  ¥{{ formatMoney(w.actual_cost || w.budget) }}
+                  ¥{{ formatMoney(w.actual_cost ?? 0) }}
                 </span>
               </div>
               <p v-if="w.note" class="text-[11px] font-serif-editorial text-[var(--ink-muted)] italic">

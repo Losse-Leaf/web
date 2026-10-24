@@ -77,10 +77,13 @@ export default defineConfig({
         background_color: '#f9f8f5',
         display: 'standalone',
         lang: 'zh-CN',
+        // WEB-1：icon-512-maskable.png 与 icon-512.png 的内容曾完全一致
+        // （SHA-256 相同、各 250,889 B），manifest 里声明两份只会让安装器
+        // 重复下载同一张图。现在复用同一个文件，分别声明 any / maskable。
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

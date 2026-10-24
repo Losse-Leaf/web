@@ -47,6 +47,14 @@ const items = ref<UploadItem[]>(
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 
+// 本次会话上传的附件是否已随条目/心愿/足迹「落库绑定」。
+// false 时组件卸载（用户取消发布 / 关闭弹窗）会把已完成上传的 object_key
+// 当孤儿文件回传服务端清理；true 后不再清理（附件已绑定，删了会把已发布内容弄坏图）。
+const committed = ref(false)
+const markCommitted = () => {
+  committed.value = true
+}
+
 const triggerSelect = () => {
   fileInputRef.value?.click()
 }
@@ -105,7 +113,10 @@ const startUpload = async (item: UploadItem) => {
 
     const res = await uploadUnifiedFile(
       item.file,
-      'entry',
+      // 必须与后端白名单一致（entries / avatar / covers / audio）。
+      // 原先传的是单数 'entry'，后端会以 400「不支持的存储归类目录」拒绝，
+      // 网页端所有散页配图上传实际上都失败了。
+      'entries',
       (pct) => {
         item.progress = Math.max(10, pct)
       },
@@ -179,6 +190,7 @@ const onPaste = (e: ClipboardEvent) => {
 
 defineExpose({
   uploadFiles,
+  markCommitted,
 })
 
 const removeItem = (item: UploadItem) => {
@@ -203,6 +215,16 @@ onUnmounted(() => {
       URL.revokeObjectURL(it.previewUrl)
     }
   })
+  // 弹窗关闭 / 取消发布且附件未随条目提交：回收本次会话上传的孤儿文件。
+  // 「existing-」前缀的是已绑定条目的历史附件，绝不能清。
+  if (!committed.value) {
+    const orphanKeys = items.value
+      .filter((it) => it.objectKey && !it.id.startsWith('existing-') && it.status === 'completed')
+      .map((it) => it.objectKey!)
+    if (orphanKeys.length > 0) {
+      cleanupUploads(orphanKeys)
+    }
+  }
 })
 </script>
 

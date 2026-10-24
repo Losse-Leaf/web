@@ -42,10 +42,9 @@ import type {
 } from './types'
 import { BookOpen, Heart, MapPin, Compass, User } from 'lucide-vue-next'
 import { entryMatchesCategory } from './types'
-import { parseOccurredDate } from './utils/format'
+import { parseOccurredDate, getBeijingYear } from './utils/format'
 import {
   fetchEntryById,
-  fetchStorageStatus,
   fetchGlobalStats,
   fetchProjects,
   fetchSiteConfig,
@@ -84,11 +83,91 @@ const { theme, toggleTheme } = useTheme()
 const siteConfig = ref<SiteConfig | null>(null)
 const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile())
 
+// 欢迎扉页 / 档案馆的流转状态 (RC-25, RC-59)
+const hasEnteredArchive = ref<boolean>(
+  Boolean(getAdminToken()) || hasEnteredArchiveSession(),
+)
+const systemStatus = ref<SystemStatus | null>(null)
+
+// WEB-5：共享请求与短 TTL 缓存。
+// 此前 profile 在 refreshData 与启动批次里各拉一次、system 在 WelcomePortal
+// 与 App 各拉一次；现在同一时刻只有一个 in-flight Promise，30 秒内复用结果。
+const PROFILE_TTL_MS = 30_000
+const SYSTEM_TTL_MS = 30_000
+const DATA_FRESH_MS = 30_000
+let profileFetchedAt = 0
+let profileInFlight: Promise<CuratorProfile | null> | null = null
+let systemFetchedAt = 0
+let systemInFlight: Promise<SystemStatus | null> | null = null
+let lastDataRefreshAt = 0
+// 上一次整批数据刷新时的登录身份：封面内登录后必须补拉主理人专属数据。
+let lastDataRefreshedAsAdmin = false
+
+const loadProfileShared = (force = false): Promise<CuratorProfile | null> => {
+  if (!force && profileFetchedAt && Date.now() - profileFetchedAt < PROFILE_TTL_MS) {
+    return Promise.resolve(curatorProfile.value)
+  }
+  // force 必须绕过在途请求：否则刚记完一笔账时，复用的仍是记账前发出的
+  // /profile，资产大盘会短暂回退到旧值。
+  if (profileInFlight && !force) return profileInFlight
+  const request = fetchCuratorProfile()
+    .then((profile) => {
+      if (profile) {
+        syncProfileCache(profile)
+        profileFetchedAt = Date.now()
+      }
+      return profile
+    })
+    .finally(() => {
+      if (profileInFlight === request) profileInFlight = null
+    })
+  profileInFlight = request
+  return request
+}
+
+const applySystemStatus = (status: SystemStatus) => {
+  systemStatus.value = status
+  if (!siteConfig.value?.site_name && status.site_name) {
+    document.title = status.site_name
+  }
+  if (!status.initialized) {
+    // 系统尚未初始化：无条件清空本地残留旧 Token，停留在欢迎扉页首次装帧向导 (RC-59)
+    removeAdminToken()
+    clearEnteredArchive()
+    hasEnteredArchive.value = false
+  } else if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
+    hasEnteredArchive.value = true
+  }
+}
+
+const loadSystemStatusShared = (force = false): Promise<SystemStatus | null> => {
+  if (!force && systemFetchedAt && Date.now() - systemFetchedAt < SYSTEM_TTL_MS) {
+    return Promise.resolve(systemStatus.value)
+  }
+  if (systemInFlight && !force) return systemInFlight
+  const request = fetchSystemStatus()
+    .then((status) => {
+      systemFetchedAt = Date.now()
+      applySystemStatus(status)
+      return status
+    })
+    .catch((err) => {
+      console.warn('Failed to fetch system status:', err)
+      return null
+    })
+    .finally(() => {
+      if (systemInFlight === request) systemInFlight = null
+    })
+  systemInFlight = request
+  return request
+}
+
 // 2. 生活档案与即时搜索
 const {
   entries,
   currentCategory,
   loadRemoteEntries,
+  refreshEntriesForYear,
   addEntry,
   updateEntry,
   removeEntry,
@@ -203,7 +282,8 @@ const anyModalOpen = computed(
     isStatsOpen.value ||
     isPairingOpen.value ||
     isUpdateCheckOpen.value ||
-    isPasscodeModalOpen.value
+    isPasscodeModalOpen.value ||
+    Boolean(selectedEntry.value)
 )
 const passcodeModalPrompt = ref('')
 const passcodeModalCallback = ref<(() => void) | null>(null)
@@ -245,7 +325,6 @@ const openUpdateCheckModal = () => {
   isUpdateCheckOpen.value = true
 }
 
-const systemStatus = ref<SystemStatus | null>(null)
 const storageStatus = ref<StorageStatus | null>(null)
 const globalStats = ref<GlobalStats | null>(null)
 
@@ -315,23 +394,21 @@ const openStatsModal = async () => {
   }
 }
 
-const openStorageBackupModal = async (tab: 'backup' | 'storage' = 'backup') => {
+const openStorageBackupModal = (tab: 'backup' | 'storage' = 'backup') => {
   if (!getAdminToken()) {
     handleRequestAuth(() => openStorageBackupModal(tab), '请输入管理员密钥以访问存储设置与灾备中枢')
     return
   }
   storageBackupInitialTab.value = tab
   isStorageBackupOpen.value = true
-  try {
-    storageStatus.value = await fetchStorageStatus()
-  } catch (err) {
-    console.error('Failed to fetch storage status:', err)
-  }
+  // WEB-5：/storage/status 延迟到弹窗打开时由 StorageBackupModal 自己拉取，
+  // 首屏与访客不再触碰这个管理端接口。
 }
 
 const handleEntryCreated = (newEntry: LifeEntry) => {
+  // WEB-7：接口已在弹窗内确认成功，这里只做本地乐观插入。
+  // 不再整库重拉 7 页；分类 / 心愿 / 足迹的刷新信号保留。
   addEntry(newEntry)
-  loadRemoteEntries()
   wishesRefreshKey.value++
   atlasRefreshKey.value++
   archiveRefreshKey.value++
@@ -353,7 +430,6 @@ const handleEntryCreated = (newEntry: LifeEntry) => {
 const handleEntryUpdated = (updated: LifeEntry) => {
   updateEntry(updated)
   selectedEntry.value = updated
-  loadRemoteEntries()
   wishesRefreshKey.value++
   atlasRefreshKey.value++
   archiveRefreshKey.value++
@@ -367,7 +443,6 @@ const handleEntryDeleted = (id: number) => {
   if (window.location.hash.startsWith('#entry/')) {
     window.location.hash = currentView.value
   }
-  loadRemoteEntries()
   wishesRefreshKey.value++
   atlasRefreshKey.value++
   archiveRefreshKey.value++
@@ -376,12 +451,8 @@ const handleEntryDeleted = (id: number) => {
 const handleTxCreated = async (tx: Transaction) => {
   addTransaction(tx)
   txRefreshKey.value++
-  try {
-    const prof = await fetchCuratorProfile()
-    if (prof) syncProfileCache(prof)
-  } catch {
-    // ignore
-  }
+  // WEB-5：与启动 / 其它入口共享同一个 in-flight Promise，避免重复 /profile。
+  await loadProfileShared(true)
 }
 
 const handleTxUpdated = (tx: Transaction) => {
@@ -395,20 +466,13 @@ const handleTxDeleted = (id: number) => {
 }
 
 const handleGearChanged = async () => {
-  try {
-    const [profRes] = await Promise.allSettled([
-      fetchCuratorProfile(),
-      loadRemoteTransactions(),
-      // 关键：器物在时间流里有伴生散页（添置 / 转手都会改写它），
-      // 不刷新时间流就看不到「添置器物 · xxx」。
-      loadRemoteEntries(),
-    ])
-    if (profRes.status === 'fulfilled' && profRes.value) {
-      syncProfileCache(profRes.value)
-    }
-  } catch (err) {
-    console.warn('Failed to refresh gear assets:', err)
-  }
+  await Promise.allSettled([
+    // 器物在时间流里有伴生散页（添置 / 转手都会改写它），
+    // 不刷新时间流就看不到「添置器物 · xxx」。
+    loadRemoteEntries(),
+    ...(Boolean(getAdminToken()) ? [loadRemoteTransactions()] : []),
+    loadProfileShared(true),
+  ])
 }
 
 const handleRestored = async () => {
@@ -417,46 +481,78 @@ const handleRestored = async () => {
   window.location.reload()
 }
 
+// WEB-7：造物伴生散页可能跨年；只回源这些年份，不再整库重拉。
+const projectEntryYears = (projectId?: number): string[] => {
+  const years = new Set<string>()
+  if (projectId) {
+    entries.value.forEach((e) => {
+      if (e.project_id === projectId) {
+        years.add(parseOccurredDate(e.occurred_at).year)
+      }
+    })
+  }
+  if (years.size === 0) years.add(String(getBeijingYear()))
+  return Array.from(years).filter(Boolean)
+}
+
 const handleProjectCreated = (newProj: Project) => {
   projects.value = [newProj, ...projects.value]
-  loadRemoteEntries()
+  archiveRefreshKey.value++
+  void refreshEntriesForYear(projectEntryYears(newProj.id))
 }
 
 const handleProjectUpdated = (updated: Project) => {
   projects.value = projects.value.map((p) => (p.id === updated.id ? updated : p))
-  loadRemoteEntries()
+  archiveRefreshKey.value++
+  void refreshEntriesForYear(projectEntryYears(updated.id))
 }
 
 const handleProjectDeleted = (id: number) => {
+  const years = projectEntryYears(id)
   projects.value = projects.value.filter((p) => p.id !== id)
-  // 关键：造物的伴生散页会随项目一并软删除，时间流必须重新拉取，
-  // 否则时间流里会留下一条再也点不回项目的孤儿记录。
-  loadRemoteEntries()
+  archiveRefreshKey.value++
+  // 关键：造物的伴生散页会随项目一并软删除，否则时间流里会留下
+  // 一条再也点不回项目的孤儿记录。只回源相关年份即可。
+  void refreshEntriesForYear(years)
 }
 
-const refreshData = async () => {
-  wishesRefreshKey.value++
-  atlasRefreshKey.value++
-  archiveRefreshKey.value++
-  try {
-    const [, statsData, statusData, profData] = await Promise.allSettled([
-      Promise.all([loadRemoteEntries(), loadRemoteTransactions()]),
-      fetchGlobalStats(),
-      fetchStorageStatus(),
-      fetchCuratorProfile(),
-    ])
-    if (statsData.status === 'fulfilled' && statsData.value) {
-      globalStats.value = statsData.value
-    }
-    if (statusData.status === 'fulfilled' && statusData.value) {
-      storageStatus.value = statusData.value
-    }
-    if (profData.status === 'fulfilled' && profData.value) {
-      syncProfileCache(profData.value)
-    }
-  } catch (err) {
-    console.error('Failed to refresh data:', err)
+// WEB-5：欢迎页首屏不再拉 stats / storage / transactions：
+// - stats 只在打开统计弹窗时拉（openStatsModal）；
+// - storage 只在打开灾备弹窗时由 StorageBackupModal 自己拉；
+// - transactions 是主理人接口，访客会 401，进档案后登录时再补。
+let refreshDataInFlight: Promise<void> | null = null
+let refreshDataAsAdmin: boolean | null = null
+const refreshData = async (): Promise<void> => {
+  const adminNow = Boolean(getAdminToken())
+  // 进馆 / 登录回调 / 首次装帧几乎同时触发时只跑一轮，避免重复整库拉取。
+  if (refreshDataInFlight) {
+    if (refreshDataAsAdmin === adminNow) return refreshDataInFlight
+    // 访客那一轮不会请求 transactions；身份变了必须等它结束再补一轮。
+    await refreshDataInFlight
   }
+  const run = (async () => {
+    wishesRefreshKey.value++
+    atlasRefreshKey.value++
+    archiveRefreshKey.value++
+    const tasks: Promise<unknown>[] = [
+      loadRemoteEntries(),
+      loadProfileShared(),
+    ]
+    if (Boolean(getAdminToken())) {
+      tasks.push(loadRemoteTransactions())
+    }
+    await Promise.allSettled(tasks)
+    lastDataRefreshAt = Date.now()
+    lastDataRefreshedAsAdmin = Boolean(getAdminToken())
+  })().finally(() => {
+    if (refreshDataInFlight === run) {
+      refreshDataInFlight = null
+      refreshDataAsAdmin = null
+    }
+  })
+  refreshDataInFlight = run
+  refreshDataAsAdmin = adminNow
+  return run
 }
 
 const handleHashChange = async () => {
@@ -501,59 +597,61 @@ const handleHashChange = async () => {
 
 const { loadCategories, isCategoryManagerOpen } = useCategories()
 
+// WEB-5：启动瀑布改为「一波并行」。
+// 此前是 refreshSessionState → handleHashChange → refreshData → 第二批，
+// 首屏要等四段串行网络；现在 session 探针、分类、全量散页、项目、config、
+// profile、system 同时发出，transactions 只在确认是主理人后才发（访客不 401）。
 onMounted(async () => {
   setupOnlineListeners()
   setupInstallPrompt()
-  loadCategories()
-  // MOB-P1-69：刷新页面后先用服务端探针确认 HttpOnly Cookie 会话是否仍然有效，
-  // 免得「已经登录」的主理人被当成访客看待（令牌本身 JS 读不到，只能问服务端）
-  await refreshSessionState()
+
+  const sessionTask = refreshSessionState()
+  const transactionsTask = sessionTask.then((isAdmin) => {
+    if (isAdmin || Boolean(getAdminToken())) return loadRemoteTransactions()
+    return undefined
+  })
+
+  const bootTasks = Promise.allSettled([
+    loadCategories(),
+    loadRemoteEntries(),
+    fetchProjects(),
+    fetchSiteConfig(),
+    loadProfileShared(),
+    loadSystemStatusShared(),
+    transactionsTask,
+  ])
+
+  // 路由不能等整批数据：只要会话角色确定就立刻应用初始 hash 并挂上监听，
+  // 否则首屏网络慢时刷新 /#atlas 会一直停在首页，前进/后退也失灵。
+  const isSessionAdmin = await sessionTask
   await handleHashChange()
   window.addEventListener('hashchange', handleHashChange)
 
-  await refreshData()
+  const results = await bootTasks
+  // 顺序与上面的 bootTasks 一一对应（sessionTask 已单独 await）。
+  const projRes = results[2]
+  const cfgRes = results[3]
 
-  try {
-    const [projRes, cfgRes, profRes, sysRes] = await Promise.allSettled([
-      fetchProjects(),
-      fetchSiteConfig(),
-      fetchCuratorProfile(),
-      fetchSystemStatus(),
-    ])
-
-    if (projRes.status === 'fulfilled' && Array.isArray(projRes.value)) {
-      projects.value = projRes.value
-    }
-    if (cfgRes.status === 'fulfilled' && cfgRes.value) {
-      const cfg = cfgRes.value
-      if (cfg.site_name && cfg.site_name.includes('时光手账')) {
-        cfg.site_name = '散页 · 个人生活志'
-      }
-      siteConfig.value = cfg
-      document.title = cfg.site_name || '散页 · 个人生活志'
-    }
-    if (profRes.status === 'fulfilled' && profRes.value) {
-      syncProfileCache(profRes.value)
-    }
-    if (sysRes.status === 'fulfilled' && sysRes.value) {
-      systemStatus.value = sysRes.value
-      if (!siteConfig.value?.site_name && sysRes.value.site_name) {
-        document.title = sysRes.value.site_name
-      }
-      // 若系统尚未初始化，无条件清空本地残留旧 Token 并停留在欢迎扉页首次装帧向导 (RC-59)
-      if (!sysRes.value.initialized) {
-        removeAdminToken()
-        clearEnteredArchive()
-        hasEnteredArchive.value = false
-      } else {
-        if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
-          hasEnteredArchive.value = true
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Initial data loading failed:', err)
+  if (projRes.status === 'fulfilled' && Array.isArray(projRes.value)) {
+    projects.value = projRes.value
   }
+  if (cfgRes.status === 'fulfilled' && cfgRes.value) {
+    const cfg = cfgRes.value
+    if (cfg.site_name && cfg.site_name.includes('时光手账')) {
+      cfg.site_name = '散页 · 个人生活志'
+    }
+    siteConfig.value = cfg
+    document.title = cfg.site_name || '散页 · 个人生活志'
+  }
+
+  // Cookie 会话有效但 localStorage 标记缺失时，applySystemStatus 可能来不及把
+  // 主人送进档案馆；以会话探针的权威结果补一次。
+  if (isSessionAdmin && systemStatus.value?.initialized !== false) {
+    hasEnteredArchive.value = true
+  }
+
+  lastDataRefreshAt = Date.now()
+  lastDataRefreshedAsAdmin = Boolean(getAdminToken())
 
   window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent) => {
     if (e.detail) {
@@ -562,20 +660,23 @@ onMounted(async () => {
   }) as EventListener)
 })
 
-// 顶级大屏页面与真正网站的流转状态 (RC-25, RC-59)
-const checkHasEntered = (): boolean => {
-  return Boolean(getAdminToken()) || hasEnteredArchiveSession()
-}
-
-const hasEnteredArchive = ref<boolean>(checkHasEntered())
-
 const handleEnterArchive = () => {
   if (systemStatus.value && !systemStatus.value.initialized) {
     return
   }
   hasEnteredArchive.value = true
   markEnteredArchive()
-  refreshData()
+  // 启动批次刚刚拉过数据就直接进馆，避免「点进入」再整库重拉一次。
+  // 但身份变了（例如封面内刚登录主人）必须补拉 transactions ——
+  // 访客启动批次根本不会请求这个主理人接口。
+  const adminNow = Boolean(getAdminToken())
+  if (
+    !lastDataRefreshAt ||
+    Date.now() - lastDataRefreshAt > DATA_FRESH_MS ||
+    adminNow !== lastDataRefreshedAsAdmin
+  ) {
+    void refreshData()
+  }
 }
 
 const handleReturnToWelcome = () => {
@@ -584,28 +685,26 @@ const handleReturnToWelcome = () => {
 }
 
 const handleBootstrapped = async () => {
+  // 先标记新鲜，防止紧随其后的 @enter 再触发一次 refreshData。
+  lastDataRefreshAt = Date.now()
   if (systemStatus.value) {
     systemStatus.value = { ...systemStatus.value, initialized: true }
   } else {
     systemStatus.value = { initialized: true, site_name: '散页' }
   }
-  try {
-    const [cfg, prof, sys] = await Promise.allSettled([
-      fetchSiteConfig(),
-      fetchCuratorProfile(),
-      fetchSystemStatus(),
-    ])
-    if (cfg.status === 'fulfilled' && cfg.value) siteConfig.value = cfg.value
-    if (prof.status === 'fulfilled' && prof.value) syncProfileCache(prof.value)
-    if (sys.status === 'fulfilled' && sys.value) {
-      systemStatus.value = { ...sys.value, initialized: true }
-    }
-  } catch (err) {
-    console.error('Failed to sync state after bootstrap:', err)
+  const [cfg, prof, sys] = await Promise.allSettled([
+    fetchSiteConfig(),
+    loadProfileShared(true),
+    loadSystemStatusShared(true),
+  ])
+  if (cfg.status === 'fulfilled' && cfg.value) siteConfig.value = cfg.value
+  if (prof.status === 'fulfilled' && prof.value) syncProfileCache(prof.value)
+  if (sys.status === 'fulfilled' && sys.value) {
+    systemStatus.value = { ...sys.value, initialized: true }
   }
   hasEnteredArchive.value = true
   markEnteredArchive()
-  refreshData()
+  void refreshData()
 }
 
 watch(currentView, (newV) => {

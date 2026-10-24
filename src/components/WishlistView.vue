@@ -73,12 +73,18 @@ watch(
   }
 )
 
+// 筛选请求序号守卫：快速切换维度/状态时只接受最新一次响应，
+// 否则慢返回的旧筛选结果会覆盖当前选择对应的列表
+let filterReqSeq = 0
+
 watch([selectedKind, selectedStatus], async () => {
+  const seq = ++filterReqSeq
   try {
     const list = await fetchWishes({
       kind: selectedKind.value !== 'all' ? selectedKind.value : undefined,
       status: selectedStatus.value !== 'all' ? selectedStatus.value : undefined,
     })
+    if (seq !== filterReqSeq) return
     filteredWishes.value = list || []
   } catch (err) {
     console.warn('Failed to filter wishes:', err)
@@ -144,7 +150,9 @@ const totalWantingBudget = computed(() => {
 })
 
 const totalFulfilledActual = computed(() => {
-  return fulfilledWishes.value.reduce((sum, w) => sum + (w.actual_cost || w.budget || 0), 0)
+  // 口径：实际投入只认 actual_cost（0 元达成计入 0，缺失计 0）——
+  // 原先 `actual_cost || budget` 会把 0 元达成按预算虚计入统计
+  return fulfilledWishes.value.reduce((sum, w) => sum + (w.actual_cost ?? 0), 0)
 })
 
 const totalSavedBudget = computed(() => {
@@ -371,8 +379,8 @@ onMounted(() => {
               <span v-if="w.status === 'relinquished'" class="text-emerald-700 font-medium">
                 省下 ¥{{ formatMoney(w.budget) }}
               </span>
-              <span v-else-if="isAdmin && w.status === 'fulfilled' && (w.actual_cost || w.budget)" class="text-[var(--accent-moss)] font-medium">
-                实付 ¥{{ formatMoney(w.actual_cost || w.budget) }}
+              <span v-else-if="isAdmin && w.status === 'fulfilled' && w.actual_cost !== null && w.actual_cost !== undefined" class="text-[var(--accent-moss)] font-medium">
+                实付 ¥{{ formatMoney(w.actual_cost ?? 0) }}
               </span>
               <span v-else-if="w.budget > 0" class="text-[var(--ink-primary)] font-medium">
                 预算 ¥{{ formatMoney(w.budget) }}
@@ -398,8 +406,10 @@ onMounted(() => {
             <img
               v-for="att in w.attachments"
               :key="att.id"
-              :src="att.url"
+              :src="att.thumbnail_url || att.url"
               :alt="w.title"
+              width="64"
+              height="64"
               loading="lazy"
               class="w-16 h-16 object-cover rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)] shrink-0"
              decoding="async">

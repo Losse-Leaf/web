@@ -20,54 +20,87 @@ const currentYearStr = String(getBeijingYear())
 const selectedYear = ref(currentYearStr)
 const isAlmanacOpen = ref(false)
 
-// 存储自主按年分页拉取的全量条目 (避免仅吃前 100 条缓存导致旧数据缺失)
-const fetchedYearEntries = ref<LifeEntry[]>([])
-const isFetchingYear = ref(false)
+// WEB-7：归档页直接复用 App 已经拉全的 props.entries，按年派生分组。
+// 原先这里会再按年串行翻一遍所有页 —— 时间流刚拉过 7 页，归档页又拉一遍，
+// 属于纯重复流量。只有「某年确实不在内存里」时才补拉，并按年缓存。
+const fetchedYearEntries = ref<Record<string, LifeEntry[]>>({})
+const inFlightYears = new Set<string>()
+let yearAbort: AbortController | null = null
 
 const loadAllEntriesForYear = async (yr: string) => {
-  if (!yr) return
-  isFetchingYear.value = true
+  if (!yr || inFlightYears.has(yr)) return
+  // 内存里已有这一年的记录（App 的全量列表已覆盖），不再回源；
+  // 已经补拉并在 fetchedYearEntries 中缓存的年份也不再回源。
+  const hasLocalYear = props.entries.some(
+    (e) => parseOccurredDate(e.occurred_at).year === yr,
+  )
+  if (hasLocalYear || fetchedYearEntries.value[yr]) return
+
+  inFlightYears.add(yr)
+  // 同一年的多页必须共享一个 AbortSignal：
+  // fetchEntries 在不传 signal 时会按 scope 互相 abort（同一 scope = year:<yr>），
+  // 4 路并发会变成「后一页取消前一页」，结果全是 null，年份永远补不回来。
+  yearAbort?.abort()
+  const controller = new AbortController()
+  yearAbort = controller
   try {
+    const collected: LifeEntry[] = []
     let page = 1
-    let collected: LifeEntry[] = []
-    while (true) {
-      const pageData = await fetchEntries({ year: yr, page, page_size: 100 })
-      // MOB-P0-17：null 代表「本次请求被中断 / 命中缓存协商」，
-      // 必须整体放弃，绝不能把半截数据写进状态。
-      if (pageData === null) return
-      if (!Array.isArray(pageData) || pageData.length === 0) break
-      collected = [...collected, ...pageData]
-      if (pageData.length < 100) break
-      page++
+    let done = false
+    // 补拉也走 4 路有界并发，保持页序。
+    while (page <= 50 && !done) {
+      const batch: number[] = []
+      for (let p = page; p < page + 4 && p <= 50; p++) batch.push(p)
+      const results = await Promise.all(
+        batch.map((p) => fetchEntries({
+          year: yr,
+          page: p,
+          page_size: 100,
+          signal: controller.signal,
+        })),
+      )
+      for (const pageData of results) {
+        // null 代表「本次请求被中断 / 命中缓存协商」，整体放弃，不能写半截数据。
+        if (pageData === null) return
+        if (!Array.isArray(pageData) || pageData.length === 0) {
+          done = true
+          break
+        }
+        collected.push(...pageData)
+        if (pageData.length < 100) {
+          done = true
+          break
+        }
+      }
+      page = batch[batch.length - 1] + 1
     }
-    fetchedYearEntries.value = collected
+    fetchedYearEntries.value = { ...fetchedYearEntries.value, [yr]: collected }
   } catch (err) {
     console.warn(`Failed to fetch full entries for year ${yr}:`, err)
   } finally {
-    isFetchingYear.value = false
+    inFlightYears.delete(yr)
+    if (yearAbort === controller) yearAbort = null
   }
 }
 
-// MOB-P0-17：原先 watch 监听 [selectedYear, refreshKey, entries]，
-// 而 refreshKey 在每次增删改条目时都会自增 ⇒ 编辑一条记录就整年重拉（数 MB）。
-// 现在：只监听「选中年份 + 刷新信号」，并对刷新信号做去抖；entries 变化不再触发重拉。
-let reloadTimer: number | null = null
-const scheduleReloadForYear = (yr: string) => {
-  if (reloadTimer) clearTimeout(reloadTimer)
-  reloadTimer = window.setTimeout(() => {
-    reloadTimer = null
-    void loadAllEntriesForYear(yr)
-  }, 600)
-}
-
+// 只在切换到「内存里没有的年份」时补拉；不监听 refreshKey / entries，
+// 增删改由 App 的本地乐观更新直接反映到 props.entries。
 watch(
-  [selectedYear, () => props.refreshKey],
-  ([yr]) => {
-    if (yr) {
-      scheduleReloadForYear(yr)
-    }
+  selectedYear,
+  (yr) => {
+    if (yr) void loadAllEntriesForYear(yr)
   },
-  { immediate: true }
+  { immediate: true },
+)
+
+// 增删改后让补拉缓存失效：props.entries 覆盖到的年份会直接回退到最新数据，
+// 只有「内存里本来就没有」的年份才需要重新回源。
+watch(
+  () => props.refreshKey,
+  () => {
+    fetchedYearEntries.value = {}
+    if (selectedYear.value) void loadAllEntriesForYear(selectedYear.value)
+  },
 )
 
 // 获取所有出现的年份 (RC-48)
@@ -77,6 +110,7 @@ const years = computed(() => {
     const { year } = parseOccurredDate(e.occurred_at)
     if (year) set.add(year)
   })
+  Object.keys(fetchedYearEntries.value).forEach((year) => set.add(year))
   const list = Array.from(set).sort((a, b) => b.localeCompare(a))
   return list.length > 0 ? list : [currentYearStr]
 })
@@ -104,15 +138,19 @@ watch(years, (newYears) => {
   }
 }, { immediate: true })
 
-// 当前年份的所有条目：合并本地缓存与全量拉取数据 (RC-48)
+// 当前年份的所有条目：内存 props 优先，补拉的年份数据只作为兜底。
 const yearEntries = computed(() => {
-  const localYearList = props.entries.filter(e => parseOccurredDate(e.occurred_at).year === selectedYear.value)
-  if (fetchedYearEntries.value.length === 0) {
-    return localYearList
+  const cached = fetchedYearEntries.value[selectedYear.value] || []
+  if (cached.length === 0) {
+    return props.entries.filter(
+      (e) => parseOccurredDate(e.occurred_at).year === selectedYear.value,
+    )
   }
   const map = new Map<number, LifeEntry>()
-  fetchedYearEntries.value.forEach(e => map.set(e.id, e))
-  localYearList.forEach(e => map.set(e.id, e))
+  cached.forEach((e) => map.set(e.id, e))
+  props.entries
+    .filter((e) => parseOccurredDate(e.occurred_at).year === selectedYear.value)
+    .forEach((e) => map.set(e.id, e))
   return Array.from(map.values()).sort((a, b) => {
     const timeA = parseOccurredDate(a.occurred_at).timestamp
     const timeB = parseOccurredDate(b.occurred_at).timestamp

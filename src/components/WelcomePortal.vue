@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, defineAsyncComponent } from 'vue'
 import {
   BookOpen,
   KeyRound,
@@ -20,12 +20,10 @@ import {
   Laptop,
   AlertCircle,
 } from 'lucide-vue-next'
-import CityPicker from './CityPicker.vue'
 import { audio } from '../utils/audio'
-import { getBeijingYear } from '../utils/format'
+import { getBeijingDotDate, getBeijingYear } from '../utils/format'
 import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
 import {
-  fetchSystemStatus,
   bootstrapSystem,
   confirmPairingTicket,
   pollPairingTicketStatus,
@@ -38,6 +36,12 @@ import {
   fetchPairQRCode,
 } from '../utils/api'
 import type { SystemStatus, BootstrapResult } from '../types'
+
+// WEB-3：城市字典（375 城，34.3KB raw）此前随欢迎扉页静态进入首屏。
+// 欢迎扉页只有「首次装帧 Step 1」需要选城市，因此改为异步组件：
+// 未初始化的访客首屏不再下载 CityPicker / atlas-cities-data，
+// 真正进入装帧表单的那一刻才按需加载。
+const CityPicker = defineAsyncComponent(() => import('./CityPicker.vue'))
 
 const props = defineProps<{
   theme: 'paper' | 'darkroom'
@@ -329,13 +333,12 @@ const handleLogout = async () => {
   isCurator.value = false
   // 与页脚登出保持一致：清掉 API 快照与 Workbox 运行时缓存。
   await clearApiCache()
+  // 单例 composable（entries / transactions / profile）不会因为清缓存而自动归零；
+  // 不刷新的话，随后以访客身份进入仍能在时间流里看到主人账目。整页重载最干净。
+  window.location.reload()
 }
 
-const todayDisplay = computed(() => {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`
-})
+const todayDisplay = computed(() => getBeijingDotDate())
 
 // 阶段一：首次装帧三步流程说明
 const bootstrapGuides = [
@@ -388,16 +391,8 @@ watch(
   { immediate: true }
 )
 
-onMounted(async () => {
-  checkCuratorAuth()
-  try {
-    const s = await fetchSystemStatus()
-    applySystemStatus(s)
-  } catch (err) {
-    console.error('Failed to fetch system status in portal:', err)
-  }
-})
-
+// WEB-5：系统状态由 App.vue 统一请求并作为 prop 传入，欢迎扉页不再重复请求
+// /system/status（此前首屏会打两次：WelcomePortal + App）。
 onUnmounted(() => {
   stopBootstrapPairingTimers()
 })

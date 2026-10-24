@@ -474,7 +474,8 @@ export function findNearestCityByCoords(lat: number, lng: number): CityOption | 
 }
 
 const LAST_CITY_STORAGE_KEY = 'looseleaf_last_city'
-const PROFILE_STORAGE_KEY = 'looseleaf_curator_profile_v1'
+// 与 utils/profile.ts 的写入键保持一致（原先的 _v1 后缀导致该回退层永远读不到数据）
+const PROFILE_STORAGE_KEY = 'looseleaf_curator_profile'
 
 /**
  * 记录上次使用的城市，供三级回退机制使用
@@ -514,12 +515,22 @@ export function getLastUsedCity(): CityOption | null {
 
 /**
  * 读取主理人常驻城市 (Tier 2: current_city / location)
+ *
+ * 键名与写入方 utils/profile.ts 的 saveCuratorProfile 一致
+ * （原先写成 `looseleaf_curator_profile_v1`，全仓无任何写入者，该回退层恒为 null）；
+ * 存储结构是 `{ cached_at, data: profile }` 信封，字段在 data 里。
  */
 export function getCuratorResidentCity(): CityOption | null {
   try {
     const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
     if (!raw) return null
-    const profile = JSON.parse(raw) as { current_city?: string; location?: string }
+    const parsed = JSON.parse(raw) as {
+      current_city?: string
+      location?: string
+      data?: { current_city?: string; location?: string }
+    }
+    const profile =
+      parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed
     const fromCurrent = matchCityFromLocation(profile.current_city)
     if (fromCurrent) return fromCurrent
     const fromLocation = matchCityFromLocation(profile.location)

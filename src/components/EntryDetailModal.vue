@@ -43,7 +43,8 @@ const editCityName = ref('')
 const editOccurredAt = ref('')
 const editProjectId = ref<number | null>(null)
 const editAttachmentIds = ref<number[]>([])
-const editFeatured = ref(false)
+// 附件上传器引用：保存成功后调用 markCommitted()，避免组件卸载时把已绑定附件当孤儿清理
+const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 
 const handleEditCitySelect = (city: { code: string; name: string }) => {
   editCityCode.value = city.code
@@ -120,10 +121,17 @@ const handleSaveEdit = async () => {
       location: finalLocation,
       city_code: finalCityCode,
       city_name: finalCityName,
+      clear_city: (!finalCityCode && !finalCityName && !finalLocation) || undefined,
       project_id: editProjectId.value,
       occurred_at: getBeijingISOString(editOccurredAt.value),
       attachment_ids: editAttachmentIds.value,
+      // 编辑时删光了照片必须显式声明解绑：单发空数组服务端按「保持原样」处理，
+      // 用户删光照片保存后照片会原样回来且无任何报错（后端契约，与 WishFormModal 同口径）
+      clear_attachments: editAttachmentIds.value.length === 0,
     })
+
+    // 附件已随本次保存绑定到条目，标记后组件卸载不再当孤儿清理
+    imageUploaderRef.value?.markCommitted()
 
     emit('updated', updated)
     isEditing.value = false
@@ -165,8 +173,10 @@ const handleDelete = async () => {
 const displayImages = computed(() => {
   if (!props.entry) return []
   if (props.entry.attachments && props.entry.attachments.length > 0) {
-    // 详情页同样用缩略图；点开灯箱（EditorialLightbox）才拉原图
-    return props.entry.attachments.map((a) => a.thumbnail_url || a.url).filter(Boolean)
+    // 列表/接触印相用缩略图；灯箱必须换回原图，否则放大后只有 480px。
+    return props.entry.attachments
+      .map((a) => ({ thumb: a.thumbnail_url || a.url, original: a.url || a.thumbnail_url }))
+      .filter((a) => Boolean(a.thumb))
   }
   return []
 })
@@ -209,6 +219,9 @@ const getKindLabel = (type: string) => {
 <template>
   <div
     v-if="entry"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="entry.title || '散页详情'"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >
@@ -324,6 +337,7 @@ const getKindLabel = (type: string) => {
 
         <!-- 附件管理 -->
         <ImageUploader
+          ref="imageUploaderRef"
           :initialAttachments="entry.attachments"
           :storageConfigured="storageConfigured"
           @update:attachments="editAttachmentIds = $event"
@@ -369,18 +383,6 @@ const getKindLabel = (type: string) => {
               ...projects.map((p) => ({ value: p.id, label: p.title })),
             ]"
           />
-        </div>
-
-        <!-- 标记为精选印记 -->
-        <div class="flex items-center gap-2 pt-1">
-          <label class="flex items-center gap-2 text-xs font-mono-archive text-[var(--ink-secondary)] cursor-pointer select-none">
-            <input
-              v-model="editFeatured"
-              type="checkbox"
-              class="w-3.5 h-3.5 rounded-xs accent-[var(--accent-warm)] cursor-pointer"
-            />
-            <span>标记为精选</span>
-          </label>
         </div>
 
         <div class="pt-6 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
@@ -465,14 +467,14 @@ const getKindLabel = (type: string) => {
               :class="displayImages.length === 4 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'"
             >
               <div
-                v-for="(imgUrl, idx) in displayImages"
+                v-for="(img, idx) in displayImages"
                 :key="idx"
-                @click="openImageLightbox(imgUrl)"
+                @click="openImageLightbox(img.original || img.thumb)"
                 class="contact-loupe-frame group/frame relative bg-black/80 p-1.5 rounded-xs border border-white/10 hover:border-[var(--accent-warm)]/80 cursor-zoom-in space-y-1"
               >
                 <div class="aspect-[4/3] overflow-hidden rounded-xs bg-black">
                   <img
-                    :src="imgUrl"
+                    :src="img.thumb"
                     :alt="entry.title"
                     class="w-full h-full object-cover group-hover/frame:scale-105 transition-transform duration-300"
                     loading="lazy"
@@ -493,13 +495,13 @@ const getKindLabel = (type: string) => {
           <!-- 逐幅纵览画廊 -->
           <div v-else class="space-y-4">
             <div
-              v-for="(imgUrl, idx) in displayImages"
+              v-for="(img, idx) in displayImages"
               :key="idx"
-              @click="openImageLightbox(imgUrl)"
+              @click="openImageLightbox(img.original || img.thumb)"
               class="overflow-hidden rounded-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] cursor-zoom-in"
             >
               <img
-                :src="imgUrl"
+                :src="img.thumb"
                 :alt="entry.title"
                 class="w-full max-h-[680px] object-cover editorial-image"
                 loading="lazy"

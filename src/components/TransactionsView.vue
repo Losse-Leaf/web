@@ -35,7 +35,7 @@ import type {
 } from '../types'
 import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
-import { formatMoney, getBeijingDateString, parseOccurredDate, getBeijingISOString } from '../utils/format'
+import { formatMoney, getBeijingDateString, getBeijingNow, parseOccurredDate, getBeijingISOString } from '../utils/format'
 import { loadCuratorProfile } from '../utils/profile'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -65,7 +65,8 @@ const {
   openCategoryManager,
 } = useCategories()
 
-const currentDate = ref(new Date())
+// 伪 UTC 的北京墙上时间：月份切换与倒计时不受浏览器本地时区影响。
+const currentDate = ref(getBeijingNow())
 const transactionsList = ref<Transaction[]>([])
 const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
@@ -407,36 +408,47 @@ const activeInstallmentsList = computed(() => {
 })
 
 const getDaysUntilDay = (targetDay: number) => {
-  const now = new Date()
-  const currentDay = now.getDate()
-  if (currentDay <= targetDay) {
-    return targetDay - currentDay
+  // 全部用 UTC 日历运算：currentDate 是「北京墙上时间」的伪 UTC Date。
+  const now = getBeijingNow()
+  const y = now.getUTCFullYear()
+  const m = now.getUTCMonth()
+  const d = now.getUTCDate()
+  if (d <= targetDay) {
+    return targetDay - d
   }
-  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, targetDay)
-  const diffMs = nextMonthDate.getTime() - now.getTime()
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  const nextMonth = Date.UTC(y, m + 1, targetDay)
+  const todayUtc = Date.UTC(y, m, d)
+  return Math.ceil((nextMonth - todayUtc) / (1000 * 60 * 60 * 24))
 }
 
 const huabeiCountdown = computed(() => getDaysUntilDay(10))
 const baitiaoCountdown = computed(() => getDaysUntilDay(20))
 
-const year = computed(() => currentDate.value.getFullYear())
-const month = computed(() => currentDate.value.getMonth() + 1)
+const year = computed(() => currentDate.value.getUTCFullYear())
+const month = computed(() => currentDate.value.getUTCMonth() + 1)
 
 const prevMonth = () => {
-  currentDate.value = new Date(year.value, month.value - 2, 1)
+  currentDate.value = new Date(Date.UTC(year.value, month.value - 2, 1))
 }
 
 const nextMonth = () => {
-  currentDate.value = new Date(year.value, month.value, 1)
+  currentDate.value = new Date(Date.UTC(year.value, month.value, 1))
 }
 
+// 请求序号守卫：月份快速切换 / refreshKey 并发触发时，
+// 只允许**最新一次**响应写入状态，慢的旧响应整体作废
+// （否则标题显示 10 月、流水却是慢返回的 9 月数据）。
+let dataLoadSeq = 0
+let assetsLoadSeq = 0
+
 const loadAssetsOverview = async () => {
+  const seq = ++assetsLoadSeq
   try {
     const [overview, channels] = await Promise.all([
       fetchAssetsOverview().catch(() => null),
       fetchCreditChannels().catch(() => []),
     ])
+    if (seq !== assetsLoadSeq) return
     if (overview) assetsOverview.value = overview
     creditChannels.value = channels
   } catch (err) {
@@ -445,6 +457,7 @@ const loadAssetsOverview = async () => {
 }
 
 const loadData = async () => {
+  const seq = ++dataLoadSeq
   try {
     isLoading.value = true
     const [txs, sum] = await Promise.all([
@@ -452,14 +465,22 @@ const loadData = async () => {
       fetchTransactionSummary({ year: year.value, month: month.value }),
       loadAssetsOverview(),
     ])
+    if (seq !== dataLoadSeq) return
     transactionsList.value = txs
     summary.value = sum
   } catch (err) {
     console.error('Failed to load transactions:', err)
   } finally {
-    isLoading.value = false
+    if (seq === dataLoadSeq) isLoading.value = false
   }
 }
+
+// 流动资金展示口径：资产大盘优先，**符号与数值必须同源**——
+// 原先符号判断用 `?? 0`（恒非负、永不加负号）、数值却回退月度结余（可为负），
+// 大盘请求失败时会负结余显示成正数。
+const liquidBalanceDisplay = computed(() => {
+  return assetsOverview.value?.liquid_balance ?? summary.value?.balance ?? 0
+})
 
 watch([year, month], () => {
   loadData()
@@ -553,6 +574,24 @@ const saveEdit = async () => {
     return
   }
   const amountCents = Math.round(amtFloat * 100)
+  // ── 分期参数提交前校验（与输入框 min/max 呼应，拦住手输越界值）──
+  // 总期数 1~60；剩余期数 0~总期数。否则 0 期会触发除零 / 月供 undefined，
+  // 剩余 > 总期数则待还金额恒为全额，账面口径自相矛盾。
+  const wantInstallmentNow = editType.value === 'expense' && editIsInstallment.value
+  if (wantInstallmentNow) {
+    const months = Math.round(Number(editInstallmentMonths.value))
+    const remain = Math.round(Number(editInstallmentRemainMonths.value))
+    if (!Number.isFinite(months) || months < 1 || months > 60) {
+      editErrorMsg.value = '分期总期数必须在 1 至 60 期之间'
+      return
+    }
+    if (!Number.isFinite(remain) || remain < 0 || remain > months) {
+      editErrorMsg.value = `剩余期数必须在 0 至 ${months} 期之间`
+      return
+    }
+    editInstallmentMonths.value = months
+    editInstallmentRemainMonths.value = remain
+  }
   // ── 分期三态（后端契约）──────────────────────────────────
   // 关键：原先的判定是 `editType === 'expense' && !editIsInstallment`，
   // 于是「把一笔分期支出改成收入」时 clear_installment 变成 false ——
@@ -571,56 +610,61 @@ const saveEdit = async () => {
       ? Math.round(amountCents / editInstallmentMonths.value)
       : undefined
 
-  const updated = await updateTransaction(editingTx.value.id, {
-    title: editTitle.value.trim() || editCategory.value,
-    amount: amountCents,
-    type: editType.value,
-    category: editCategory.value,
-    note: editNote.value.trim(),
-    payment_method: editPaymentMethod.value.trim() || undefined,
-    occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
-    city_code: editCityCode.value || undefined,
-    is_installment: wantInstallment,
-    // 关键：**显式声明**「本次要取消分期」。
-    // 后端的新契约是「is_installment=false 且不带 clear_installment → 保持原值」，
-    // 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传 ——
-    // 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
-    // 这里是 web 端**唯一**能真正取消分期的入口，所以必须带上这个信号。
-    clear_installment: cancelInstallment,
-    installment_channel_code:
-      editType.value === 'expense' && editIsInstallment.value
-        ? editInstallmentChannel.value
-        : undefined,
-    installment_total_amount:
-      editType.value === 'expense' && editIsInstallment.value ? amountCents : undefined,
-    installment_months:
-      editType.value === 'expense' && editIsInstallment.value
-        ? editInstallmentMonths.value
-        : undefined,
-    installment_monthly_pay:
-      editType.value === 'expense' && editIsInstallment.value ? monthlyPay : undefined,
-    installment_remain_months:
-      editType.value === 'expense' && editIsInstallment.value
-        ? editInstallmentRemainMonths.value
-        : undefined,
-    repayment_day:
-      editType.value === 'expense' && editIsInstallment.value
-        ? editRepaymentDay.value
-        : undefined,
-  })
+  try {
+    const updated = await updateTransaction(editingTx.value.id, {
+      title: editTitle.value.trim() || editCategory.value,
+      amount: amountCents,
+      type: editType.value,
+      category: editCategory.value,
+      note: editNote.value.trim(),
+      payment_method: editPaymentMethod.value.trim() || undefined,
+      occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
+      city_code: editCityCode.value || undefined,
+      is_installment: wantInstallment,
+      // 关键：**显式声明**「本次要取消分期」。
+      // 后端的新契约是「is_installment=false 且不带 clear_installment → 保持原值」，
+      // 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传 ——
+      // 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
+      // 这里是 web 端**唯一**能真正取消分期的入口，所以必须带上这个信号。
+      clear_installment: cancelInstallment,
+      installment_channel_code:
+        editType.value === 'expense' && editIsInstallment.value
+          ? editInstallmentChannel.value
+          : undefined,
+      installment_total_amount:
+        editType.value === 'expense' && editIsInstallment.value ? amountCents : undefined,
+      installment_months:
+        editType.value === 'expense' && editIsInstallment.value
+          ? editInstallmentMonths.value
+          : undefined,
+      installment_monthly_pay:
+        editType.value === 'expense' && editIsInstallment.value ? monthlyPay : undefined,
+      installment_remain_months:
+        editType.value === 'expense' && editIsInstallment.value
+          ? editInstallmentRemainMonths.value
+          : undefined,
+      repayment_day:
+        editType.value === 'expense' && editIsInstallment.value
+          ? editRepaymentDay.value
+          : undefined,
+    })
 
-  const idx = transactionsList.value.findIndex((t) => t.id === updated.id)
-  if (idx !== -1) {
-    transactionsList.value[idx] = updated
+    const idx = transactionsList.value.findIndex((t) => t.id === updated.id)
+    if (idx !== -1) {
+      transactionsList.value[idx] = updated
+    }
+    emit('transactionUpdated', updated)
+    editingTx.value = null
+    await Promise.all([
+      fetchTransactionSummary({ year: year.value, month: month.value }).then((sum) => {
+        if (sum) summary.value = sum
+      }),
+      loadAssetsOverview(),
+    ]).catch(() => {})
+  } catch (err: any) {
+    // 保存失败：保留弹窗与已填内容，给出可感知的错误（原先 unhandled rejection、静默无反馈）
+    editErrorMsg.value = err?.message || '保存账目失败，请稍后重试'
   }
-  emit('transactionUpdated', updated)
-  editingTx.value = null
-  await Promise.all([
-    fetchTransactionSummary({ year: year.value, month: month.value }).then((sum) => {
-      if (sum) summary.value = sum
-    }),
-    loadAssetsOverview(),
-  ]).catch(() => {})
 }
 
 const removeTx = async (id: number) => {
@@ -631,7 +675,12 @@ const removeTx = async (id: number) => {
     danger: true,
   })
   if (!ok) return
-  await deleteTransaction(id)
+  try {
+    await deleteTransaction(id)
+  } catch (err: any) {
+    await showAlert({ title: '删除失败', message: err?.message || '删除账目失败', danger: true })
+    return
+  }
   transactionsList.value = transactionsList.value.filter((t) => t.id !== id)
   emit('transactionDeleted', id)
   await Promise.all([
@@ -756,8 +805,8 @@ const spectrumItems = computed(() => {
             </button>
           </div>
 
-          <div v-if="!isEditingLiquidBalance" class="font-serif-editorial text-2xl sm:text-3xl font-medium tracking-tight" :class="(assetsOverview?.liquid_balance ?? 0) >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
-            {{ (assetsOverview?.liquid_balance ?? 0) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(assetsOverview?.liquid_balance ?? (summary?.balance || 0))) }}
+          <div v-if="!isEditingLiquidBalance" class="font-serif-editorial text-2xl sm:text-3xl font-medium tracking-tight" :class="liquidBalanceDisplay >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
+            {{ liquidBalanceDisplay < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(liquidBalanceDisplay)) }}
           </div>
 
           <div v-else @click.stop class="flex items-center gap-1.5 pt-0.5 font-mono-archive">

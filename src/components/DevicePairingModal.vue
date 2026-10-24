@@ -24,7 +24,7 @@ import {
   fetchPairQRCode,
 } from '../utils/api'
 import { audio } from '../utils/audio'
-import { askConfirm } from '../composables/useConfirm'
+import { askConfirm, showAlert } from '../composables/useConfirm'
 import { parseOccurredDate } from '../utils/format'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
@@ -188,10 +188,13 @@ const handleRevoke = async (id: number) => {
   if (!ok) return
   try {
     await revokeTrustedDevice(id)
-  } catch (err) {
+    // 仅在服务端确认吊销成功后才从列表移除——
+    // 原先失败也照删，界面显示「已解绑」而服务端该设备仍受信
+    devices.value = devices.value.filter((d) => d.id !== id)
+  } catch (err: any) {
     console.error('Failed to revoke device:', err)
+    showAlert({ title: '解绑失败', message: err?.message || '解绑设备失败，请稍后重试', danger: true })
   }
-  devices.value = devices.value.filter((d) => d.id !== id)
 }
 
 const editingDeviceKey = ref<string | number | null>(null)

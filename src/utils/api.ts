@@ -183,8 +183,13 @@ type SessionProbe =
   | { kind: 'unknown' }
 
 async function probeSessionCookie(): Promise<SessionProbe> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), 8000)
   try {
-    const res = await fetch(`${API_BASE}/auth/session`, { credentials: 'same-origin' })
+    const res = await fetch(`${API_BASE}/auth/session`, {
+      credentials: 'same-origin',
+      signal: controller.signal,
+    })
     // 401/403 才是「服务端明确说不认账」
     if (res.status === 401 || res.status === 403) return { kind: 'not-admin' }
     // 5xx / 404（旧服务端未实现该路由）属于「探针不可用」，不是「会话失效」
@@ -195,8 +200,10 @@ async function probeSessionCookie(): Promise<SessionProbe> {
       ? { kind: 'admin' }
       : { kind: 'not-admin' }
   } catch {
-    // 网络不可达 —— 探针没跑成，不代表 Cookie 失效
+    // 网络不可达 / 超时 —— 探针没跑成，不代表 Cookie 失效
     return { kind: 'unknown' }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -257,6 +264,22 @@ export async function refreshSessionState(): Promise<boolean> {
 // 这里为所有 JSON 请求加上统一超时，避免页面永远转圈。
 const REQUEST_TIMEOUT_MS = 25_000
 
+/** 兼容没有 AbortSignal.any 的老 Safari / 微信内核 */
+function anyAbortSignal(signals: AbortSignal[]): AbortSignal {
+  const anyFn = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any
+  if (typeof anyFn === 'function') return anyFn(signals)
+  const controller = new AbortController()
+  const onAbort = () => controller.abort()
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort()
+      break
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  }
+  return controller.signal
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getAdminToken()
   const authHeaders: Record<string, string> = {}
@@ -268,13 +291,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
   const timeoutController = new AbortController()
   const timer = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
-  let signal: AbortSignal | undefined = timeoutController.signal
-  if (options?.signal) {
-    signal =
-      typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function'
-        ? AbortSignal.any([options.signal, timeoutController.signal])
-        : options.signal
-  }
+  // 外部 signal 与超时 signal 合并：有 AbortSignal.any 直接合，
+  // 老浏览器经 anyAbortSignal 转发 abort —— 两个中止来源都保留
+  //（原先降级分支直接换成 options.signal，25s 超时静默失效）。
+  const signal: AbortSignal = options?.signal
+    ? anyAbortSignal([options.signal, timeoutController.signal])
+    : timeoutController.signal
 
   let res: Response
   try {
@@ -345,13 +367,35 @@ function entriesScope(params?: {
 }
 
 const ENTRIES_ETAG_KEY = 'looseleaf_entries_etag'
-let entriesETag = ''
+// WEB-7：缓存协商从「只有第 1 页」升级为「每页各存各的 ETag」。
+// 否则第 1 页命中 304 时，旧页（第 2 页以后）是否被跨设备修改完全无从得知。
+// 兼容旧数据：历史上该键存的是单个 ETag 字符串，这里自动迁移为第 1 页。
+let entriesPageETags: Record<number, string> = {}
 try {
-  entriesETag = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
+  const raw = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
+  if (raw.trim().startsWith('{')) {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      for (const [k, v] of Object.entries(parsed)) {
+        const page = Number(k)
+        if (Number.isFinite(page) && typeof v === 'string' && v) {
+          entriesPageETags[page] = v
+        }
+      }
+    }
+  } else if (raw) {
+    entriesPageETags[1] = raw
+  }
 } catch {}
 
+function persistEntriesPageETags(): void {
+  try {
+    localStorage.setItem(ENTRIES_ETAG_KEY, JSON.stringify(entriesPageETags))
+  } catch {}
+}
+
 export function resetEntriesETag(): void {
-  entriesETag = ''
+  entriesPageETags = {}
   try {
     localStorage.removeItem(ENTRIES_ETAG_KEY)
   } catch {}
@@ -395,6 +439,8 @@ export async function fetchEntries(params?: {
   category?: string
   year?: string
   signal?: AbortSignal
+  /** WEB-7：跳过 If-None-Match，用于「304 但没有本地页缓存」时强制取回该页 */
+  noCache?: boolean
 }): Promise<LifeEntry[] | null> {
   // 竞态保护：同一作用域内的上一次未完成请求会被终止；不同作用域互不影响。
   const scope = entriesScope(params)
@@ -427,16 +473,28 @@ export async function fetchEntries(params?: {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  // 默认首页无过滤列表启用 If-None-Match 缓存协商 (FE-10)
-  const isDefaultList = !params?.type && !params?.category && !params?.year && (params?.page || 1) === 1
-  if (isDefaultList && entriesETag) {
-    headers['If-None-Match'] = entriesETag
+  // WEB-7：默认列表的每一页都可以做缓存协商（不再只限第 1 页）。
+  // 每页 ETag 独立保存；若调用方要求 noCache（本地没有该页兜底数据）则跳过。
+  const page = params?.page || 1
+  const isDefaultList = !params?.type && !params?.category && !params?.year
+  if (isDefaultList && !params?.noCache && entriesPageETags[page]) {
+    headers['If-None-Match'] = entriesPageETags[page]
   }
+
+  // 统一 25 秒超时：分页请求若挂死，不能永久占住启动顺序（原先前端只有 request()
+  // 带超时，fetchEntries 走裸 fetch，网络黑洞时首屏会一直等）。
+  // 老浏览器（Safari < 17.4 / Chrome < 116 / 旧微信内核）没有 AbortSignal.any，
+  // 原先直接调用会 TypeError，导致首页时间流请求全挂；经 anyAbortSignal 降级转发。
+  const timeoutController = new AbortController()
+  const timeoutTimer = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
+  const combinedSignal: AbortSignal = signal
+    ? anyAbortSignal([signal, timeoutController.signal])
+    : timeoutController.signal
 
   try {
     const res = await fetch(url, {
       headers,
-      signal,
+      signal: combinedSignal,
     })
 
     // 命中 304 缓存协商：返回 null 告知调用方保持现有引用，跳过重渲染 (FE-10)
@@ -455,10 +513,8 @@ export async function fetchEntries(params?: {
 
     const newEtag = res.headers.get('ETag')
     if (isDefaultList && newEtag) {
-      entriesETag = newEtag
-      try {
-        localStorage.setItem(ENTRIES_ETAG_KEY, newEtag)
-      } catch {}
+      entriesPageETags[page] = newEtag
+      persistEntriesPageETags()
     }
 
     const json = await res.json()
@@ -471,6 +527,8 @@ export async function fetchEntries(params?: {
       return null
     }
     throw err
+  } finally {
+    clearTimeout(timeoutTimer)
   }
 }
 
@@ -588,6 +646,7 @@ export async function updateLifeEntry(
     project_id?: number | null
     wish_id?: number | null
     footprint_id?: number | null
+    clear_city?: boolean
     attachment_ids?: number[]
   /**
    * 显式声明「本次要解除全部附件绑定」
@@ -1307,6 +1366,16 @@ export async function updateFootprint(
     life_entry_id: number | null
     wish_id: number | null
     attachment_ids: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传 ——
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   * 编辑时若最终附件列表为空（用户删光了照片），必须带上这个信号。
+   */
+    clear_attachments: boolean
   }>
 ): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints/${id}`, {

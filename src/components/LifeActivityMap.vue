@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import type { LifeEntry } from '../types'
-import { parseOccurredDate } from '../utils/format'
+import { getBeijingNow, parseOccurredDate } from '../utils/format'
 
 const props = defineProps<{
   entries: LifeEntry[]
@@ -60,11 +60,11 @@ export interface DayCell {
   baseClass: string
 }
 
-// 今天日期基准
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+// 今天日期基准：北京自然日，用伪 UTC Date + getUTC*，不受浏览器时区影响。
+const bjNow = getBeijingNow()
+const today = new Date(Date.UTC(bjNow.getUTCFullYear(), bjNow.getUTCMonth(), bjNow.getUTCDate()))
 const pad = (n: number) => String(n).padStart(2, '0')
-const todayStr = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(today.getDate())}`
+const todayStr = `${today.getUTCFullYear()}.${pad(today.getUTCMonth() + 1)}.${pad(today.getUTCDate())}`
 
 const todayDisplay = computed(() => todayStr)
 
@@ -73,29 +73,27 @@ const calendarWeeks = computed(() => {
   const weeks: DayCell[][] = []
 
   // 今天的星期 (0=Sun, 6=Sat)
-  const todayDayOfWeek = today.getDay()
+  const todayDayOfWeek = today.getUTCDay()
 
   // GitHub 热力图规范：从今天往前推 52 周，并对齐到周日
   // 52 周 * 7 天 = 364 天。起始周的第一天(周日) 为：
   const startDate = new Date(today)
-  startDate.setDate(today.getDate() - 52 * 7 - todayDayOfWeek)
-  startDate.setHours(0, 0, 0, 0)
+  startDate.setUTCDate(today.getUTCDate() - 52 * 7 - todayDayOfWeek)
 
   // 终点日期：当前周的周六（或者今天之后的本周余下天数被标记为 isFuture）
   const endDate = new Date(today)
-  endDate.setDate(today.getDate() + (6 - todayDayOfWeek))
-  endDate.setHours(0, 0, 0, 0)
+  endDate.setUTCDate(today.getUTCDate() + (6 - todayDayOfWeek))
 
   let cur = new Date(startDate)
   let currentWeek: DayCell[] = []
 
   while (cur <= endDate) {
-    const y = cur.getFullYear()
-    const m = cur.getMonth() + 1
-    const d = cur.getDate()
+    const y = cur.getUTCFullYear()
+    const m = cur.getUTCMonth() + 1
+    const d = cur.getUTCDate()
 
     const dateStr = `${y}.${pad(m)}.${pad(d)}`
-    const dayOfWeek = cur.getDay() // 0=Sun, ..., 6=Sat
+    const dayOfWeek = cur.getUTCDay() // 0=Sun, ..., 6=Sat
 
     const isToday = dateStr === todayStr
     const isFuture = cur.getTime() > today.getTime()
@@ -147,7 +145,7 @@ const calendarWeeks = computed(() => {
       currentWeek = []
     }
 
-    cur.setDate(cur.getDate() + 1)
+    cur.setUTCDate(cur.getUTCDate() + 1)
   }
 
   return weeks

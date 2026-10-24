@@ -76,6 +76,7 @@ watch(
 const backups = ref<BackupItem[]>([])
 const localStorageStatus = ref<StorageStatus | null>(props.storageStatus || null)
 const isLoadingList = ref(false)
+const loadError = ref('')
 const isCreatingBackup = ref(false)
 const isRestoring = ref(false)
 const isDeleting = ref<string | null>(null)
@@ -91,6 +92,10 @@ const alertMessage = ref<{ type: 'success' | 'error'; text: string } | null>(nul
 const totalBackupBytes = computed(() => {
   return backups.value.reduce((acc, item) => acc + (item.size || 0), 0)
 })
+
+// 备份保留上限（DEC-05：每 6 小时一份 × 12 份 ≈ 3 天历史深度）。
+// 后端 /system/backup/list 响应未携带上限字段，暂以常量对齐；若后端下发请替换为接口值。
+const MAX_BACKUP_RETENTION = 12
 
 const showAlertMsg = (type: 'success' | 'error', text: string) => {
   alertMessage.value = { type, text }
@@ -148,6 +153,7 @@ const formatRelativeTime = (dateStr: string): string => {
 // 读取数据
 const loadData = async () => {
   isLoadingList.value = true
+  loadError.value = ''
   try {
     const [listRes, statusRes] = await Promise.allSettled([
       fetchBackupList(),
@@ -159,8 +165,10 @@ const loadData = async () => {
     if (statusRes.status === 'fulfilled') {
       localStorageStatus.value = statusRes.value
     }
-  } catch (err: any) {
-    console.error('Failed to load backup data:', err)
+    // 两个都失败才是「真的没加载出来」；只失败一个时另一块仍可正常使用。
+    if (listRes.status === 'rejected' && statusRes.status === 'rejected') {
+      loadError.value = listRes.reason?.message || statusRes.reason?.message || '灾备数据加载失败'
+    }
   } finally {
     isLoadingList.value = false
   }
@@ -560,6 +568,9 @@ onMounted(() => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog"
+    aria-modal="true"
+    aria-label="存储设置与灾备中枢"
     class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 backdrop-blur-xs transition-opacity duration-200"
     @click.self="emit('close')"
   >
@@ -594,6 +605,7 @@ onMounted(() => {
         </div>
         <button
           @click="emit('close')"
+          aria-label="关闭存储设置"
           class="p-1.5 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--bg-subtle)] rounded-xs transition-colors cursor-pointer"
         >
           <X class="w-5 h-5" />
@@ -617,7 +629,7 @@ onMounted(() => {
             class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive"
             :class="activeTab === 'backup' ? 'bg-white/20 text-white' : 'bg-[var(--bg-subtle)] text-[var(--ink-muted)]'"
           >
-            {{ backups.length }}/7
+            {{ backups.length }}/{{ MAX_BACKUP_RETENTION }}
           </span>
         </button>
 
@@ -666,11 +678,11 @@ onMounted(() => {
                 全量数据快照归档
               </span>
               <span class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[var(--ink-muted)]">
-                {{ backups.length }}/7 份
+                {{ backups.length }}/{{ MAX_BACKUP_RETENTION }} 份
               </span>
             </div>
             <p class="text-xs text-[var(--ink-muted)] leading-relaxed font-serif-editorial">
-              每日 03:30 自动备份 · 累计占用 {{ formatBytes(totalBackupBytes) }} · 目的地：{{ localStorageStatus?.configured ? 'Cloudflare R2' : '本地存储' }}
+              每 6 小时自动备份 · 累计占用 {{ formatBytes(totalBackupBytes) }} · 目的地：{{ localStorageStatus?.configured ? 'Cloudflare R2' : '本地存储' }}
             </p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
@@ -699,9 +711,18 @@ onMounted(() => {
         <div class="space-y-3">
           <div class="flex items-center justify-between text-xs text-[var(--ink-muted)]">
             <span class="font-serif-editorial font-medium text-[var(--ink-primary)]">
-              历史快照归档清单 ({{ backups.length }}/7)
+              历史快照归档清单 ({{ backups.length }}/{{ MAX_BACKUP_RETENTION }})
             </span>
             <span class="font-serif-editorial text-[11px]">按时间倒序 · 独立可移植</span>
+          </div>
+
+          <div
+            v-if="loadError"
+            class="p-3 rounded-xs border border-rose-500/30 bg-rose-500/10 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2"
+          >
+            <AlertTriangle class="w-4 h-4 shrink-0" />
+            <span class="flex-1">{{ loadError }}</span>
+            <button type="button" class="underline cursor-pointer" @click="loadData">重试</button>
           </div>
 
           <div v-if="isLoadingList && backups.length === 0" class="py-12 text-center text-xs font-serif-editorial text-[var(--ink-muted)] space-y-2">
@@ -721,7 +742,7 @@ onMounted(() => {
               暂无历史归档快照
             </div>
             <div class="text-xs text-[var(--ink-muted)] max-w-sm mx-auto leading-relaxed">
-              可点击上方「立即生成快照」创建首份完整全量备份，或静候每日 03:30 系统自动打包归档。
+              可点击上方「立即生成快照」创建首份完整全量备份，或静候系统每 6 小时自动打包归档。
             </div>
           </div>
 
@@ -935,8 +956,20 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- 首次拉取完成前不渲染表单：否则用户抢先输入的凭据会被随后到达的
+             /storage/status 覆盖（父组件已不再预取）。 -->
+        <div
+          v-if="isLoadingList && !localStorageStatus"
+          class="p-8 text-center text-xs font-serif-editorial text-[var(--ink-muted)] border border-dashed border-[var(--border-subtle)] rounded-xs"
+        >
+          正在读取存储配置…
+        </div>
+
         <!-- 存储配置表单 -->
-        <div class="p-4 sm:p-5 bg-[var(--bg-subtle)]/40 rounded-xs border border-[var(--border-subtle)] space-y-4">
+        <div
+          v-else
+          class="p-4 sm:p-5 bg-[var(--bg-subtle)]/40 rounded-xs border border-[var(--border-subtle)] space-y-4"
+        >
           <div class="flex items-center justify-between pb-1">
             <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
               对象存储接入凭据

@@ -328,6 +328,15 @@ const removeGear = async (idx: number) => {
     gearErrorMsg.value = '该设备缺少后端标识，无法删除'
     return
   }
+  // 与 TransactionsView 的设备移除对齐：单击即永久删除的操作必须有确认
+  // （删除还会连带软删它在时间流里的伴生散页）
+  const ok = await askConfirm({
+    title: '移除设备',
+    message: `确定从固定资产库中移除「${item.name}」？其在时间流中的伴生散页将一并删除，此操作不可恢复。`,
+    confirmText: '移除',
+    danger: true,
+  })
+  if (!ok) return
   try {
     gearErrorMsg.value = ''
     await deleteGearAsset(item.id)

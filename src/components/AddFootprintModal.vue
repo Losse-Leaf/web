@@ -44,6 +44,8 @@ const departedAt = ref('')
 const title = ref('')
 const note = ref('')
 const attachmentIds = ref<number[]>([])
+// 附件上传器引用：保存成功后 markCommitted，避免卸载时把已绑定附件当孤儿清理
+const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
@@ -116,6 +118,11 @@ const handleSubmit = async () => {
     errorMsg.value = '请选择到访日期'
     return
   }
+  // 返程不得早于到访（YYYY-MM-DD 字典序即时间序），否则产生负跨度旅程
+  if (departedAt.value && visitedAt.value && departedAt.value < visitedAt.value) {
+    errorMsg.value = '返程日期不能早于到访日期'
+    return
+  }
 
   if (!getAdminToken()) {
     emit('requestAuth', () => handleSubmit())
@@ -139,8 +146,12 @@ const handleSubmit = async () => {
         title: title.value.trim() || undefined,
         note: note.value.trim() || undefined,
         attachment_ids: attachmentIds.value,
+        // 编辑时删光了照片必须显式声明解绑：单发空数组服务端按「保持原样」处理（契约 A）
+        clear_attachments: attachmentIds.value.length === 0,
       })
       audio.playShutter()
+      // 附件已随本次保存绑定，标记后组件卸载不再当孤儿清理
+      imageUploaderRef.value?.markCommitted()
       emit('saved', fp)
       emit('close')
     } else {
@@ -154,6 +165,7 @@ const handleSubmit = async () => {
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
       })
       audio.playShutter()
+      imageUploaderRef.value?.markCommitted()
       emit('saved', fp)
       emit('close')
     }
@@ -259,6 +271,7 @@ const handleSubmit = async () => {
 
         <!-- 旅途影像上传 -->
         <ImageUploader
+          ref="imageUploaderRef"
           :storageConfigured="storageConfigured"
           :initialAttachments="editingFootprint?.attachments"
           @update:attachments="(ids) => (attachmentIds = ids)"

@@ -123,8 +123,8 @@
 
   /* 等宽排版字体 (Monospace Timestamp) */
   .font-mono-archive {
-    /* MOB-P1-98：等宽优先本地 JetBrains Mono */
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    /* WEB-6：移除 31KB 的 JetBrains Mono 自托管文件，改用系统等宽栈 */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco,
       'Sarasa Mono SC', 'Noto Sans Mono CJK SC', monospace;
     letter-spacing: 0.02em;
   }
@@ -172,7 +172,7 @@
   }
 
   .type-mono-meta {
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
     font-size: 0.6875rem;
     line-height: 1.5;
     letter-spacing: 0.025em;

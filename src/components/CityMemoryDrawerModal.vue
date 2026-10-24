@@ -414,7 +414,9 @@ const handleDeleteFootprint = async (fp: any) => {
               class="w-24 h-24 sm:w-32 sm:h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs overflow-hidden cursor-zoom-in transition-colors"
             >
               <img
-                :src="att.url"
+                :src="att.thumbnail_url || att.url"
+                width="128"
+                height="128"
                 loading="lazy"
                 class="w-full h-full object-cover editorial-image"
                 alt="旅途菲林"

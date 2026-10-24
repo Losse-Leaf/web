@@ -48,18 +48,38 @@ const getEntryFirstImage = (entry: LifeEntry): string => {
   return ''
 }
 
+// 灯箱才需要原图：列表卡片一律用 thumbnail_url（见上）。
+const getEntryFirstOriginalImage = (entry: LifeEntry): string => {
+  return entry.attachments?.[0]?.url || ''
+}
+
 // MOB-P1-67：附件列表记忆化 ——
 // 模板里每条记录会调用 getEntryImages 3~5 次，每次都 filter 出新数组。
-const imagesMemo = new WeakMap<LifeEntry, { id: number; url: string }[]>()
+// WEB-9：同时保留原图地址与固有尺寸，列表用缩略图、灯箱用原图，
+// width/height 交给浏览器预留画幅，减少图片加载后的 CLS。
+type EntryImage = {
+  id: number
+  url: string
+  originalUrl: string
+  width?: number
+  height?: number
+}
+const imagesMemo = new WeakMap<LifeEntry, EntryImage[]>()
 
-const getEntryImages = (entry: LifeEntry): { id: number; url: string }[] => {
+const getEntryImages = (entry: LifeEntry): EntryImage[] => {
   const cached = imagesMemo.get(entry)
   if (cached) return cached
-  const list =
+  const list: EntryImage[] =
     entry.attachments && entry.attachments.length > 0
-      ? (entry.attachments
+      ? entry.attachments
           .filter((a) => Boolean(a.url))
-          .map((a) => ({ id: a.id, url: thumbnailUrlOf(a) })) as { id: number; url: string }[])
+          .map((a) => ({
+            id: a.id,
+            url: thumbnailUrlOf(a),
+            originalUrl: a.url,
+            width: a.width,
+            height: a.height,
+          }))
       : []
   imagesMemo.set(entry, list)
   return list
@@ -120,7 +140,7 @@ const formatMonthHeader = (entry: LifeEntry): string => {
 
 const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   lightboxPayload.value = {
-    imageUrl: customUrl || getEntryFirstImage(entry),
+    imageUrl: customUrl || getEntryFirstOriginalImage(entry) || getEntryFirstImage(entry),
     title: entry.title || '',
     meta: entry.city_name || entry.location || '',
     location: entry.location || '',
@@ -520,12 +540,14 @@ const getGapDays = (index: number): number => {
               <div
                 v-if="getEntryImages(entry).length === 1"
                 class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in border border-[var(--border-subtle)]/70 p-1.5 sm:p-2"
-                @click.stop="openLightbox(entry, getEntryImages(entry)[0].url)"
+                @click.stop="openLightbox(entry, getEntryImages(entry)[0].originalUrl)"
               >
                 <img
                   :src="getEntryImages(entry)[0].url"
                   :alt="entry.title"
-                  class="w-full max-h-[580px] object-contain sm:object-cover rounded-xs editorial-image group-hover/img:scale-[1.008] transition-transform duration-500 mx-auto"
+                  :width="getEntryImages(entry)[0].width"
+                  :height="getEntryImages(entry)[0].height"
+                  class="w-full h-auto max-h-[580px] object-contain sm:object-cover rounded-xs editorial-image group-hover/img:scale-[1.008] transition-transform duration-500 mx-auto"
                   loading="lazy"
                  decoding="async">
                 <div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[11px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-xs">
@@ -543,11 +565,13 @@ const getGapDays = (index: number): number => {
                   v-for="(img, imgIdx) in getEntryImages(entry)"
                   :key="img.id || imgIdx"
                   class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in aspect-[4/3] group/single border border-[var(--border-subtle)]/50"
-                  @click.stop="openLightbox(entry, img.url)"
+                  @click.stop="openLightbox(entry, img.originalUrl)"
                 >
                   <img
                     :src="img.url"
                     :alt="entry.title"
+                    :width="img.width"
+                    :height="img.height"
                     class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
                     loading="lazy"
                    decoding="async">
@@ -566,11 +590,13 @@ const getGapDays = (index: number): number => {
                   v-for="(img, imgIdx) in getEntryImages(entry)"
                   :key="img.id || imgIdx"
                   class="relative overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in aspect-[4/3] group/single border border-[var(--border-subtle)]/50"
-                  @click.stop="openLightbox(entry, img.url)"
+                  @click.stop="openLightbox(entry, img.originalUrl)"
                 >
                   <img
                     :src="img.url"
                     :alt="entry.title"
+                    :width="img.width"
+                    :height="img.height"
                     class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
                     loading="lazy"
                    decoding="async">

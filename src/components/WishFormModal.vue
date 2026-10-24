@@ -33,6 +33,8 @@ const targetDate = ref('')
 const plantedAt = ref(getBeijingDateString())
 const attachments = ref<Attachment[]>([])
 const attachmentIds = ref<number[]>([])
+// 附件上传器引用：保存成功后 markCommitted，避免卸载时把已绑定参考图当孤儿清理
+const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
@@ -137,6 +139,8 @@ const handleSubmit = async () => {
       })
       emit('saved', created)
     }
+    // 参考图已随心愿落库绑定，标记后上传器卸载不再回收这些文件
+    imageUploaderRef.value?.markCommitted()
     emit('close')
   } catch (err: any) {
     if (!getAdminToken()) {
@@ -319,6 +323,7 @@ const handleSubmit = async () => {
         <div class="space-y-1.5">
           <label class="block text-[11px] text-[var(--ink-muted)]">心愿参考照片与灵感剪报</label>
           <ImageUploader
+            ref="imageUploaderRef"
             :initialAttachments="attachments"
             :storageConfigured="storageConfigured ?? true"
             @update:attachments="attachmentIds = $event"

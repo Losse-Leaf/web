@@ -30,22 +30,21 @@ async function decodeImage(file: File, targetMaxEdge: number): Promise<DecodedIm
   // 1) 现代路径：createImageBitmap + imageOrientation + 直接按目标尺寸解码
   if (typeof createImageBitmap === 'function') {
     try {
-      const probe = await createImageBitmap(file)
+      // 探测尺寸也必须带 imageOrientation: 'from-image' ——
+      // 不带时 probe 是「未旋转」的存储尺寸，而后续 resize 是在**已旋转**的位图上执行，
+      // 竖拍（EXIF orientation 6/8 等且最长边 > 2048）会被按横幅比例缩放，内容压扁变形。
+      // 不支持该选项的老浏览器会在此抛错，自动落到 <img> 回退路径（其 natural* 已含方向）。
+      const probe = await createImageBitmap(file, { imageOrientation: 'from-image' })
       const sourceMax = Math.max(probe.width, probe.height)
       if (sourceMax <= targetMaxEdge) {
-        // 尺寸已达标：仍需应用 EXIF 方向（from-image 会旋转像素）
-        const oriented = await createImageBitmap(file, { imageOrientation: 'from-image' })
-        probe.close()
+        // 尺寸已达标：probe 本身已按 EXIF 方向旋转，直接复用，无需二次解码
         return {
-          width: oriented.width,
-          height: oriented.height,
-          draw: (ctx) => ctx.drawImage(oriented, 0, 0, oriented.width, oriented.height),
-          release: () => oriented.close(),
+          width: probe.width,
+          height: probe.height,
+          draw: (ctx) => ctx.drawImage(probe, 0, 0, probe.width, probe.height),
+          release: () => probe.close(),
         }
       }
-      probe.close()
-
-      // 超大图：直接按目标尺寸解码，峰值内存 ≈ 目标尺寸而非原图尺寸
       const scale = targetMaxEdge / sourceMax
       const resized = await createImageBitmap(file, {
         imageOrientation: 'from-image',
@@ -55,6 +54,7 @@ async function decodeImage(file: File, targetMaxEdge: number): Promise<DecodedIm
       }).catch(() => null)
 
       if (resized) {
+        probe.close()
         return {
           width: resized.width,
           height: resized.height,
@@ -62,6 +62,7 @@ async function decodeImage(file: File, targetMaxEdge: number): Promise<DecodedIm
           release: () => resized.close(),
         }
       }
+      probe.close()
     } catch {
       // 落到下面的 <img> 回退路径
     }

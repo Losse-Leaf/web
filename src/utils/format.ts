@@ -18,9 +18,15 @@ export function formatMoney(cents: number): string {
 // ==========================================
 const BEIJING_OFFSET_MINUTES = 8 * 60
 
-/** 将任意时刻转换为「北京墙上时间」的伪 UTC Date（此后一律用 getUTC* 读取） */
+/**
+ * 将任意时刻转换为「北京墙上时间」的伪 UTC Date（此后一律用 getUTC* 读取）。
+ *
+ * 只加固定 +8 小时，**不能**再叠加 `getTimezoneOffset()`：
+ * 后者是「本地时间相对 UTC 的分钟差」（UTC+8 为 -480），再 +480 等于抵消，
+ * 结果 Date 仍是原瞬间，`getUTC*` 读出来是 UTC 而不是北京时间（整体早 8 小时）。
+ */
 export function toBeijingDate(d: Date): Date {
-  return new Date(d.getTime() + (d.getTimezoneOffset() + BEIJING_OFFSET_MINUTES) * 60000)
+  return new Date(d.getTime() + BEIJING_OFFSET_MINUTES * 60000)
 }
 
 /** 当前的北京时间（伪 UTC Date，请配合 getUTC* 读取） */
@@ -69,6 +75,52 @@ export function getBeijingISOString(dateStrOrDate?: string | Date): string {
 /** 北京时间年份 */
 export function getBeijingYear(): number {
   return getBeijingNow().getUTCFullYear()
+}
+
+export interface BeijingCalendar {
+  year: number
+  month: number // 1~12
+  day: number // 1~31
+  hour: number // 0~23
+  minute: number // 0~59
+  second: number // 0~59
+  dayOfWeek: number // 0=周日 … 6=周六
+}
+
+/**
+ * 北京墙上时间的日历字段（锚定 +08:00，不依赖浏览器本地时区）
+ *
+ * 供「今天的日期 / 本月 / 星期几」这类日历判断统一取值 (RC-134)：
+ * 组件里原先散落的 `new Date().getFullYear()/getMonth()/getDate()/getDay()`
+ * 在非北京时区的浏览器上会取到错误的「今天」。
+ */
+export function getBeijingCalendar(d: Date = new Date()): BeijingCalendar {
+  const bj = toBeijingDate(d)
+  return {
+    year: bj.getUTCFullYear(),
+    month: bj.getUTCMonth() + 1,
+    day: bj.getUTCDate(),
+    hour: bj.getUTCHours(),
+    minute: bj.getUTCMinutes(),
+    second: bj.getUTCSeconds(),
+    dayOfWeek: bj.getUTCDay(),
+  }
+}
+
+/** 北京时间某年某月（1~12）的天数（公历日历运算，与时区无关） */
+export function getBeijingDaysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+/** 北京时间某日某时的绝对 epoch 毫秒（例：beijingDateToUtcMs(2026, 10, 1) = 北京 10 月 1 日 00:00） */
+export function beijingDateToUtcMs(
+  year: number,
+  month: number,
+  day: number,
+  hour = 0,
+  minute = 0
+): number {
+  return Date.UTC(year, month - 1, day, hour, minute) - BEIJING_OFFSET_MINUTES * 60000
 }
 
 /** 北京时间日期串 YYYY.MM.DD（出版风格展示） */

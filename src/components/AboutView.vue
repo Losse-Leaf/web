@@ -66,8 +66,11 @@ const availableAlmanacYears = computed(() => {
 
 const selectedDateEntries = computed(() => {
   if (!selectedHeatmapDate.value) return []
+  // 热力图日期是点号格式（2026.10.24），dateKey 是连字符（2026-10-24），
+  // 统一成连字符再比较 —— 原先格式不匹配导致点任何日期速览恒为 0 条
+  const selectedKey = selectedHeatmapDate.value.replace(/\./g, '-')
   return allEntries.value.filter(
-    (entry) => parseOccurredDate(entry.occurred_at).dateKey === selectedHeatmapDate.value
+    (entry) => parseOccurredDate(entry.occurred_at).dateKey === selectedKey
   )
 })
 
