@@ -109,10 +109,11 @@ const handleSubmit = async () => {
       const updated = await updateWish(props.editingWish.id, {
         title: t,
         kind: kind.value,
-        note: note.value.trim() || undefined,
-        spec: kind.value === 'item' ? spec.value.trim() || undefined : undefined,
-        city_name: kind.value === 'travel' ? cityName.value.trim() || undefined : undefined,
-        city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
+        // 编辑时显式空串才能清空；undefined 会被后端当作“保持原值”。
+        note: note.value.trim(),
+        spec: kind.value === 'item' ? spec.value.trim() : '',
+        city_name: kind.value === 'travel' ? cityName.value.trim() : '',
+        city_code: kind.value === 'travel' ? cityCode.value.trim() : '',
         budget: budgetCents,
         target_date: targetDate.value || undefined,
         planted_at: plantedAt.value || undefined,

@@ -138,10 +138,11 @@ const handleSubmit = async () => {
     errorMsg.value = '请选择达成日期'
     return
   }
-  const selTime = new Date(fulfilledDate.value).getTime()
-  const nowTime = new Date().getTime()
-  if (selTime > nowTime) {
-    errorMsg.value = '达成时间不能晚于当前时间（拒绝时间穿越）'
+  // 日期串按 UTC 零点解析会相当于北京时间 08:00 —— 凌晨选“今天”会被误判为未来。
+  // 统一按北京自然日比较。
+  const selectedDate = fulfilledDate.value.slice(0, 10)
+  if (selectedDate > getBeijingDateString()) {
+    errorMsg.value = '达成日期不能晚于今天（拒绝时间穿越）'
     return
   }
 

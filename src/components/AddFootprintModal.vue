@@ -143,8 +143,9 @@ const handleSubmit = async () => {
         city_name: selectedCityName.value,
         visited_at: getBeijingISOString(visitedAt.value),
         departed_at: departedAt.value ? getBeijingISOString(departedAt.value) : undefined,
-        title: title.value.trim() || undefined,
-        note: note.value.trim() || undefined,
+        // 编辑时显式发送空串才能清空；省略/undefined 会被后端当作保持原值。
+        title: title.value.trim(),
+        note: note.value.trim(),
         attachment_ids: attachmentIds.value,
         // 编辑时删光了照片必须显式声明解绑：单发空数组服务端按「保持原样」处理（契约 A）
         clear_attachments: attachmentIds.value.length === 0,

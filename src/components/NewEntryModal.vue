@@ -493,6 +493,7 @@ const currentKindMeta = computed(() => {
 const contentPlaceholder = computed(() => '')
 
 const handleSubmit = async () => {
+  if (isSubmitting.value) return
   errorMsg.value = null
 
   // 若当前尚未登录主理人，呼出印鉴校验弹窗，校验成功后自动继续发布

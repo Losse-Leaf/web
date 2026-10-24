@@ -70,13 +70,16 @@ const notifyChange = () => {
 // 一次选 6 张 12MP 照片 ≈ 290MB ⇒ iOS Safari 直接内存崩溃。
 // 现在改为「串行队列」：一次只解码 + 上传一张，峰值内存与单张照片同量级。
 let fileQueue: Promise<void> = Promise.resolve()
+let destroyed = false
 
 const enqueueFile = (file: File) => {
+  if (destroyed) return fileQueue
   fileQueue = fileQueue.then(() => handleFileProcess(file)).catch(() => {})
   return fileQueue
 }
 
 const handleFileProcess = async (file: File) => {
+  if (destroyed) return
   // 单文件 50MB 上限，与后端统一中转接口及 docs 契约一致 (FE-16)
   if (file.size > 50 * 1024 * 1024) {
     showAlert({ title: '文件过大', message: `文件 ${file.name} 超过 50MB 上限`, danger: true })
@@ -85,7 +88,12 @@ const handleFileProcess = async (file: File) => {
 
   // 客户端智能压制（限制 2048px / 82% 质量 JPEG，与 Android 端契约一致）
   const compressedFile = await compressClientImage(file)
+  if (destroyed) return
   const previewUrl = URL.createObjectURL(compressedFile)
+  if (destroyed) {
+    URL.revokeObjectURL(previewUrl)
+    return
+  }
   const item = reactive<UploadItem>({
     id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     file: compressedFile,
@@ -101,7 +109,7 @@ const handleFileProcess = async (file: File) => {
 }
 
 const startUpload = async (item: UploadItem) => {
-  if (!item.file) return
+  if (!item.file || destroyed) return
 
   const controller = new AbortController()
   item.abort = controller
@@ -125,6 +133,11 @@ const startUpload = async (item: UploadItem) => {
 
     item.attachmentId = res.attachment_id
     item.objectKey = res.object_key
+    if (destroyed) {
+      // 上传在组件卸载后才完成：服务端已落下附件，必须按孤儿文件回收。
+      if (!committed.value) cleanupUploads([res.object_key])
+      return
+    }
     item.status = 'completed'
     item.progress = 100
     audio.playShutter()
@@ -205,6 +218,7 @@ const removeItem = (item: UploadItem) => {
 }
 
 onUnmounted(() => {
+  destroyed = true
   items.value.forEach((it) => {
     try {
       it.abort?.abort()
@@ -224,6 +238,9 @@ onUnmounted(() => {
     if (orphanKeys.length > 0) {
       cleanupUploads(orphanKeys)
     }
+    // 组件因切换记录形态而卸载时，父层共享的 attachmentIds 必须同步清空，
+    // 否则「日常传图 → 切到账目 → 再切回」会留下已被回收的附件 ID。
+    emit('update:attachments', [])
   }
 })
 </script>

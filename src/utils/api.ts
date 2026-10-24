@@ -298,9 +298,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     ? anyAbortSignal([options.signal, timeoutController.signal])
     : timeoutController.signal
 
-  let res: Response
   try {
-    res = await fetch(url, {
+    const res = await fetch(url, {
       ...options,
       signal,
       headers: {
@@ -309,6 +308,38 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
         ...(options?.headers as Record<string, string> | undefined),
       },
     })
+
+    if (!res.ok) {
+      if (res.status === 401 && !url.includes('/auth/verify')) {
+        // MOB-P1-xx：401 只清**本地**凭据，不做全局登出。
+        //
+        // 之前这里走 removeAdminToken()，而它会连带 POST /auth/logout 把 HttpOnly Cookie 打死
+        // ⇒ 任何一次只读接口的偶发 401（令牌轮换、网关鉴权抖动）都会把用户静默踢出主人态。
+        // 服务端的 LogoutSession 只清浏览器 Cookie、并不吊销 devices 表里的设备令牌，
+        // 所以那次「登出」既粗暴又没真正吊销任何东西。
+        clearLocalCredential()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
+        }
+      }
+      let msg = `HTTP error ${res.status}`
+      try {
+        const errJson = await res.json()
+        if (errJson.message) msg = errJson.message
+      } catch {
+        // ignore
+      }
+      throw new Error(msg)
+    }
+
+    // 响应体解析也必须留在 25 秒计时器内：只等响应头就清计时器，
+    // 服务端缓慢吐 body 时 res.json() 会无限挂起。
+    const json = await res.json()
+    // 兼容标准结构 { code: 200, message: "success", data: ... }
+    if (json && typeof json === 'object' && 'code' in json && 'data' in json) {
+      return json.data as T
+    }
+    return json as T
   } catch (err: any) {
     if (err?.name === 'AbortError') {
       throw new Error('请求超时，请检查网络后重试')
@@ -317,36 +348,6 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   } finally {
     clearTimeout(timer)
   }
-
-  if (!res.ok) {
-    if (res.status === 401 && !url.includes('/auth/verify')) {
-      // MOB-P1-xx：401 只清**本地**凭据，不做全局登出。
-      //
-      // 之前这里走 removeAdminToken()，而它会连带 POST /auth/logout 把 HttpOnly Cookie 打死
-      // ⇒ 任何一次只读接口的偶发 401（令牌轮换、网关鉴权抖动）都会把用户静默踢出主人态。
-      // 服务端的 LogoutSession 只清浏览器 Cookie、并不吊销 devices 表里的设备令牌，
-      // 所以那次「登出」既粗暴又没真正吊销任何东西。
-      clearLocalCredential()
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
-      }
-    }
-    let msg = `HTTP error ${res.status}`
-    try {
-      const errJson = await res.json()
-      if (errJson.message) msg = errJson.message
-    } catch {
-      // ignore
-    }
-    throw new Error(msg)
-  }
-
-  const json = await res.json()
-  // 兼容标准结构 { code: 200, message: "success", data: ... }
-  if (json && typeof json === 'object' && 'code' in json && 'data' in json) {
-    return json.data as T
-  }
-  return json as T
 }
 
 // 1. Life Entries
@@ -983,6 +984,8 @@ export async function updateTransaction(
      * 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
      */
     clear_installment?: boolean
+    /** 显式清空城市归属（跨端统一契约 A），优先级高于 city_code 字段 */
+    clear_city?: boolean
   }
 ): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions/${id}`, {

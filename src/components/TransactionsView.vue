@@ -580,7 +580,13 @@ const saveEdit = async () => {
   const wantInstallmentNow = editType.value === 'expense' && editIsInstallment.value
   if (wantInstallmentNow) {
     const months = Math.round(Number(editInstallmentMonths.value))
-    const remain = Math.round(Number(editInstallmentRemainMonths.value))
+    // 空输入不能被 Number('') 当成 0（那会把整笔负债误判为已还清）。
+    const remainRaw = String(editInstallmentRemainMonths.value ?? '').trim()
+    if (remainRaw === '') {
+      editErrorMsg.value = '请填写剩余期数'
+      return
+    }
+    const remain = Math.round(Number(remainRaw))
     if (!Number.isFinite(months) || months < 1 || months > 60) {
       editErrorMsg.value = '分期总期数必须在 1 至 60 期之间'
       return
@@ -607,8 +613,10 @@ const saveEdit = async () => {
   const cancelInstallment = !wantInstallment && wasInstallment
   const monthlyPay =
     editIsInstallment.value && editInstallmentMonths.value > 0
-      ? Math.round(amountCents / editInstallmentMonths.value)
+      ? Math.floor(amountCents / editInstallmentMonths.value)
       : undefined
+  // 城市被删空时必须显式声明清空；只发 city_code: undefined 会被后端当作“保持原值”。
+  const clearCity = !editCityCode.value && Boolean(editingTx.value.city_code)
 
   try {
     const updated = await updateTransaction(editingTx.value.id, {
@@ -620,6 +628,7 @@ const saveEdit = async () => {
       payment_method: editPaymentMethod.value.trim() || undefined,
       occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
       city_code: editCityCode.value || undefined,
+      clear_city: clearCity || undefined,
       is_installment: wantInstallment,
       // 关键：**显式声明**「本次要取消分期」。
       // 后端的新契约是「is_installment=false 且不带 clear_installment → 保持原值」，
@@ -655,12 +664,8 @@ const saveEdit = async () => {
     }
     emit('transactionUpdated', updated)
     editingTx.value = null
-    await Promise.all([
-      fetchTransactionSummary({ year: year.value, month: month.value }).then((sum) => {
-        if (sum) summary.value = sum
-      }),
-      loadAssetsOverview(),
-    ]).catch(() => {})
+    // 统一走带月份守卫的 loadData，避免保存后的汇总请求绕过守卫覆盖新月份数据。
+    await loadData()
   } catch (err: any) {
     // 保存失败：保留弹窗与已填内容，给出可感知的错误（原先 unhandled rejection、静默无反馈）
     editErrorMsg.value = err?.message || '保存账目失败，请稍后重试'
@@ -683,12 +688,7 @@ const removeTx = async (id: number) => {
   }
   transactionsList.value = transactionsList.value.filter((t) => t.id !== id)
   emit('transactionDeleted', id)
-  await Promise.all([
-    fetchTransactionSummary({ year: year.value, month: month.value }).then((sum) => {
-      if (sum) summary.value = sum
-    }),
-    loadAssetsOverview(),
-  ]).catch(() => {})
+  await loadData()
 }
 
 // 支出光谱细线条颜色与占比 (Earthy publication film palette)

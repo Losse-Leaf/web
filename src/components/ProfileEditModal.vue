@@ -340,7 +340,9 @@ const removeGear = async (idx: number) => {
   try {
     gearErrorMsg.value = ''
     await deleteGearAsset(item.id)
-    form.value.edc_gear?.splice(idx, 1)
+    // 等待期间列表可能已被其它删除改写，不能再复用旧下标；按设备 ID 定位。
+    const currentIdx = form.value.edc_gear?.findIndex((g) => g.id === item.id) ?? -1
+    if (currentIdx >= 0) form.value.edc_gear?.splice(currentIdx, 1)
     saveCuratorProfile(form.value)
     emit('updated', { ...form.value })
   } catch (err: any) {

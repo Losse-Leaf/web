@@ -120,6 +120,8 @@ const formatDateTime = (dateStr: string): string => {
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return dateStr
     return d.toLocaleString('zh-CN', {
+      // 全站时间口径为中国北京时间，不能跟随浏览器本地时区。
+      timeZone: 'Asia/Shanghai',
       hour12: false,
       year: 'numeric',
       month: '2-digit',

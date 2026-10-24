@@ -243,8 +243,9 @@ export function useArchive() {
           if (controller.signal.aborted || seq !== entriesFetchSeq) return
           for (const data of results) {
             if (!Array.isArray(data)) {
-              done = true
-              break
+              // 年份请求不参与 ETag，null 只可能来自超时/中止。
+              // 绝不能当作“读到末页”：那会把半截结果合并回去，静默覆盖整年本地缓存。
+              return
             }
             collected.push(...data)
             if (data.length < PAGE_SIZE) {

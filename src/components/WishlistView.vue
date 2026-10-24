@@ -43,24 +43,36 @@ const isResolutionOpen = ref(false)
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
 
+let statsReqSeq = 0
+let filterReqSeq = 0
+
+const currentFilters = () => ({
+  kind: selectedKind.value !== 'all' ? selectedKind.value : undefined,
+  status: selectedStatus.value !== 'all' ? selectedStatus.value : undefined,
+})
+
 const loadWishes = async () => {
+  const statsSeq = ++statsReqSeq
+  const listSeq = ++filterReqSeq
+  const filters = currentFilters()
   try {
     isLoading.value = true
     loadError.value = ''
     const [statsList, currentList] = await Promise.all([
       fetchWishes(),
-      fetchWishes({
-        kind: selectedKind.value !== 'all' ? selectedKind.value : undefined,
-        status: selectedStatus.value !== 'all' ? selectedStatus.value : undefined,
-      }),
+      fetchWishes(filters),
     ])
-    allWishes.value = statsList || []
-    filteredWishes.value = currentList || []
+    // 统计与筛选列表各自独立守卫：慢返回的整页刷新不能覆盖更新的筛选结果，
+    // 慢返回的筛选也不能回退全量统计。
+    if (statsSeq === statsReqSeq) allWishes.value = statsList || []
+    if (listSeq === filterReqSeq) filteredWishes.value = currentList || []
   } catch (err: any) {
-    console.error('Failed to load wishes:', err)
-    loadError.value = err?.message || '心愿清单加载失败，请检查服务连接'
+    if (statsSeq === statsReqSeq) {
+      console.error('Failed to load wishes:', err)
+      loadError.value = err?.message || '心愿清单加载失败，请检查服务连接'
+    }
   } finally {
-    isLoading.value = false
+    if (statsSeq === statsReqSeq) isLoading.value = false
   }
 }
 
@@ -75,19 +87,15 @@ watch(
 
 // 筛选请求序号守卫：快速切换维度/状态时只接受最新一次响应，
 // 否则慢返回的旧筛选结果会覆盖当前选择对应的列表
-let filterReqSeq = 0
-
 watch([selectedKind, selectedStatus], async () => {
   const seq = ++filterReqSeq
+  const filters = currentFilters()
   try {
-    const list = await fetchWishes({
-      kind: selectedKind.value !== 'all' ? selectedKind.value : undefined,
-      status: selectedStatus.value !== 'all' ? selectedStatus.value : undefined,
-    })
+    const list = await fetchWishes(filters)
     if (seq !== filterReqSeq) return
     filteredWishes.value = list || []
   } catch (err) {
-    console.warn('Failed to filter wishes:', err)
+    if (seq === filterReqSeq) console.warn('Failed to filter wishes:', err)
   }
 })
 
