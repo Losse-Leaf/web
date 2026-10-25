@@ -1,47 +1,31 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted, defineAsyncComponent } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   BookOpen,
   KeyRound,
   PenTool,
   Check,
-  RotateCw,
-  Copy,
   ShieldCheck,
   Sparkles,
   ArrowRight,
-  ArrowLeft,
   Sun,
   Moon,
   Camera,
   Compass,
   Layers,
-  Clock,
-  Laptop,
+  ScanLine,
   AlertCircle,
 } from 'lucide-vue-next'
 import { audio } from '../utils/audio'
 import { getBeijingDotDate, getBeijingYear } from '../utils/format'
 import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
 import {
-  bootstrapSystem,
-  confirmPairingTicket,
-  pollPairingTicketStatus,
-  verifyMasterPasscode,
-  detectBrowserDeviceName,
+  claimDevice,
   getAdminToken,
-  establishSession,
   removeAdminToken,
   clearApiCache,
-  fetchPairQRCode,
 } from '../utils/api'
-import type { SystemStatus, BootstrapResult } from '../types'
-
-// WEB-3：城市字典（375 城，34.3KB raw）此前随欢迎扉页静态进入首屏。
-// 欢迎扉页只有「首次装帧 Step 1」需要选城市，因此改为异步组件：
-// 未初始化的访客首屏不再下载 CityPicker / atlas-cities-data，
-// 真正进入装帧表单的那一刻才按需加载。
-const CityPicker = defineAsyncComponent(() => import('./CityPicker.vue'))
+import type { SystemStatus } from '../types'
 
 const props = defineProps<{
   theme: 'paper' | 'darkroom'
@@ -66,33 +50,21 @@ const status = ref<SystemStatus>({
 
 // 主理人凭证状态
 const isCurator = ref(Boolean(getAdminToken()))
-const passcode = ref('')
-const isLoggingIn = ref(false)
-const loginError = ref('')
 
 // 阶段判定 (RC-59 / RC-60)：
-// 当 status.initialized === false 时，无条件清空失效的本地残留 Token 并独占渲染阶段一「唯一首次装帧两步向导」
-const isBootstrapOnlyStage = computed(() => !status.value.initialized)
+// 当 status.initialized === false 时，无条件清空失效的本地残留 Token 并独占渲染阶段一「首次认领码输入页」
+// 认领成功后（claimSuccess）驻留阶段一的成功页，直到用户点「翻开扉页」主动进馆 ——
+// 期间系统状态刷新为 initialized=true 也不得把扉页翻到阶段二（与 App.vue
+// handleBootstrapped 只预取数据、不自动进馆的口径一致）。
+const isBootstrapOnlyStage = computed(() => claimSuccess.value || !status.value.initialized)
 
-// 阶段一：首次装帧两步闭环向导状态 (Step 1: 双次设密 -> Step 2: 散页风二维码/配对深链与设备激活)
-const bootstrapStep = ref<1 | 2>(1)
-const bootstrapForm = ref({
-  curator_name: '',
-  city_code: '',
-  location: '',
-  master_passcode: '',
-  confirm_passcode: '',
-})
-const isBootstrapping = ref(false)
-const isConfirmingWebDevice = ref(false)
-const bootstrapError = ref('')
-const bootstrapTicket = ref<BootstrapResult | null>(null)
-const pairCountdown = ref(300)
-const pairCopied = ref(false)
-const selectedCandidateUrl = ref('')
-const isSwitchingNode = ref(false)
-let countdownTimer: number | null = null
-let pollTimer: number | null = null
+// 阶段一：一次性认领码认领首台设备
+// 认领码由服务在启动时打印到标准输出（systemd 用 journalctl -u loose-leaf 查看），
+// 15 分钟内有效；过期或连续输错 5 次作废，需重启服务获取新码。
+const claimCode = ref('')
+const isClaiming = ref(false)
+const claimError = ref('')
+const claimSuccess = ref(false)
 
 const checkCuratorAuth = () => {
   isCurator.value = Boolean(getAdminToken())
@@ -109,189 +81,36 @@ const applySystemStatus = (s: SystemStatus) => {
   }
 }
 
-const onBootstrapCitySelect = (city: { code: string; name: string } | null) => {
-  if (!city || (!city.code && !city.name)) {
-    bootstrapForm.value.city_code = ''
-    bootstrapForm.value.location = ''
-    return
-  }
-  bootstrapForm.value.city_code = city.code || ''
-  bootstrapForm.value.location = city.name || ''
-}
-
-// 停止配对轮询与倒计时
-const stopBootstrapPairingTimers = () => {
-  if (countdownTimer) {
-    clearInterval(countdownTimer)
-    countdownTimer = null
-  }
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
-const startBootstrapCountdown = (seconds: number) => {
-  if (countdownTimer) clearInterval(countdownTimer)
-  pairCountdown.value = seconds
-  countdownTimer = window.setInterval(() => {
-    if (pairCountdown.value > 0) {
-      pairCountdown.value--
-    } else {
-      stopBootstrapPairingTimers()
-    }
-  }, 1000)
-}
-
-// 启动每 2 秒轮询 GET /api/v1/auth/pair/status?ticket=... (RC-59)
-const startBootstrapStatusPolling = (ticket: string) => {
-  if (pollTimer) clearInterval(pollTimer)
-  pollTimer = window.setInterval(async () => {
-    try {
-      const res = await pollPairingTicketStatus(ticket)
-      if (res.status === 'paired' || res.initialized) {
-        if (res.web_token) {
-          // MOB-P1-69：优先建立 HttpOnly Cookie 会话（令牌不落 localStorage）
-          await establishSession(res.web_token)
-        }
-        stopBootstrapPairingTimers()
-        audio.playShutter()
-        status.value.initialized = true
-        isCurator.value = true // 配对成功即主理人，无需重复判定 (FE-22)
-        markEnteredArchive()
-        emit('bootstrapped')
-        emit('enter')
-      } else if (res.status === 'expired') {
-        pairCountdown.value = 0
-        stopBootstrapPairingTimers()
-      }
-    } catch (err) {
-      console.warn('Pairing status poll jitter:', err)
-    }
-  }, 2000)
-}
-
-// Step 1 提交：校验双次密钥一致并上报 window.location.origin 获取散页纸墨风配对凭据 (RC-59)
-const handleBootstrapStep1Submit = async () => {
-  const name = bootstrapForm.value.curator_name.trim()
-  const pass = bootstrapForm.value.master_passcode.trim()
-  const confirmPass = bootstrapForm.value.confirm_passcode.trim()
-
-  if (!name) {
-    bootstrapError.value = '请输入主理人称谓'
-    return
-  }
-  if (!pass) {
-    bootstrapError.value = '请设定管理员密钥'
-    return
-  }
-  if (!confirmPass) {
-    bootstrapError.value = '请再次输入确认管理员密钥'
-    return
-  }
-  if (pass !== confirmPass) {
-    bootstrapError.value = '两次输入的管理员密钥不一致，请重新核对'
+// 提交认领码：POST /api/v1/auth/claim，成功后当前浏览器成为首台受信任设备
+const handleClaimSubmit = async () => {
+  const code = claimCode.value.trim().toUpperCase()
+  if (!code) {
+    claimError.value = '请输入服务启动时打印的认领码'
     return
   }
 
   audio.playTink()
-  isBootstrapping.value = true
-  bootstrapError.value = ''
-
+  isClaiming.value = true
+  claimError.value = ''
   try {
-    const res = await bootstrapSystem({
-      curator_name: name,
-      location: bootstrapForm.value.location.trim() || undefined,
-      master_passcode: pass,
-      confirm_passcode: confirmPass,
-      hub_url: window.location.origin,
-    })
-
-    // 后端返回首台设备配对工单 (ticket / qr_payload)，进入 Step 2 等待首台设备绑定激活
-    if (res.ticket) {
-      bootstrapTicket.value = res
-      selectedCandidateUrl.value = res.hub_url || ''
-      bootstrapStep.value = 2
-      startBootstrapCountdown(res.expires_in_seconds || 300)
-      startBootstrapStatusPolling(res.ticket)
-    }
-  } catch (err: any) {
-    bootstrapError.value = err?.message || '发起首次装帧失败，请检查后端服务连接'
-  } finally {
-    isBootstrapping.value = false
-  }
-}
-
-const handleSelectCandidate = async (candUrl: string) => {
-  if (!bootstrapTicket.value || selectedCandidateUrl.value === candUrl) return
-  audio.playTink()
-  selectedCandidateUrl.value = candUrl
-  isSwitchingNode.value = true
-  try {
-    const res = await fetchPairQRCode(candUrl, bootstrapTicket.value.ticket)
-    bootstrapTicket.value = {
-      ...bootstrapTicket.value,
-      hub_url: res.hub_url,
-      qr_payload: res.qr_payload,
-      qr_code_data_url: res.qr_code_data_url,
-    }
-  } catch (err) {
-    console.warn('Switching bootstrap QR endpoint failed:', err)
-  } finally {
-    isSwitchingNode.value = false
-  }
-}
-
-// Step 2 开发调试一键暗门：直接将当前浏览器作为首台设备完成装帧并激活系统 (RC-59)
-const handleQuickConfirmCurrentBrowser = async () => {
-  if (!bootstrapTicket.value?.ticket) return
-  audio.playTink()
-  isConfirmingWebDevice.value = true
-  bootstrapError.value = ''
-
-  try {
-    const res = await confirmPairingTicket({
-      ticket: bootstrapTicket.value.ticket,
-      platform: 'web',
-      device_name: detectBrowserDeviceName(),
-    })
-    if (res.device_token) {
-      // MOB-P1-69：优先建立 HttpOnly Cookie 会话（令牌不落 localStorage）
-      await establishSession(res.device_token)
-    }
-    stopBootstrapPairingTimers()
+    await claimDevice({ code })
     audio.playShutter()
+    claimSuccess.value = true
     status.value.initialized = true
     isCurator.value = true
     markEnteredArchive()
     emit('bootstrapped')
-    emit('enter')
   } catch (err: any) {
-    bootstrapError.value = err?.message || '本机设备装帧激活失败，请重试'
+    claimError.value = err?.message || '认领码不正确或已失效，请核对服务启动日志'
   } finally {
-    isConfirmingWebDevice.value = false
+    isClaiming.value = false
   }
 }
 
-const handleReturnToStep1 = () => {
-  audio.playTink()
-  stopBootstrapPairingTimers()
-  bootstrapError.value = ''
-  bootstrapStep.value = 1
-}
-
-const copyBootstrapPayload = async () => {
-  if (!bootstrapTicket.value?.qr_payload) return
-  audio.playTink()
-  try {
-    await navigator.clipboard.writeText(bootstrapTicket.value.qr_payload)
-    pairCopied.value = true
-    setTimeout(() => {
-      pairCopied.value = false
-    }, 2000)
-  } catch (err) {
-    console.warn('Clipboard write failed:', err)
-  }
+// 认领成功后进入展厅
+const handleClaimEnter = () => {
+  audio.playPaperFlip()
+  emit('enter')
 }
 
 // 阶段二（已初始化）：1. 访客通道直接进入
@@ -300,29 +119,6 @@ const handleEnterAsGuest = () => {
   audio.playPaperFlip()
   markEnteredArchive()
   emit('enter')
-}
-
-// 阶段二（已初始化）：2. 主人通道内联管理员密钥钤印进入 (RC-60)
-const handlePasscodeLogin = async () => {
-  if (!passcode.value.trim()) {
-    loginError.value = '请输入管理员密钥'
-    return
-  }
-  audio.playTink()
-  isLoggingIn.value = true
-  loginError.value = ''
-  try {
-    await verifyMasterPasscode(passcode.value.trim())
-    audio.playShutter()
-    isCurator.value = true
-    passcode.value = ''
-    markEnteredArchive()
-    emit('enter')
-  } catch (err: any) {
-    loginError.value = err?.message || '管理员密钥不正确，请重新核对'
-  } finally {
-    isLoggingIn.value = false
-  }
 }
 
 // 退出主人身份
@@ -340,22 +136,22 @@ const handleLogout = async () => {
 
 const todayDisplay = computed(() => getBeijingDotDate())
 
-// 阶段一：首次装帧三步流程说明
+// 阶段一：首次认领流程说明
 const bootstrapGuides = [
   {
     num: '01',
-    title: '设定主理人称谓与专属密钥',
-    desc: '铭刻您的称谓、常居城市与管理员密钥，守护私人账簿与生活手稿。',
+    title: '查看服务启动日志',
+    desc: '首次运行会在标准输出打印 8 位认领码（systemd 部署用 journalctl -u loose-leaf 查看）。',
   },
   {
     num: '02',
-    title: '生成首台设备配对印信',
-    desc: '生成专属纸墨二维码与配对链接，供随身手机或桌面端扫码接入。',
+    title: '输入认领码认领首台设备',
+    desc: '认领码 15 分钟内有效；过期或连续输错 5 次会作废，重启服务即可获取新码。',
   },
   {
     num: '03',
-    title: '首台设备授信后开启展厅',
-    desc: '支持移动端扫码、桌面端粘贴配对链接，或直接将当前浏览器设为首台受信任设备。',
+    title: '建议再配对一台设备作为备份',
+    desc: '认领成功后可随时在「设备管理」为手机或桌面端签发配对二维码。',
   },
 ]
 
@@ -393,9 +189,6 @@ watch(
 
 // WEB-5：系统状态由 App.vue 统一请求并作为 prop 传入，欢迎扉页不再重复请求
 // /system/status（此前首屏会打两次：WelcomePortal + App）。
-onUnmounted(() => {
-  stopBootstrapPairingTimers()
-})
 </script>
 
 <template>
@@ -419,7 +212,7 @@ onUnmounted(() => {
         </span>
         <span class="hidden sm:inline text-[var(--border-divider)]">/</span>
         <span class="hidden sm:inline uppercase tracking-widest text-[11px]">
-          {{ isBootstrapOnlyStage ? 'VOL. 01 · 创刊装帧' : 'VOL. 01 · 创刊扉页' }}
+          {{ isBootstrapOnlyStage ? 'VOL. 01 · 首次认领' : 'VOL. 01 · 创刊扉页' }}
         </span>
       </div>
 
@@ -441,7 +234,7 @@ onUnmounted(() => {
     <main class="flex-grow flex items-center justify-center px-4 sm:px-10 lg:px-16 py-10 sm:py-16 relative z-20">
       <div class="w-full max-w-6xl mx-auto">
         <!-- =====================================================================
-             阶段一：未初始化冷启动（!initialized && !isCurator）—— 独占式「首次装帧向导」(RC-59)
+             阶段一：未初始化冷启动（!initialized）—— 独占式「首次认领码输入页」
              严禁渲染任何访客入口或模式切换按钮
              ===================================================================== -->
         <div
@@ -474,12 +267,12 @@ onUnmounted(() => {
             </div>
 
             <blockquote class="p-5 sm:p-6 rounded-xs bg-[var(--bg-subtle)]/50 border-l-2 border-[var(--accent-warm)] text-[var(--ink-secondary)] font-serif-editorial text-base sm:text-lg italic leading-relaxed">
-              “此档案馆尚处素胚状态。请主理人设定专属密钥并完成首台设备钤印，装帧完成后方可开启日常记录与公开展览。”
+              “此档案馆尚处素胚状态。请查看服务启动日志中的认领码完成首次认领，随后开启日常记录与公开展览。”
             </blockquote>
 
             <div class="space-y-3 pt-1">
               <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                装帧流程说明
+                首次认领流程说明
               </div>
               <div class="space-y-2.5">
                 <div
@@ -511,245 +304,88 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 右页：唯一首次装帧两步闭环向导 -->
+          <!-- 右页：唯一首次认领码输入页 -->
           <div class="lg:col-span-6">
             <div class="p-6 sm:p-8 rounded-xs border border-[var(--accent-warm)]/60 bg-[var(--bg-subtle)]/40 shadow-xl space-y-6 text-left min-h-[430px] flex flex-col justify-between">
-              <!-- 向导页眉 -->
+              <!-- 页眉 -->
               <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4 shrink-0">
                 <div class="flex items-center gap-2.5">
                   <PenTool class="w-4 h-4 text-[var(--accent-warm)]" />
                   <span class="font-serif-editorial text-lg sm:text-xl font-medium text-[var(--ink-primary)]">
-                    首次装帧 · 筑造私人档案馆
+                    首次认领 · 筑造私人档案馆
                   </span>
                 </div>
                 <span class="px-2 py-0.5 rounded-xs bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[11px] font-mono-archive tracking-widest">
-                  STEP 0{{ bootstrapStep }} / 02
+                  CLAIM
                 </span>
               </div>
 
-              <!-- Step 1: 设定主理人档案与双重确认密钥 -->
-              <div v-if="bootstrapStep === 1" class="space-y-5 flex-1">
+              <!-- 认领成功：提示备份后进入展厅 -->
+              <div v-if="claimSuccess" class="space-y-5 flex-1 flex flex-col justify-center">
+                <div class="p-4 rounded-xs border border-[var(--accent-moss)]/35 bg-[var(--accent-moss)]/10 flex items-start gap-3">
+                  <Check class="w-4 h-4 text-[var(--accent-moss)] shrink-0 mt-0.5" />
+                  <div class="space-y-1.5">
+                    <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+                      已认领为首台受信任设备
+                    </div>
+                    <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
+                      建议再配对一台设备作为备份。
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  @click="handleClaimEnter"
+                  class="w-full py-3 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <span>翻开扉页 · 进入展厅</span>
+                  <ArrowRight class="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <!-- 认领码输入 -->
+              <div v-else class="space-y-5 flex-1">
                 <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
-                  第一步：请填写主理人称谓并设定管理员密钥，随后进入首台设备授信激活。
+                  请输入服务启动时打印的 8 位认领码（格式 XXXX-XXXX），认领当前浏览器为首台受信任设备。
                 </p>
 
                 <div class="space-y-4 font-mono-archive text-xs">
                   <div class="space-y-1.5">
-                    <label class="block text-[var(--ink-muted)]">主理人称谓 *</label>
+                    <label class="block text-[var(--ink-muted)]">认领码 *</label>
                     <input
-                      v-model="bootstrapForm.curator_name"
+                      v-model="claimCode"
                       type="text"
-                      class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
+                      inputmode="text"
+                      autocomplete="one-time-code"
+                      spellcheck="false"
+                      placeholder="XXXX-XXXX"
+                      maxlength="9"
+                      @keydown.enter="handleClaimSubmit"
+                      class="w-full px-3 py-2.5 text-center text-base tracking-[0.3em] uppercase bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
                     />
-                  </div>
-
-                  <div class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                      <label class="block text-[var(--ink-muted)]">常驻城市</label>
-                      <span v-if="bootstrapForm.location" class="text-[11px] text-[var(--accent-moss)]">
-                        已选：{{ bootstrapForm.location }}
-                      </span>
-                    </div>
-                    <CityPicker
-                      v-model="bootstrapForm.city_code"
-                      @select="onBootstrapCitySelect"
-                    />
-                  </div>
-
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div class="space-y-1.5">
-                      <label class="block text-[var(--ink-muted)]">管理员密钥 *</label>
-                      <input
-                        v-model="bootstrapForm.master_passcode"
-                        type="password"
-                        class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
-                      />
-                    </div>
-                    <div class="space-y-1.5">
-                      <label class="block text-[var(--ink-muted)]">确认管理员密钥 *</label>
-                      <input
-                        v-model="bootstrapForm.confirm_passcode"
-                        type="password"
-                        @keydown.enter="handleBootstrapStep1Submit"
-                        class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
-                      />
-                    </div>
                   </div>
 
                   <div
-                    v-if="bootstrapError"
-                    class="p-2.5 rounded-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] flex items-center gap-2"
+                    v-if="claimError"
+                    class="p-2.5 rounded-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] flex items-start gap-2"
                   >
-                    <AlertCircle class="w-3.5 h-3.5 shrink-0" />
-                    <span>{{ bootstrapError }}</span>
+                    <AlertCircle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>{{ claimError }}</span>
                   </div>
 
                   <button
-                    @click="handleBootstrapStep1Submit"
-                    :disabled="isBootstrapping"
+                    @click="handleClaimSubmit"
+                    :disabled="isClaiming || !claimCode.trim()"
                     class="w-full py-3 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Sparkles class="w-3.5 h-3.5" />
-                    <span>{{ isBootstrapping ? '正在生成首台设备配对凭据...' : '下一步 · 生成首台设备配对凭据 →' }}</span>
+                    <span>{{ isClaiming ? '正在核验认领码...' : '钤印认领 · 成为档案馆主人 →' }}</span>
                   </button>
-                </div>
-              </div>
 
-              <!-- Step 2: 首台设备绑定与系统激活 (散页纸墨风二维码装裱 + 开发一键暗门 RC-59 / RC-61) -->
-              <div v-else class="space-y-5">
-                <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
-                  <button
-                    @click="handleReturnToStep1"
-                    class="inline-flex items-center gap-1 hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
-                  >
-                    <ArrowLeft class="w-3.5 h-3.5" />
-                    <span>返回修改密钥</span>
-                  </button>
-                  <span class="inline-flex items-center gap-1.5 text-[var(--accent-warm)]">
-                    <Clock class="w-3.5 h-3.5" />
-                    <span>配对有效期 {{ pairCountdown }}s</span>
-                  </span>
-                </div>
-
-                <!-- 散页纸墨风二维码暗房装裱框 + 配对深链 -->
-                <div class="p-4 sm:p-5 bg-[var(--bg-archive)]/80 border border-[var(--border-subtle)] rounded-xs space-y-4">
-                  <div class="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-                    <!-- 散页纸墨风二维码装裱容器 (.film-frame + 四角复古裁切基准线 + #F9F8F5 棉纸内衬 RC-61) -->
-                    <div class="film-frame p-4 rounded-xs relative inline-flex flex-col items-center shrink-0">
-                      <span class="pointer-events-none absolute top-1.5 left-1.5 w-2.5 h-2.5 border-t-2 border-l-2 border-[var(--accent-warm)]/80"></span>
-                      <span class="pointer-events-none absolute top-1.5 right-1.5 w-2.5 h-2.5 border-t-2 border-r-2 border-[var(--accent-warm)]/80"></span>
-                      <span class="pointer-events-none absolute bottom-1.5 left-1.5 w-2.5 h-2.5 border-b-2 border-l-2 border-[var(--accent-warm)]/80"></span>
-                      <span class="pointer-events-none absolute bottom-1.5 right-1.5 w-2.5 h-2.5 border-b-2 border-r-2 border-[var(--accent-warm)]/80"></span>
-
-                      <div class="p-2.5 bg-[#F9F8F5] text-[#181716] rounded-xs border border-[#181716]/15 shadow-inner relative">
-                        <img
-                          v-if="bootstrapTicket?.qr_code_data_url"
-                          :src="bootstrapTicket.qr_code_data_url"
-                          alt="首台设备配对二维码"
-                          class="w-36 h-36 object-contain block"
-                         loading="lazy" decoding="async">
-                        <div
-                          v-else
-                          class="w-36 h-36 flex items-center justify-center text-[11px] font-mono-archive text-[#57544e] text-center px-2"
-                        >
-                          使用移动端扫码或复制配对深链
-                        </div>
-
-                        <!-- 过期遮罩 -->
-                        <div
-                          v-if="pairCountdown <= 0"
-                          class="absolute inset-0 bg-[#F9F8F5]/95 flex flex-col items-center justify-center p-3 text-center space-y-2"
-                        >
-                          <span class="text-[11px] font-mono-archive text-[#57544e]">配对凭据已过期</span>
-                          <button
-                            @click="handleBootstrapStep1Submit"
-                            class="px-2.5 py-1 bg-[#181716] text-[#F9F8F5] text-[11px] font-mono-archive rounded-xs cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <RotateCw class="w-3 h-3" />
-                            <span>重新生成</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div class="mt-2 flex items-center justify-center w-full text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider px-0.5">
-                        <span>扫码或复制链接接入</span>
-                      </div>
-                    </div>
-
-                    <!-- 右侧：首台设备扫码/链接配对与实时监听状态 -->
-                    <div class="flex-1 space-y-3 text-center sm:text-left min-w-0 w-full">
-                      <div class="space-y-1">
-                        <div class="text-[11px] font-mono-archive text-[var(--accent-warm)] tracking-widest uppercase">
-                          INITIAL DEVICE PAIRING · 首台设备授信
-                        </div>
-                        <h4 class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
-                          扫码极速接入 或 复制配对深链
-                        </h4>
-                      </div>
-
-                      <div class="flex items-center justify-center sm:justify-start gap-2 text-xs font-mono-archive text-[var(--accent-moss)]">
-                        <span class="inline-block w-2 h-2 rounded-full bg-[var(--accent-moss)] animate-pulse"></span>
-                        <span>正在监听首台设备接入...</span>
-                      </div>
-
-                      <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                        请使用移动端扫描左侧纸墨二维码，或复制配对深链至 macOS 客户端一键完成设备钤印；接入后本页将自动激活并进入展厅。
-                      </p>
-
-                      <!-- 接入节点智能切换胶囊 -->
-                      <div v-if="(bootstrapTicket?.candidates || []).length > 1" class="space-y-1.5 pt-1">
-                        <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center justify-between">
-                          <span>选择连接节点：</span>
-                          <span v-if="isSwitchingNode" class="text-[var(--accent-warm)]">正在更新二维码...</span>
-                        </div>
-                        <div class="flex flex-wrap gap-1.5 font-mono-archive text-[11px]">
-                          <button
-                            v-for="cand in bootstrapTicket?.candidates"
-                            :key="cand.url"
-                            type="button"
-                            @click="handleSelectCandidate(cand.url)"
-                            class="px-2 py-1 rounded-xs border transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs select-none max-w-full min-w-0"
-                            :class="
-                              selectedCandidateUrl === cand.url
-                                ? 'border-[var(--accent-warm)] bg-[var(--accent-warm)]/10 text-[var(--accent-warm)] font-medium'
-                                : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--ink-primary)] hover:text-[var(--ink-primary)]'
-                            "
-                          >
-                            <span
-                              class="w-1.5 h-1.5 rounded-full shrink-0"
-                              :class="selectedCandidateUrl === cand.url ? 'bg-[var(--accent-warm)]' : 'bg-[var(--border-divider)]'"
-                            ></span>
-                            <span class="truncate">{{ cand.label }}</span>
-                            <span class="opacity-70 text-[11px] font-mono-archive truncate">({{ cand.ip }})</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 配对专属协议 Deep Link (跨全宽底部通栏，绝不溢出容器) -->
-                  <div
-                    v-if="bootstrapTicket?.qr_payload"
-                    class="pt-3 border-t border-[var(--border-subtle)]/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs font-mono-archive w-full"
-                  >
-                    <div class="truncate text-[11px] text-[var(--ink-muted)] select-all bg-[var(--bg-archive)]/60 px-2.5 py-1.5 rounded-xs border border-[var(--border-subtle)]/40 font-mono-archive flex-1 min-w-0">
-                      {{ bootstrapTicket.qr_payload }}
-                    </div>
-                    <button
-                      @click="copyBootstrapPayload"
-                      type="button"
-                      class="px-3.5 py-1.5 shrink-0 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] bg-[var(--bg-archive)] rounded-xs cursor-pointer flex items-center justify-center gap-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors whitespace-nowrap text-xs"
-                    >
-                      <component :is="pairCopied ? Check : Copy" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-                      <span>{{ pairCopied ? '已复制深链' : '复制配对深链' }}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  v-if="bootstrapError"
-                  class="p-2.5 rounded-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] font-mono-archive flex items-center gap-2"
-                >
-                  <AlertCircle class="w-3.5 h-3.5 shrink-0" />
-                  <span>{{ bootstrapError }}</span>
-                </div>
-
-                <!-- 本机浏览器直连激活 -->
-                <div class="pt-3 border-t border-dashed border-[var(--border-divider)] space-y-2">
-                  <button
-                    @click="handleQuickConfirmCurrentBrowser"
-                    :disabled="isConfirmingWebDevice || pairCountdown <= 0"
-                    class="w-full py-2.5 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer text-xs font-mono-archive flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <Laptop class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-                    <span>
-                      {{
-                        isConfirmingWebDevice
-                          ? '正在将当前浏览器设为首台设备...'
-                          : '在此浏览器直接完成装帧并进入展厅 →'
-                      }}
-                    </span>
-                  </button>
+                  <p class="text-[11px] font-mono-archive text-[var(--ink-muted)] leading-relaxed border-t border-[var(--border-subtle)]/60 pt-3">
+                    认领码 15 分钟内有效，只出现在服务标准输出（systemd 部署用
+                    journalctl -u loose-leaf 查看）；过期或连续输错 5 次会作废，重启服务即可获取新码。
+                  </p>
                 </div>
               </div>
             </div>
@@ -758,7 +394,7 @@ onUnmounted(() => {
 
         <!-- =====================================================================
              阶段二：已初始化日常访问（initialized === true）—— 极简双通道对开扉页 (RC-60)
-             上半区访客直入 + 下半区内联密钥登堂，彻底移除网页反向扫码与子页面切换
+             上半区访客直入 + 下半区主人通道（会话直入 / 扫码配对）
              ===================================================================== -->
         <div
           v-else
@@ -881,13 +517,13 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <!-- 下半区：主人通道 · 管理员密钥钤印 (直接内联，无需二次切换) -->
+              <!-- 下半区：主人通道 · 会话直入 / 设备配对 -->
               <div class="p-6 sm:p-8 pt-7 bg-[var(--bg-archive)]/55 space-y-4">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <KeyRound class="w-4 h-4 text-[var(--accent-warm)]" />
                     <span class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
-                      主人通道 · 管理员密钥钤印
+                      主人通道 · 设备配对钤印
                     </span>
                   </div>
                   <span
@@ -899,11 +535,7 @@ onUnmounted(() => {
                   </span>
                 </div>
 
-                <p class="font-serif-editorial text-xs text-[var(--ink-muted)] leading-relaxed">
-                  输入首次装帧设定的管理员密钥，为当前浏览器签发专属受信任设备令牌，解锁记录编纂、私密账簿与多端配对中枢。
-                </p>
-
-                <!-- 若本机已持有管理员凭证，提供一键以主人身份直入或注销 -->
+                <!-- 若本机已持有有效会话，一键以主人身份直入或注销 -->
                 <div
                   v-if="isCurator"
                   class="p-3.5 rounded-xs border border-[var(--accent-moss)]/35 bg-[var(--accent-moss)]/10 flex items-center justify-between gap-3 text-xs font-mono-archive"
@@ -928,31 +560,20 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <!-- 内联管理员密钥输入框 + 钤印进入按钮 -->
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
-                  <input
-                    v-model="passcode"
-                    type="password"
-                    placeholder="管理员密钥..."
-                    @keydown.enter="handlePasscodeLogin"
-                    class="flex-1 px-3.5 py-2.5 text-xs font-mono-archive bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-[var(--ink-primary)]"
-                  />
-                  <button
-                    @click="handlePasscodeLogin"
-                    :disabled="isLoggingIn || !passcode.trim()"
-                    class="px-5 py-2.5 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 disabled:opacity-50 transition-opacity inline-flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
-                  >
-                    <span>{{ isLoggingIn ? '钤印核验中...' : '钤印进入' }}</span>
-                    <ArrowRight class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
+                <!-- 未持有会话：唯一的接入方式是设备配对 -->
                 <div
-                  v-if="loginError"
-                  class="text-xs font-mono-archive text-red-600 dark:text-red-400 flex items-center gap-1.5"
+                  v-else
+                  class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex items-start gap-3"
                 >
-                  <AlertCircle class="w-3.5 h-3.5 shrink-0" />
-                  <span>{{ loginError }}</span>
+                  <ScanLine class="w-4 h-4 text-[var(--accent-warm)] shrink-0 mt-0.5" />
+                  <div class="space-y-1">
+                    <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
+                      请在一台已配对的设备上打开「设置 → 设备配对」，生成新的配对二维码或链接，再用本浏览器扫码或粘贴接入。
+                    </p>
+                    <p class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
+                      若所有设备均已丢失，请删除服务器数据文件用认领码重新开始。
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

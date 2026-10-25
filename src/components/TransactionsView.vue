@@ -120,6 +120,8 @@ const saveInitialLiquidBalance = async () => {
 const gearFilter = ref<'active' | 'sold' | 'all'>('active')
 const isAddGearModalOpen = ref(false)
 const isSubmittingGear = ref(false)
+// 改账弹窗的保存进行中标记：防双击重复 PUT + 保存期间禁止关闭弹窗
+const isSavingEdit = ref(false)
 const gearErrorMsg = ref<string | null>(null)
 
 const newGearName = ref('')
@@ -565,14 +567,23 @@ const startEdit = (tx: Transaction) => {
   editRepaymentDay.value = tx.repayment_day || 10
 }
 
+// 改账弹窗的用户侧关闭入口：保存进行中禁止关闭（与全站「提交中禁闭」口径一致）
+const handleEditClose = () => {
+  if (isSavingEdit.value) return
+  editingTx.value = null
+}
+
 const saveEdit = async () => {
   if (!editingTx.value) return
+  // 保存中禁闭与防重：双击保存会发两次 PUT（后写覆盖前写）并各触发一次 loadData
+  if (isSavingEdit.value) return
   editErrorMsg.value = ''
   const amtFloat = parseFloat(editAmount.value)
   if (isNaN(amtFloat) || amtFloat <= 0) {
     editErrorMsg.value = '请输入大于 0 的有效金额'
     return
   }
+  isSavingEdit.value = true
   const amountCents = Math.round(amtFloat * 100)
   // ── 分期参数提交前校验（与输入框 min/max 呼应，拦住手输越界值）──
   // 总期数 1~60；剩余期数 0~总期数。否则 0 期会触发除零 / 月供 undefined，
@@ -669,6 +680,8 @@ const saveEdit = async () => {
   } catch (err: any) {
     // 保存失败：保留弹窗与已填内容，给出可感知的错误（原先 unhandled rejection、静默无反馈）
     editErrorMsg.value = err?.message || '保存账目失败，请稍后重试'
+  } finally {
+    isSavingEdit.value = false
   }
 }
 
@@ -1635,14 +1648,14 @@ const spectrumItems = computed(() => {
     <div
       v-if="editingTx"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
-      @click.self="editingTx = null"
+      @click.self="handleEditClose"
     >
       <div class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] p-6 rounded-xs w-full max-w-lg space-y-4 max-h-[90dvh] overflow-y-auto">
         <div class="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
           <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
             修改账目
           </h3>
-          <button @click="editingTx = null" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+          <button @click="handleEditClose" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -1823,11 +1836,11 @@ const spectrumItems = computed(() => {
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border-subtle)]">
-          <button @click="editingTx = null" class="px-3 py-1.5 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+          <button @click="handleEditClose" class="px-3 py-1.5 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
             取消
           </button>
-          <button @click="saveEdit" class="px-4 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90">
-            保存修改
+          <button @click="saveEdit" :disabled="isSavingEdit" class="px-4 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90 disabled:opacity-50">
+            {{ isSavingEdit ? '保存中...' : '保存修改' }}
           </button>
         </div>
       </div>

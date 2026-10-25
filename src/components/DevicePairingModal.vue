@@ -122,25 +122,38 @@ const stopPairingPolling = () => {
   }
 }
 
+// 工单代际序号：弹窗 v-if 卸载后，在途 generateTicket 的 await 续体仍会执行
+// startCountdown/startPairingPolling —— 重建出的 interval 没有人再清，永久泄漏；
+// 「关闭后立刻重开」时旧续体还会用过期工单覆盖新工单。每次开弹窗/重新生成自增，
+// 续体落地前比对序号，不符即弃。
+let ticketSeq = 0
+
 const generateTicket = async () => {
   audio.playTink()
+  const seq = ++ticketSeq
   isLoadingTicket.value = true
   ticketError.value = ''
   pairingSuccess.value = false
   try {
-    const res = await initPairingTicket({
+    // 工单与设备列表两者就绪后才快照基线并开轮询（见 devicesLoaded 说明）；
+    // 工单请求与列表等待并发执行，不额外增加出码延迟。
+    const ticketTask = initPairingTicket({
       hub_url: window.location.origin,
     })
+    await (devicesLoaded ?? loadDevices())
+    const res = await ticketTask
+    if (seq !== ticketSeq) return
     currentTicket.value = res
     selectedCandidateUrl.value = res.hub_url || ''
     startCountdown(res.expires_in_seconds || 300)
     startPairingPolling()
   } catch (err: any) {
+    if (seq !== ticketSeq) return
     ticketError.value = err?.message || '获取配对工单失败，请检查服务连接'
     currentTicket.value = null
     stopPairingPolling()
   } finally {
-    isLoadingTicket.value = false
+    if (seq === ticketSeq) isLoadingTicket.value = false
   }
 }
 
@@ -164,17 +177,27 @@ const handleSelectCandidate = async (candUrl: string) => {
   }
 }
 
-const loadDevices = async () => {
-  isLoadingDevices.value = true
-  try {
-    const res = await fetchTrustedDevices()
-    devices.value = res || []
-  } catch (err) {
-    console.error('Failed to load trusted devices:', err)
-    devices.value = []
-  } finally {
-    isLoadingDevices.value = false
-  }
+// 设备列表加载 Promise：generateTicket 必须等它落定后才能取设备数基线。
+// 弹窗打开时 loadDevices 与 generateTicket 并发，若工单先回来就以
+// 仍为 0 的 devices.length 快照开轮询，2 秒后兜底分支 latestDevices.length >
+// initialDeviceCount 恒成立 —— 刚生成二维码就误报「配对成功」。
+let devicesLoaded: Promise<void> | null = null
+
+const loadDevices = () => {
+  const task = (async () => {
+    isLoadingDevices.value = true
+    try {
+      const res = await fetchTrustedDevices()
+      devices.value = res || []
+    } catch (err) {
+      console.error('Failed to load trusted devices:', err)
+      devices.value = []
+    } finally {
+      isLoadingDevices.value = false
+    }
+  })()
+  devicesLoaded = task
+  return task
 }
 
 const handleRevoke = async (id: number) => {
@@ -259,9 +282,13 @@ watch(
   () => props.isOpen,
   (open) => {
     if (open) {
+      // 自增序号使上一代在途续体全部失效，随后重新发起
+      ticketSeq++
+      devicesLoaded = null
       loadDevices()
       generateTicket()
     } else {
+      ticketSeq++
       if (countdownTimer) clearInterval(countdownTimer)
       stopPairingPolling()
       ticketError.value = ''
@@ -479,7 +506,8 @@ onUnmounted(() => {
           <span class="text-[11px]">新设备扫码后自动完成授权，无需输入密码。</span>
           <button
             @click="generateTicket"
-            class="flex items-center gap-1 hover:text-[var(--ink-primary)] cursor-pointer text-xs"
+            :disabled="isLoadingTicket"
+            class="flex items-center gap-1 hover:text-[var(--ink-primary)] cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isLoadingTicket }" />
             <span>重新生成</span>

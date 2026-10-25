@@ -23,6 +23,8 @@ const emit = defineEmits<{
  * 桌面端保持原有行为。
  */
 const scale = ref(1)
+// 手势舞台 DOM 引用：touchmove 需要以 non-passive 方式挂载/卸载
+const imageStageRef = ref<HTMLElement | null>(null)
 const offsetX = ref(0)
 const offsetY = ref(0)
 const dragging = ref(false)
@@ -100,12 +102,21 @@ watch(
       window.removeEventListener('keydown', handleKeydown)
       document.body.style.overflow = ''
     }
+    // 捏合缩放/放大平移需要 preventDefault，touchmove 监听必须 non-passive：
+    // Vue 的 .passive 修饰符会让 preventDefault 变成 no-op（浏览器忽略并告警），
+    // iOS 上双指捏合会同时缩放整个页面。touchstart 保持 passive 不影响。
+    const el = imageStageRef.value
+    if (el) {
+      if (open) el.addEventListener('touchmove', onTouchMove, { passive: false })
+      else el.removeEventListener('touchmove', onTouchMove)
+    }
   },
   { immediate: true }
 )
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  imageStageRef.value?.removeEventListener('touchmove', onTouchMove)
   document.body.style.overflow = ''
 })
 </script>
@@ -140,6 +151,7 @@ onBeforeUnmount(() => {
       @click.self="emit('close')"
     >
       <div
+        ref="imageStageRef"
         class="relative max-w-5xl max-h-[76dvh] sm:max-h-[76vh] flex flex-col items-center"
         :style="{
           transform: `translate(${offsetX}px, ${offsetY + swipeY}px) scale(${scale})`,
@@ -147,7 +159,7 @@ onBeforeUnmount(() => {
           opacity: swipeY > 0 ? Math.max(0.3, 1 - swipeY / 400) : 1
         }"
         @touchstart.passive="onTouchStart"
-        @touchmove.passive="onTouchMove"
+        @touchmove="onTouchMove"
         @touchend="onTouchEnd"
         @touchcancel="onTouchEnd"
       >

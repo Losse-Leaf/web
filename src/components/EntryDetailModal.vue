@@ -91,10 +91,21 @@ const cancelEdit = () => {
   errorMsg.value = null
 }
 
+// 提交/删除进行中禁止用户侧关闭（背景/X）：保存期间关闭会卸载弹窗并触发
+// ImageUploader 的 cleanupUploads，把在途 PUT 正在绑定的照片当孤儿回收。
+// 删除成功路径的 emit('close') 发生在 finally 复位之前，直接 emit、绕过本守卫。
+const handleClose = () => {
+  if (isSubmitting.value) return
+  emit('close')
+}
+
+
 const handleSaveEdit = async () => {
   if (!props.entry) return
-  if (!editContent.value.trim()) {
-    errorMsg.value = '记录内容不能为空'
+  // 与 NewEntryModal 创建口径一致：正文与附件全空才拦截 ——
+  // 其他端创建的纯图条目（正文为空）此前被强制「正文非空」而无法编辑。
+  if (!editContent.value.trim() && editAttachmentIds.value.length === 0) {
+    errorMsg.value = '请填写记录内容或上传至少一张照片'
     return
   }
 
@@ -105,7 +116,12 @@ const handleSaveEdit = async () => {
 
   try {
     isSubmitting.value = true
-    const matched = !editCityCode.value ? matchCityFromLocation(editLocation.value) : null
+    // 编辑时记录「初始城市」：用户显式清空（初始有城市→现为空）必须跳过地名反推，
+    // 否则 matchCityFromLocation 会用地名文本把刚清空的城市再推导回来
+    // （NewEntryModal 创建时 location 默认就是城市名，命中率极高），
+    // clear_city 恒为 false、清空静默失效。仅初始就无城市的条目才允许反推兜底。
+    const cityCleared = Boolean(props.entry.city_code) && !editCityCode.value
+    const matched = !cityCleared && !editCityCode.value ? matchCityFromLocation(editLocation.value) : null
     const finalCityCode = editCityCode.value || matched?.code || undefined
     const finalCityName = editCityName.value || matched?.name || undefined
     const finalLocation = editLocation.value.trim() || finalCityName || ''
@@ -121,7 +137,9 @@ const handleSaveEdit = async () => {
       location: finalLocation,
       city_code: finalCityCode,
       city_name: finalCityName,
-      clear_city: (!finalCityCode && !finalCityName && !finalLocation) || undefined,
+      // 清空城市但保留地点文本时 finalCityCode 为 undefined 且不带 clear_city，
+      // 后端按「保持原值」处理 ⇒ 清空静默失效。对齐 TransactionsView 的判定。
+      clear_city: cityCleared || undefined,
       project_id: editProjectId.value,
       occurred_at: getBeijingISOString(editOccurredAt.value),
       attachment_ids: editAttachmentIds.value,
@@ -223,7 +241,7 @@ const getKindLabel = (type: string) => {
     aria-modal="true"
     :aria-label="entry.title || '散页详情'"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
-    @click.self="emit('close')"
+    @click.self="handleClose"
   >
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-10 text-left relative transition-all pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
@@ -260,7 +278,7 @@ const getKindLabel = (type: string) => {
           </template>
 
           <button
-            @click="emit('close')"
+            @click="handleClose"
             class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
           >
             <X class="w-5 h-5" />

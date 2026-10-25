@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { MapPin } from 'lucide-vue-next'
 import { searchCities, findCityByCode, type CityOption } from '../utils/cities'
 
@@ -71,26 +71,24 @@ const updateDropdownPosition = () => {
   }
 }
 
+const removeDropdownListeners = () => {
+  window.removeEventListener('scroll', updateDropdownPosition, true)
+  window.removeEventListener('resize', updateDropdownPosition)
+}
+
 watch(isOpen, (open) => {
-  if (!open) return
+  if (!open) {
+    removeDropdownListeners()
+    return
+  }
   updateDropdownPosition()
   window.addEventListener('scroll', updateDropdownPosition, true)
   window.addEventListener('resize', updateDropdownPosition)
 })
 
-// 输入框位置随弹窗滚动变化时同步更新
-const stopWatchers: Array<() => void> = []
-watch(
-  () => isOpen.value,
-  (open) => {
-    if (!open) {
-      stopWatchers.forEach((stop) => stop())
-      stopWatchers.length = 0
-      window.removeEventListener('scroll', updateDropdownPosition, true)
-      window.removeEventListener('resize', updateDropdownPosition)
-    }
-  }
-)
+// 卸载兜底：下拉打开时父弹窗被关闭卸载，watch 的移除分支不会执行 ——
+// 必须在这里移除，否则 window 上的 scroll/resize 监听随组件一起泄漏。
+onBeforeUnmount(removeDropdownListeners)
 </script>
 
 <template>

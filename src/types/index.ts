@@ -265,29 +265,24 @@ export interface PairingTicketResult {
 
 export interface SystemStatus {
   initialized: boolean
-  has_passcode_set?: boolean
   site_name: string
   curator_name?: string
 }
 
-export interface BootstrapPayload {
-  curator_name: string
-  location?: string
-  master_passcode: string
-  confirm_passcode: string
-  hub_url?: string
+export interface ClaimPayload {
+  code: string
+  device_name?: string
+  platform?: string
+  device_model?: string
 }
 
-export interface BootstrapResult {
-  curator_name: string
-  location: string
-  ticket: string
-  hub_url?: string
-  qr_payload: string
-  qr_code_data_url?: string
-  expires_at: string
-  expires_in_seconds: number
-  candidates?: NetworkCandidate[]
+export interface ClaimResult {
+  device_id: string
+  device_name: string
+  platform: string
+  paired_at?: string
+  device_token: string
+  initialized: boolean
 }
 
 export interface PairConfirmPayload {
@@ -316,13 +311,6 @@ export interface PairStatusResult {
     platform: string
     paired_at: string
   }
-  web_token?: string
-}
-
-export interface VerifyPasscodeResult {
-  token: string
-  device_id?: string
-  device_name?: string
 }
 
 export interface Wish {

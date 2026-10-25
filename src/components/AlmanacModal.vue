@@ -40,16 +40,22 @@ const computedYears = computed(() => {
   return [beijingYear]
 })
 
+// 请求序号守卫：快速切换年份时旧年份的慢响应不得覆盖新年份的数据
+let almanacLoadSeq = 0
+
 const loadAlmanac = async (year: number) => {
+  const seq = ++almanacLoadSeq
   try {
     isLoading.value = true
     errorMsg.value = ''
     const data = await fetchAnnualAlmanacSummary(year)
+    if (seq !== almanacLoadSeq) return
     summary.value = data
   } catch (err: any) {
+    if (seq !== almanacLoadSeq) return
     errorMsg.value = err.message || '加载年度年鉴失败'
   } finally {
-    isLoading.value = false
+    if (seq === almanacLoadSeq) isLoading.value = false
   }
 }
 

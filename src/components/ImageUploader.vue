@@ -207,6 +207,15 @@ defineExpose({
 })
 
 const removeItem = (item: UploadItem) => {
+  // 仍在上传中的项必须先中止 XHR：直接移除会让 XHR 脱离 items 追踪，
+  // 若传完后服务端已落附件，这个 objectKey 再无人回收，成为孤儿文件。
+  if (item.status === 'uploading') {
+    try {
+      item.abort?.abort()
+    } catch {
+      // ignore
+    }
+  }
   if (item.objectKey && !item.id.startsWith('existing-')) {
     cleanupUploads([item.objectKey])
   }

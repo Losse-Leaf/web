@@ -482,6 +482,15 @@ const resetForm = () => {
 }
 
 const handleClose = () => {
+  // 提交中禁止关闭（含背景点击与取消按钮）：关闭会卸载弹窗并触发
+  // ImageUploader 的 cleanupUploads，把条目正在引用的附件当孤儿回收 ⇒ 图片死链。
+  if (isSubmitting.value) return
+  forceClose()
+}
+
+// 创建成功路径专用：此时附件已 markCommitted、isSubmitting 尚未在 finally 里复位，
+// 若走 handleClose 会被上面的守卫吞掉（弹窗永不关闭）。守卫只服务于用户侧入口。
+const forceClose = () => {
   resetForm()
   emit('close')
 }
@@ -577,7 +586,7 @@ const handleSubmit = async () => {
 
       audio.playShutter()
       emit('transactionCreated', createdTx)
-      handleClose()
+      forceClose()
     } catch (err: any) {
       // 凭证在提交瞬间过期：统一交回印鉴登录并在成功后继续本次提交 (FE-22)
       if (!getAdminToken()) {
@@ -630,7 +639,7 @@ const handleSubmit = async () => {
       imageUploaderRef.value?.markCommitted()
       clearSavedDraft()
       emit('wishCreated', createdWish)
-      handleClose()
+      forceClose()
     } catch (err: any) {
       if (!getAdminToken()) {
         emit('requestAuth', () => {
@@ -682,7 +691,7 @@ const handleSubmit = async () => {
         clearSavedDraft()
         emit('projectCreated', createdProj)
         emit('entryCreated', createdEntry)
-        handleClose()
+        forceClose()
       } catch (err: any) {
         if (!getAdminToken()) {
           emit('requestAuth', () => handleSubmit())
@@ -719,7 +728,7 @@ const handleSubmit = async () => {
         imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
         emit('entryCreated', createdEntry)
-        handleClose()
+        forceClose()
       } catch (err: any) {
         errorMsg.value = err.message || '保存造物手记失败'
       } finally {
@@ -770,7 +779,7 @@ const handleSubmit = async () => {
     imageUploaderRef.value?.markCommitted()
     clearSavedDraft()
     emit('entryCreated', created)
-    handleClose()
+    forceClose()
   } catch (err: any) {
     errorMsg.value = err.message || '保存失败'
   } finally {
@@ -820,7 +829,8 @@ const handleSubmit = async () => {
 
         <button
           @click="handleClose"
-          class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
+          :disabled="isSubmitting"
+          class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           title="关闭"
         >
           <X class="w-5 h-5" />
@@ -1486,7 +1496,8 @@ const handleSubmit = async () => {
           <button
             type="button"
             @click="handleClose"
-            class="px-4 py-2 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
+            :disabled="isSubmitting"
+            class="px-4 py-2 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             取消
           </button>

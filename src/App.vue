@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import HeaderNav from './components/HeaderNav.vue'
 import HomeView from './components/HomeView.vue'
 import FooterArchive from './components/FooterArchive.vue'
@@ -23,12 +23,13 @@ const SearchModal = defineAsyncComponent(() => import('./components/SearchModal.
 const DevicePairingModal = defineAsyncComponent(() => import('./components/DevicePairingModal.vue'))
 const UpdateCheckModal = defineAsyncComponent(() => import('./components/UpdateCheckModal.vue'))
 const CategoryManagerModal = defineAsyncComponent(() => import('./components/CategoryManagerModal.vue'))
-const PasscodeModal = defineAsyncComponent(() => import('./components/PasscodeModal.vue'))
+const SessionExpiredModal = defineAsyncComponent(() => import('./components/SessionExpiredModal.vue'))
 import { getAdminToken, removeAdminToken, refreshSessionState } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
 import { useTransactions } from './composables/useTransactions'
 import { useCategories } from './composables/useCategories'
+import { useConfirm } from './composables/useConfirm'
 import type {
   LifeEntry,
   Project,
@@ -135,7 +136,7 @@ const applySystemStatus = (status: SystemStatus) => {
     removeAdminToken()
     clearEnteredArchive()
     hasEnteredArchive.value = false
-  } else if (Boolean(getAdminToken()) || hasEnteredArchiveSession()) {
+  } else if (!suppressAutoEnter && (Boolean(getAdminToken()) || hasEnteredArchiveSession())) {
     hasEnteredArchive.value = true
   }
 }
@@ -238,7 +239,7 @@ const setupOnlineListeners = () => {
 const isPairingOpen = ref(false)
 const isUpdateCheckOpen = ref(false)
 
-const isPasscodeModalOpen = ref(false)
+const isSessionHintOpen = ref(false)
 
 // MOB-P2-84：PWA 安装引导
 // Android Chrome 会触发 beforeinstallprompt（可主动弹出安装 CTA）；
@@ -273,7 +274,11 @@ const promptInstall = async () => {
   }
 }
 
-// MOB-P1-93：是否处于「某个弹窗打开」状态（用于隐藏悬浮按钮）
+// MOB-P1-93：是否处于「某个弹窗打开」状态（用于隐藏悬浮按钮与移动端底栏）
+// z-[1150] 的移动端底栏会盖在任何漏计的弹窗上：分类管理弹窗（useCategories
+// 单例状态）与全局确认框（useConfirm 单例的 confirmRequest）此前都不在内。
+const { confirmRequest } = useConfirm()
+const { loadCategories, isCategoryManagerOpen } = useCategories()
 const anyModalOpen = computed(
   () =>
     isSearchOpen.value ||
@@ -282,34 +287,24 @@ const anyModalOpen = computed(
     isStatsOpen.value ||
     isPairingOpen.value ||
     isUpdateCheckOpen.value ||
-    isPasscodeModalOpen.value ||
+    isSessionHintOpen.value ||
+    isCategoryManagerOpen.value ||
+    Boolean(confirmRequest.value) ||
     Boolean(selectedEntry.value)
 )
-const passcodeModalPrompt = ref('')
-const passcodeModalCallback = ref<(() => void) | null>(null)
 const wishesRefreshKey = ref(0)
 const atlasRefreshKey = ref(0)
 const txRefreshKey = ref(0)
 const archiveRefreshKey = ref(0)
 
-const handleRequestAuth = (callback?: () => void, prompt?: string) => {
+// 母密钥已移除：未授信的浏览器无法就地自证身份，
+// 唯一接入方式是由已配对设备签发配对二维码，这里只做引导。
+const handleRequestAuth = (callback?: () => void) => {
   if (Boolean(getAdminToken())) {
     callback?.()
     return
   }
-  passcodeModalPrompt.value = prompt || '请输入管理员密钥以授权发布与管理'
-  passcodeModalCallback.value = callback || null
-  isPasscodeModalOpen.value = true
-}
-
-const handleAuthenticated = async () => {
-  const cb = passcodeModalCallback.value
-  passcodeModalCallback.value = null
-  isPasscodeModalOpen.value = false
-  if (cb) {
-    cb()
-  }
-  await refreshData()
+  isSessionHintOpen.value = true
 }
 
 const handleLogout = async () => {
@@ -396,7 +391,7 @@ const openStatsModal = async () => {
 
 const openStorageBackupModal = (tab: 'backup' | 'storage' = 'backup') => {
   if (!getAdminToken()) {
-    handleRequestAuth(() => openStorageBackupModal(tab), '请输入管理员密钥以访问存储设置与灾备中枢')
+    handleRequestAuth(() => openStorageBackupModal(tab))
     return
   }
   storageBackupInitialTab.value = tab
@@ -567,7 +562,12 @@ const handleHashChange = async () => {
       } else {
         try {
           const fetched = await fetchEntryById(id)
-          if (fetched) selectedEntry.value = fetched
+          // 晚到防护：请求期间用户可能已切换 hash / 关闭详情，
+          // 迟到的结果不能再赋给 selectedEntry，否则会凭空弹出「幽灵详情」。
+          // 用全等比对（而非 startsWith）避免 entry/1 误匹配 entry/12。
+          if (fetched && window.location.hash.replace('#', '') === `entry/${id}`) {
+            selectedEntry.value = fetched
+          }
         } catch (err) {
           console.error(`Failed to fetch entry #${id}:`, err)
         }
@@ -595,7 +595,12 @@ const handleHashChange = async () => {
   }
 }
 
-const { loadCategories, isCategoryManagerOpen } = useCategories()
+// 任意请求 401 后 utils/api.ts 会先清除本地凭据并派发 'looseleaf-auth-expired'。
+// 这里统一收口：弹一次 SessionExpiredModal 提示会话失效（复用 isSessionHintOpen，
+// 它是布尔单弹窗，连续多个 401 事件不会叠加弹窗，只会保持打开）。
+const handleAuthExpired = () => {
+  isSessionHintOpen.value = true
+}
 
 // WEB-5：启动瀑布改为「一波并行」。
 // 此前是 refreshSessionState → handleHashChange → refreshData → 第二批，
@@ -604,6 +609,7 @@ const { loadCategories, isCategoryManagerOpen } = useCategories()
 onMounted(async () => {
   setupOnlineListeners()
   setupInstallPrompt()
+  window.addEventListener('looseleaf-auth-expired', handleAuthExpired)
 
   const sessionTask = refreshSessionState()
   const transactionsTask = sessionTask.then((isAdmin) => {
@@ -660,10 +666,21 @@ onMounted(async () => {
   }) as EventListener)
 })
 
+onUnmounted(() => {
+  window.removeEventListener('looseleaf-auth-expired', handleAuthExpired)
+})
+
+// 认领成功页存活期间抑制「会话/entered 标记 → 自动进馆」：
+// 认领成功瞬间两者必然已写入（claimDevice 已建立会话、handleClaimSubmit 已 markEnteredArchive），
+// 若不抑制，handleBootstrapped 的状态预取一返回 applySystemStatus 就会把扉页顶成展厅，
+// 「建议再配对一台设备作为备份」与「翻开扉页」根本来不及呈现。进馆由成功页按钮驱动。
+let suppressAutoEnter = false
+
 const handleEnterArchive = () => {
   if (systemStatus.value && !systemStatus.value.initialized) {
     return
   }
+  suppressAutoEnter = false
   hasEnteredArchive.value = true
   markEnteredArchive()
   // 启动批次刚刚拉过数据就直接进馆，避免「点进入」再整库重拉一次。
@@ -685,6 +702,11 @@ const handleReturnToWelcome = () => {
 }
 
 const handleBootstrapped = async () => {
+  // 首次认领成功：只做数据预取与状态校正，**不推进馆** ——
+  // 成功页（「建议再配对一台设备作为备份」）必须留在欢迎扉页上，
+  // 进馆交由成功页「翻开扉页」按钮 emit('enter') → handleEnterArchive 驱动。
+  // 抑制 applySystemStatus 的自动进馆，否则预取返回（亚秒级）就会顶掉成功页。
+  suppressAutoEnter = true
   // 先标记新鲜，防止紧随其后的 @enter 再触发一次 refreshData。
   lastDataRefreshAt = Date.now()
   if (systemStatus.value) {
@@ -702,8 +724,6 @@ const handleBootstrapped = async () => {
   if (sys.status === 'fulfilled' && sys.value) {
     systemStatus.value = { ...sys.value, initialized: true }
   }
-  hasEnteredArchive.value = true
-  markEnteredArchive()
   void refreshData()
 }
 
@@ -755,7 +775,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @openUpdateCheck="openUpdateCheckModal"
       @toggleTheme="toggleTheme"
       @openStats="openStatsModal"
-      @openLogin="() => handleRequestAuth(undefined, '以主人身份登录自留地')"
+      @openLogin="() => handleRequestAuth()"
       @logout="handleLogout"
     />
 
@@ -899,7 +919,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     -->
     <nav
       v-if="!anyModalOpen"
-      class="md:hidden fixed bottom-0 inset-x-0 z-[1150] bg-[var(--bg-archive)]/96 backdrop-blur-md border-t border-[var(--border-subtle)] pb-[env(safe-area-inset-bottom)]"
+      class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--bg-archive)]/96 backdrop-blur-md border-t border-[var(--border-subtle)] pb-[env(safe-area-inset-bottom)]"
       aria-label="主导航"
     >
       <div class="grid grid-cols-5">
@@ -999,13 +1019,11 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     <!-- 10. 全站统一确认 / 提示弹窗 (原生 confirm/alert 收口 FE-21) -->
     <ConfirmDialog />
 
-    <!-- 11. 主理人印鉴登录弹窗 -->
-    <PasscodeModal
-      v-if="isPasscodeModalOpen"
-      :isOpen="isPasscodeModalOpen"
-      :prompt="passcodeModalPrompt"
-      @close="isPasscodeModalOpen = false; passcodeModalCallback = null"
-      @authenticated="handleAuthenticated"
+    <!-- 11. 主理人权限引导弹窗（无母密钥后，未授信浏览器只能通过设备配对接入） -->
+    <SessionExpiredModal
+      v-if="isSessionHintOpen"
+      :isOpen="isSessionHintOpen"
+      @close="isSessionHintOpen = false"
     />
 
   </div>

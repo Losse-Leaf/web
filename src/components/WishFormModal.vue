@@ -115,7 +115,9 @@ const handleSubmit = async () => {
         city_name: kind.value === 'travel' ? cityName.value.trim() : '',
         city_code: kind.value === 'travel' ? cityCode.value.trim() : '',
         budget: budgetCents,
-        target_date: targetDate.value || undefined,
+        // 编辑时目标期被清除必须显式发空串（后端 hasKey+空串=清空）；
+        // `|| undefined` 会被当作「保持原值」，清除永远无效。创建分支才用 undefined 默认语义。
+        target_date: targetDate.value,
         planted_at: plantedAt.value || undefined,
         attachment_ids: attachmentIds.value,
         // 关键：**显式声明**「本次要解除全部参考图绑定」。
@@ -161,13 +163,21 @@ const handleSubmit = async () => {
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => props.isOpen)
+
+  // 提交中禁止用户侧关闭（背景/X/取消）：关闭会卸载弹窗并触发 ImageUploader
+  // 的 cleanupUploads，把在途 PUT 正在绑定的参考图当孤儿回收 ⇒ 图片死链。
+  // 成功路径的 emit('close') 发生在 finally 复位之前，必须直接 emit、绕过本守卫。
+  const handleClose = () => {
+    if (isSubmitting.value) return
+    emit('close')
+  }
 </script>
 
 <template>
   <div
     v-if="isOpen"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--ink-primary)]/40 backdrop-blur-xs animate-in fade-in duration-200"
-    @click.self="emit('close')"
+    @click.self="handleClose"
   >
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-lg rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90dvh] overflow-y-auto text-left pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
@@ -186,7 +196,7 @@ const handleSubmit = async () => {
           </p>
         </div>
         <button
-          @click="emit('close')"
+          @click="handleClose"
           class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 cursor-pointer transition-colors"
         >
           <X class="w-4 h-4" />
@@ -337,7 +347,7 @@ const handleSubmit = async () => {
         <!-- 底部提交操作 -->
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">
           <button
-            @click="emit('close')"
+            @click="handleClose"
             type="button"
             class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
           >

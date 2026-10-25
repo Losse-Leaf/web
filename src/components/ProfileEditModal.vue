@@ -130,7 +130,9 @@ const processAvatarUpload = async (file: File) => {
     form.value.avatar_url = res.url
     form.value.avatar_key = res.object_key
   } catch (err: any) {
-    // 离线/未配置存储时优雅降级：FileReader 本地暂存
+    // 离线/未配置存储时优雅降级：FileReader dataURL 仅作本地预览。
+    // 它绝不能随保存落库 —— 后端会把 data: 前缀当对象键存取，全站头像损坏。
+    // 保存时 handleSave 会剥离该 dataURL、维持远端原头像。
     const reader = new FileReader()
     reader.onload = (ev) => {
       if (ev.target?.result) {
@@ -138,7 +140,7 @@ const processAvatarUpload = async (file: File) => {
       }
     }
     reader.readAsDataURL(file)
-    avatarUploadError.value = err?.message || '后端直传失败，已自动转为本地暂存'
+    avatarUploadError.value = err?.message || '后端直传失败，头像暂仅本地预览，保存后仍使用原头像'
   } finally {
     isUploadingAvatar.value = false
   }
@@ -161,6 +163,12 @@ const handleSave = async () => {
 
   // 2. 向后端更新持久化主理人基本资料，不携带 edc_gear 以杜绝双写互踩 (RC-132)
   try {
+    // 头像直传失败时的 FileReader dataURL 只作本地预览，绝不能写进 PUT /profile
+    //（后端会把 data: 前缀当对象键落库，全站头像损坏）——保存时剥离，回退远端原头像。
+    const avatarUrlInput = form.value.avatar_url || ''
+    const avatarUrlToSave = avatarUrlInput.startsWith('data:')
+      ? (props.profile.avatar_url || undefined)
+      : avatarUrlInput
     const updated = await updateCuratorProfile({
       name: form.value.name,
       title: form.value.title,
@@ -168,7 +176,7 @@ const handleSave = async () => {
       location: form.value.location,
       current_city: form.value.current_city,
       avatar_key: avatarKey.value || form.value.avatar_key || undefined,
-      avatar_url: form.value.avatar_url,
+      avatar_url: avatarUrlToSave,
       motto: form.value.motto,
       email: form.value.email,
       github: form.value.github,

@@ -8,7 +8,6 @@ import {
   Search,
   Moon,
   Sun,
-  KeyRound,
   Volume2,
   VolumeX,
 } from 'lucide-vue-next'
@@ -31,7 +30,6 @@ const emit = defineEmits<{
   (e: 'openPairing'): void
   (e: 'openUpdateCheck'): void
   (e: 'toggleTheme'): void
-  (e: 'openLogin'): void
   (e: 'logout'): void
 }>()
 
@@ -108,12 +106,6 @@ const toolOptions = computed(() => {
         action: () => emit('logout'),
       }
     )
-  } else {
-    opts.push({
-      key: 'login',
-      label: '主理人登录',
-      action: () => emit('openLogin'),
-    })
   }
   return opts
 })
@@ -220,17 +212,9 @@ onUnmounted(() => {
           <span class="font-serif-editorial text-[13px]">记录</span>
         </button>
 
-        <!-- 主理人身份状态 / 登录入口 -->
-        <button
-          v-if="!isAdmin"
-          @click="emit('openLogin')"
-          class="flex items-center gap-1 text-xs py-1 px-2 rounded-xs border border-[var(--accent-warm)]/50 hover:border-[var(--accent-warm)] bg-[var(--accent-warm)]/5 text-[var(--accent-warm)] transition-colors cursor-pointer"
-        >
-          <KeyRound class="w-3.5 h-3.5" />
-          <span class="font-serif-editorial text-[13px]">登录</span>
-        </button>
+        <!-- 主理人身份状态 -->
         <div
-          v-else
+          v-if="isAdmin"
           class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-emerald-600/30 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-mono-archive text-[11px]"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -339,14 +323,6 @@ onUnmounted(() => {
         >
           <Plus class="w-4 h-4" />
           <span class="font-serif-editorial text-sm font-medium">写下一篇散页手账</span>
-        </button>
-        <button
-          v-if="!isAdmin"
-          @click="emit('openLogin'); mobileMenuOpen = false"
-          class="w-full py-2 px-3 border border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)] rounded-xs text-xs font-serif-editorial flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[var(--accent-warm)]/12 transition-colors"
-        >
-          <KeyRound class="w-3.5 h-3.5" />
-          <span>主理人印鉴登录</span>
         </button>
       </div>
 

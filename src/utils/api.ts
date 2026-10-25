@@ -12,12 +12,11 @@ import type {
   SiteConfig,
   CuratorProfile,
   SystemStatus,
-  BootstrapPayload,
-  BootstrapResult,
+  ClaimPayload,
+  ClaimResult,
   PairConfirmPayload,
   PairConfirmResult,
   PairStatusResult,
-  VerifyPasscodeResult,
   UnifiedUploadResult,
   Wish,
   AssetsOverview,
@@ -310,7 +309,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     })
 
     if (!res.ok) {
-      if (res.status === 401 && !url.includes('/auth/verify')) {
+      if (res.status === 401 && !url.includes('/auth/claim')) {
         // MOB-P1-xx：401 只清**本地**凭据，不做全局登出。
         //
         // 之前这里走 removeAdminToken()，而它会连带 POST /auth/logout 把 HttpOnly Cookie 打死
@@ -1080,14 +1079,9 @@ export async function confirmPairingTicket(data: PairConfirmPayload): Promise<Pa
 }
 
 export async function pollPairingTicketStatus(ticket: string): Promise<PairStatusResult> {
-  const res = await request<PairStatusResult>(
+  return request<PairStatusResult>(
     `${API_BASE}/auth/pair/status?ticket=${encodeURIComponent(ticket)}`
   )
-  if (res.web_token) {
-    // MOB-P1-69：优先建立 HttpOnly Cookie 会话
-    await establishSession(res.web_token)
-  }
-  return res
 }
 
 export async function fetchPairQRCode(hubUrl: string, ticket: string): Promise<{
@@ -1155,23 +1149,12 @@ export async function updateCuratorProfile(data: Partial<CuratorProfile>): Promi
   })
 }
 
-// 10. 系统生命周期与冷启动两步装帧 (System Lifecycle & Two-Step Bootstrap RC-59)
+// 10. 系统生命周期与首台设备认领 (System Lifecycle & Device Claim)
 export async function fetchSystemStatus(): Promise<SystemStatus> {
   return request<SystemStatus>(`${API_BASE}/system/status`)
 }
 
-export async function bootstrapSystem(data: BootstrapPayload): Promise<BootstrapResult> {
-  const payload: BootstrapPayload = {
-    ...data,
-    hub_url: data.hub_url || (typeof window !== 'undefined' ? window.location.origin : ''),
-  }
-  return request<BootstrapResult>(`${API_BASE}/system/bootstrap`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-}
-
-// 11. 浏览器设备名识别与扉页管理员密钥验证 (Admin Key Sign-In RC-60)
+// 11. 浏览器设备名识别与首台设备认领 (Device Claim)
 export function detectBrowserDeviceName(): string {
   if (typeof navigator === 'undefined') return 'Web Browser'
   const ua = navigator.userAgent || ''
@@ -1191,20 +1174,18 @@ export function detectBrowserDeviceName(): string {
   return `${browser} · ${os}`
 }
 
-export async function verifyMasterPasscode(
-  passcode: string,
-  deviceName?: string
-): Promise<VerifyPasscodeResult> {
-  const res = await request<VerifyPasscodeResult>(`${API_BASE}/auth/verify`, {
+export async function claimDevice(data: ClaimPayload): Promise<ClaimResult> {
+  const res = await request<ClaimResult>(`${API_BASE}/auth/claim`, {
     method: 'POST',
     body: JSON.stringify({
-      passcode,
-      device_name: deviceName || detectBrowserDeviceName(),
+      ...data,
+      device_name: data.device_name || detectBrowserDeviceName(),
+      platform: data.platform || 'web',
     }),
   })
-  if (res.token) {
+  if (res.device_token) {
     // MOB-P1-69：优先建立 HttpOnly Cookie 会话
-    await establishSession(res.token)
+    await establishSession(res.device_token)
   }
   return res
 }

@@ -59,7 +59,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'restored'): void
-  (e: 'requestAuth', callback?: () => void, prompt?: string): void
+  (e: 'requestAuth', callback?: () => void): void
 }>()
 
 // 激活选项卡：'backup' (全量快照与灾备) | 'storage' (对象存储设置)
@@ -416,7 +416,7 @@ watch(
 const handleTestStorage = async () => {
   if (isTestingStorage.value) return
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleTestStorage(), '请输入管理员密钥以测试对象存储连接')
+    emit('requestAuth', () => handleTestStorage())
     return
   }
   storageTestResult.value = null
@@ -479,7 +479,7 @@ const handleTestStorage = async () => {
 const handleSaveStorage = async () => {
   if (isSavingStorage.value) return
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleSaveStorage(), '请输入管理员密钥以保存对象存储配置')
+    emit('requestAuth', () => handleSaveStorage())
     return
   }
 
