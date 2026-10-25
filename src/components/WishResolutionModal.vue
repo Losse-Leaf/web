@@ -94,11 +94,14 @@ watch(resolutionType, (type) => {
     actualTitle.value = props.wish.title
     linkTransaction.value = true
     linkGearAsset.value = props.wish.kind === 'item'
+    // 从「理性拔草」切回达成路径时必须重置感言，否则拔草文案会残留进达成散页/足迹
+    entryContent.value = `圆满达成向往的心愿《${props.wish.title}》，生活又多了一份确切的欣喜。`
   } else if (type === 'altered') {
     actualCostYuan.value = props.wish.budget > 0 ? (props.wish.budget / 100).toFixed(2) : '0.00'
     actualTitle.value = ''
     linkTransaction.value = true
     linkGearAsset.value = props.wish.kind === 'item'
+    entryContent.value = `圆满达成向往的心愿《${props.wish.title}》，生活又多了一份确切的欣喜。`
   } else if (type === 'relinquished') {
     actualCostYuan.value = '0.00'
     actualTitle.value = props.wish.title
@@ -127,7 +130,8 @@ const selectedChannelRepaymentDay = computed(() => {
 const monthlyPayEstimate = computed(() => {
   const act = parseFloat(actualCostYuan.value) || 0
   if (act <= 0 || installmentMonths.value <= 0) return '0.00'
-  return (act / installmentMonths.value).toFixed(2)
+  // 整除 floor 口径（按分），末期含尾差 —— 与后端 DEC-02 口径 A 及落库月供一致
+  return (Math.floor((act * 100) / installmentMonths.value) / 100).toFixed(2)
 })
 
 const handleSubmit = async () => {
@@ -364,6 +368,9 @@ const handleSubmit = async () => {
                 ]"
               />
             </div>
+            <p class="sm:col-span-2 text-[10px] text-[var(--ink-muted)]">
+              月供为整除估算，末期含尾差，以落库分期详情为准。
+            </p>
           </div>
         </div>
 

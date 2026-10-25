@@ -83,6 +83,12 @@ const handleSubmit = async () => {
     return
   }
 
+  // 补档语义只面向过去：许下日期不得晚于今天（北京时间，YYYY-MM-DD 字典序即时间序）
+  if (plantedAt.value && plantedAt.value > getBeijingDateString()) {
+    errorMsg.value = '许下日期不能晚于今天'
+    return
+  }
+
   if (!getAdminToken()) {
     emit('requestAuth', () => {
       handleSubmit()
@@ -261,33 +267,13 @@ const handleSubmit = async () => {
           />
         </div>
 
-        <!-- 旅程专属：目标城市 (接入 CityPicker.vue 自动绑定行政代码 RC-58) -->
-        <div v-if="kind === 'travel'" class="space-y-3">
-          <div>
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
-            <CityPicker
-              v-model="cityCode"
-              @select="onCityPicked"
-            />
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市名</label>
-              <input
-                v-model="cityName"
-                type="text"
-                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
-              />
-            </div>
-            <div>
-              <label class="block text-[11px] text-[var(--ink-muted)] mb-1">行政代码</label>
-              <input
-                v-model="cityCode"
-                type="text"
-                class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
-              />
-            </div>
-          </div>
+        <!-- 旅程专属：目标城市 (CityPicker 同时派生 city_code 与 city_name，锁定单源) -->
+        <div v-if="kind === 'travel'">
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
+          <CityPicker
+            v-model="cityCode"
+            @select="onCityPicked"
+          />
         </div>
 
         <!-- 预算与目标期 -->

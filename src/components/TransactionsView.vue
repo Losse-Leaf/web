@@ -74,18 +74,11 @@ const selectedCategoryFilter = ref<string>('')
 const activeSubTab = ref<'ledger' | 'gear'>('ledger')
 
 // 信贷渠道与资产大盘 (RC-53, FE-15, RG-20)
+// 渠道唯一事实源是后端渠道行（内置 huabei/baitiao 已在 DB 种子化且不可删）：
+// 不保留前端兜底字典 —— 那会在用户修改渠道还款日后继续报旧值，形成第二事实源。
 const isCreditModalOpen = ref(false)
 const assetsOverview = ref<AssetsOverview | null>(null)
 const creditChannels = ref<CreditChannel[]>([])
-
-const defaultCreditChannels: CreditChannel[] = [
-  { code: 'huabei', name: '花呗', repayment_day: 10 },
-  { code: 'baitiao', name: '京东白条', repayment_day: 20 },
-]
-
-const displayCreditChannels = computed<CreditChannel[]>(() => {
-  return creditChannels.value.length > 0 ? creditChannels.value : defaultCreditChannels
-})
 
 // 初始流动资金底数校准状态 (RG-20)
 const isEditingLiquidBalance = ref(false)
@@ -129,13 +122,11 @@ const newGearCategory = ref('数码器材')
 const newGearSpec = ref('')
 const newGearPriceYuan = ref('')
 const newGearPurchaseDate = ref(getBeijingDateString())
-const newGearPaymentMethod = ref('')
 const newGearNote = ref('')
 const newGearCreateTx = ref(true)
 const newGearIsInstallment = ref(false)
 const newGearInstallmentChannel = ref('huabei')
 const newGearInstallmentMonths = ref(12)
-const newGearRepaymentDay = ref(10)
 
 // 出二手回血模态框状态
 const sellingGear = ref<GearItem | null>(null)
@@ -196,13 +187,11 @@ const openAddGearModal = () => {
   newGearSpec.value = ''
   newGearPriceYuan.value = ''
   newGearPurchaseDate.value = getBeijingDateString()
-  newGearPaymentMethod.value = paymentMethodsList.value[0] || ''
   newGearNote.value = ''
   newGearCreateTx.value = true
   newGearIsInstallment.value = false
-  newGearInstallmentChannel.value = displayCreditChannels.value[0]?.code || 'huabei'
+  newGearInstallmentChannel.value = creditChannels.value[0]?.code || ''
   newGearInstallmentMonths.value = 12
-  newGearRepaymentDay.value = displayCreditChannels.value[0]?.repayment_day || 10
   gearErrorMsg.value = null
   isAddGearModalOpen.value = true
 }
@@ -214,10 +203,11 @@ const handleCreateGear = async () => {
   }
   const priceFloat = parseFloat(newGearPriceYuan.value || '0')
   const priceCents = !isNaN(priceFloat) && priceFloat > 0 ? Math.round(priceFloat * 100) : 0
-  const matchedCh = displayCreditChannels.value.find(
+  // 还款日单源化：一律派生自所选渠道行（渠道列表为空时分期开关禁用，不会走到这里）
+  const matchedCh = creditChannels.value.find(
     (c) => c.code === newGearInstallmentChannel.value
   )
-  const repDay = matchedCh ? matchedCh.repayment_day : newGearRepaymentDay.value || 10
+  const repDay = matchedCh ? matchedCh.repayment_day : 10
 
   try {
     isSubmittingGear.value = true
@@ -228,7 +218,7 @@ const handleCreateGear = async () => {
       spec: newGearSpec.value.trim() || undefined,
       price_cents: priceCents,
       purchase_date: newGearPurchaseDate.value || undefined,
-      payment_method: newGearPaymentMethod.value,
+      // 支付方式不在此采集：联动流水的支付方式由后端回落为「设备购置」默认值
       note: newGearNote.value.trim() || undefined,
       create_transaction: newGearCreateTx.value && priceCents > 0,
       is_installment: newGearCreateTx.value && newGearIsInstallment.value,
@@ -323,10 +313,69 @@ const editIsInstallment = ref(false)
 const editInstallmentChannel = ref('huabei')
 const editInstallmentMonths = ref(12)
 const editInstallmentRemainMonths = ref(12)
-const editRepaymentDay = ref(10)
+
+// 还款日单源化：一律派生自所选渠道行（custom 伪渠道已移除，后端同步强制按渠道派生）。
+// 渠道列表未加载完成或渠道码缺失时回落账单原值，保证既有分期账目编辑不受加载时序影响。
+const editRepaymentDay = computed(() => {
+  const matched = creditChannels.value.find((c) => c.code === editInstallmentChannel.value)
+  if (matched && matched.repayment_day > 0) return matched.repayment_day
+  return editingTx.value?.repayment_day || 10
+})
 
 const editCategoriesList = computed(() => {
   return editType.value === 'income' ? incomeCategories.value : expenseCategories.value
+})
+
+// 收支类型切换时分类必须跟着切域：支出分类挂在收入账上属于矛盾组合
+//（后端 UpdateTransaction 不做 category↔type 配对校验，会原样落库）
+watch(editType, (t) => {
+  const list = t === 'income' ? incomeCategories.value : expenseCategories.value
+  if (!list.includes(editCategory.value)) {
+    editCategory.value = list[0] || (t === 'income' ? '工资收入' : '餐饮')
+  }
+})
+
+/**
+ * 按购买时间与还款日推算「时间上已经过去」的剩余期数（与后端
+ * CalculateElapsedInstallmentMonths 同口径：北京墙钟、按月推进、当期未到不计数）。
+ * 服务端只允许把剩余期数校准到该值以下（向下=记更多已还），向上校准会被静默钳回。
+ */
+const calcAutoRemainMonths = (occurredAt: string, totalMonths: number, repaymentDay: number): number => {
+  if (!Number.isFinite(totalMonths) || totalMonths <= 0) totalMonths = 12
+  const day = Math.min(31, Math.max(1, Math.round(repaymentDay) || 10))
+  if (!occurredAt) return totalMonths
+  const parsed = parseOccurredDate(occurredAt)
+  const purchase = Date.UTC(Number(parsed.year), Number(parsed.month) - 1, Number(parsed.day))
+  const now = getBeijingNow()
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  if (today <= purchase) return totalMonths
+  let y = Number(parsed.year)
+  let m = Number(parsed.month) // 1-based
+  let paid = 0
+  while (paid < totalMonths) {
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    const repDate = Date.UTC(y, m - 1, Math.min(day, daysInMonth))
+    if (repDate > today) break
+    if (repDate > purchase) paid++
+    m++
+    if (m > 12) {
+      m = 1
+      y++
+    }
+  }
+  return Math.max(0, totalMonths - Math.min(paid, totalMonths))
+}
+
+// 剩余期数可校准上限 = min(总期数, 按时间推算的剩余期数)
+const editRemainMax = computed(() => {
+  if (!editingTx.value) return 60
+  const months = Math.max(1, Math.round(Number(editInstallmentMonths.value)) || 12)
+  const auto = calcAutoRemainMonths(
+    editingTx.value.occurred_at || '',
+    months,
+    editRepaymentDay.value
+  )
+  return Math.max(0, Math.min(months, auto))
 })
 
 // 资产与信贷管理大盘 (RC-53, RG-19)
@@ -403,7 +452,7 @@ const activeInstallmentsList = computed(() => {
       tx,
       // 渠道名取自后端渠道字典，避免前端硬编码与字典重复定义 (FE-20)
       channelName:
-        displayCreditChannels.value.find((c) => c.code === tx.installment_channel_code)?.name ||
+        creditChannels.value.find((c) => c.code === tx.installment_channel_code)?.name ||
         tx.installment_channel_code || '信贷分期',
       channelColor: undefined,
     }))
@@ -564,7 +613,7 @@ const startEdit = (tx: Transaction) => {
   editInstallmentChannel.value = tx.installment_channel_code || 'huabei'
   editInstallmentMonths.value = tx.installment_months || 12
   editInstallmentRemainMonths.value = tx.installment_remain_months ?? (tx.installment_months || 12)
-  editRepaymentDay.value = tx.repayment_day || 10
+  // 还款日不再单独赋值：editRepaymentDay 为 computed，恒派生自所选渠道行
 }
 
 // 改账弹窗的用户侧关闭入口：保存进行中禁止关闭（与全站「提交中禁闭」口径一致）
@@ -591,6 +640,7 @@ const saveEdit = async () => {
   const wantInstallmentNow = editType.value === 'expense' && editIsInstallment.value
   if (wantInstallmentNow) {
     const months = Math.round(Number(editInstallmentMonths.value))
+    // 还款日随渠道单源派生（editRepaymentDay computed），此处只校验期数。
     // 空输入不能被 Number('') 当成 0（那会把整笔负债误判为已还清）。
     const remainRaw = String(editInstallmentRemainMonths.value ?? '').trim()
     if (remainRaw === '') {
@@ -602,8 +652,10 @@ const saveEdit = async () => {
       editErrorMsg.value = '分期总期数必须在 1 至 60 期之间'
       return
     }
-    if (!Number.isFinite(remain) || remain < 0 || remain > months) {
-      editErrorMsg.value = `剩余期数必须在 0 至 ${months} 期之间`
+    // 服务端按购买时间与还款日推算剩余期数，只允许「向下校准」（记更多已还）；
+    // 超出推算值的输入会被静默钳回，这里在前端先行拦截并提示
+    if (!Number.isFinite(remain) || remain < 0 || remain > editRemainMax.value) {
+      editErrorMsg.value = `剩余期数必须在 0 至 ${editRemainMax.value} 期之间（服务端按时间推算，只允许向下校准）`
       return
     }
     editInstallmentMonths.value = months
@@ -1519,20 +1571,25 @@ const spectrumItems = computed(() => {
                   id="newGearInstallmentCheck"
                   v-model="newGearIsInstallment"
                   type="checkbox"
-                  class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
+                  :disabled="creditChannels.length === 0"
+                  class="rounded-xs cursor-pointer accent-[var(--ink-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
                 />
-                <label for="newGearInstallmentCheck" class="text-[var(--ink-secondary)] cursor-pointer select-none">
+                <label for="newGearInstallmentCheck" class="text-[var(--ink-secondary)] cursor-pointer select-none" :class="creditChannels.length === 0 ? 'opacity-40' : ''">
                   该设备使用信贷分期购入
                 </label>
               </div>
 
-              <div v-if="newGearIsInstallment" class="grid grid-cols-2 gap-3">
+              <p v-if="creditChannels.length === 0" class="text-[10px] text-[var(--ink-muted)]">
+                请先在信贷渠道管理添加分期渠道
+              </p>
+
+              <div v-if="newGearIsInstallment && creditChannels.length > 0" class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
                   <PaperSelect
                     v-model="newGearInstallmentChannel"
                     size="sm"
-                    :options="displayCreditChannels.map((c) => ({ value: c.code, label: `${c.name} (${c.repayment_day}日)` }))"
+                    :options="creditChannels.map((c) => ({ value: c.code, label: `${c.name} (${c.repayment_day}日)` }))"
                   />
                 </div>
                 <div>
@@ -1805,11 +1862,17 @@ const spectrumItems = computed(() => {
                 <PaperSelect
                   v-model="editInstallmentChannel"
                   size="sm"
-                  :options="[
-                    ...displayCreditChannels.map((c) => ({ value: c.code, label: c.name })),
-                    { value: 'custom', label: '自定义分期' },
-                  ]"
+                  :disabled="creditChannels.length === 0"
+                  :options="
+                    creditChannels.map((c) => ({ value: c.code, label: c.name }))
+                  "
                 />
+                <p class="mt-1 text-[10px] text-[var(--ink-muted)]">
+                  还款日随渠道配置：每月 {{ editRepaymentDay }} 日
+                </p>
+                <p v-if="creditChannels.length === 0" class="mt-1 text-[10px] text-[var(--ink-muted)]">
+                  渠道列表未加载，保存将保留原渠道与还款日
+                </p>
               </div>
               <div>
                 <label class="block text-[var(--ink-muted)] mb-1">总期数</label>
@@ -1827,9 +1890,12 @@ const spectrumItems = computed(() => {
                   v-model.number="editInstallmentRemainMonths"
                   type="number"
                   min="0"
-                  max="60"
+                  :max="editRemainMax"
                   class="w-full px-2 py-1 text-xs border border-[var(--border-subtle)] rounded-xs bg-transparent"
                 />
+                <p class="mt-1 text-[10px] text-[var(--ink-muted)]">
+                  上限 {{ editRemainMax }} 期，服务端按时间推算、只允许向下校准
+                </p>
               </div>
             </div>
           </div>

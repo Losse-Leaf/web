@@ -151,9 +151,7 @@ const handleSave = async () => {
   saveError.value = ''
 
   // 1. 规范清洗字段：彻底杜绝英文名，信条与座右铭合一，城市与坐标合一 (RC-31, RC-52)
-  if (!form.value.motto?.trim()) {
-    form.value.motto = DEFAULT_PROFILE.motto
-  }
+  // motto 空串按契约 C 直接清空（后端支持），不再强制回填默认签名 —— 否则用户永远清不掉题记
   const loc = (form.value.location || '').trim()
   const matchedCity = matchCityFromLocation(loc)
   form.value.location = loc

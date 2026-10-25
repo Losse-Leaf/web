@@ -403,6 +403,19 @@ const syncFormWithStatus = (status: StorageStatus | null) => {
   }
 }
 
+// 切换接入模式时清空另一模式的寻址字段：endpoint 输入框在 R2 模式下被隐藏但值仍留在
+// 表单状态里，残留的旧 S3 端点会随 payload 提交 —— 后端 endpoint 非空时优先于
+// account_id，等于把 R2 配置静默写成旧 S3 端点。
+const switchProvider = (type: 'r2' | 's3') => {
+  if (storageProviderType.value === type) return
+  storageProviderType.value = type
+  if (type === 'r2') {
+    storageForm.value.endpoint = ''
+  } else {
+    storageForm.value.account_id = ''
+  }
+}
+
 watch(
   localStorageStatus,
   (newVal) => {
@@ -980,7 +993,7 @@ onMounted(() => {
             <div class="flex items-center gap-1 p-0.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs text-xs font-serif-editorial">
               <button
                 type="button"
-                @click="storageProviderType = 'r2'"
+                @click="switchProvider('r2')"
                 class="py-1 px-2.5 rounded-xs transition-all cursor-pointer font-medium"
                 :class="storageProviderType === 'r2' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
               >
@@ -988,7 +1001,7 @@ onMounted(() => {
               </button>
               <button
                 type="button"
-                @click="storageProviderType = 's3'"
+                @click="switchProvider('s3')"
                 class="py-1 px-2.5 rounded-xs transition-all cursor-pointer font-medium"
                 :class="storageProviderType === 's3' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)]' : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
               >

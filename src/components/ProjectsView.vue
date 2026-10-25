@@ -66,10 +66,25 @@ const formError = ref<string | null>(null)
 const formTitle = ref('')
 const formSubtitle = ref('')
 const formCategory = ref('')
-const formStatus = ref('Active')
+const formStatus = ref('进行中')
 const formDescription = ref('')
 const formStory = ref('')
 const formGithubUrl = ref('')
+
+// 造物状态四端统一为中文四态(与后端 validProjectStatuses 白名单一致)。
+// normalize 兼容存量英文/历史表述的读取(后端已做一次性数据迁移,此处双保险)。
+const normalizeProjectStatus = (raw?: string | null): string => {
+  const s = (raw || '').trim()
+  if (!s) return '进行中'
+  switch (s) {
+    case '进行中': case '已完成': case '维护中': case '已搁置': return s
+    case 'Active': case 'WIP': return '进行中'
+    case 'Maintained': case '持续维护': return '维护中'
+    case 'Archived': case '已归档': return '已搁置'
+    default: return s === '已完成' ? s : '进行中'
+  }
+}
+const projectStatusLabel = (raw?: string | null): string => normalizeProjectStatus(raw)
 
 const openCreateModal = () => {
   if (!isAdmin.value) {
@@ -80,7 +95,7 @@ const openCreateModal = () => {
   formTitle.value = ''
   formSubtitle.value = ''
   formCategory.value = activeCategory.value === 'all' ? (projectCategories.value[0] || '开源项目') : activeCategory.value
-  formStatus.value = 'Active'
+  formStatus.value = '进行中'
   formDescription.value = ''
   formStory.value = ''
   formGithubUrl.value = ''
@@ -97,7 +112,7 @@ const openEditModal = (proj: Project) => {
   formTitle.value = proj.title || ''
   formSubtitle.value = proj.subtitle || ''
   formCategory.value = proj.category || projectCategories.value[0] || '开源项目'
-  formStatus.value = proj.status || 'Active'
+  formStatus.value = normalizeProjectStatus(proj.status)
   formDescription.value = proj.description || ''
   formStory.value = proj.story || ''
   formGithubUrl.value = proj.github_url || ''
@@ -123,7 +138,7 @@ const handleSave = async () => {
       title: formTitle.value.trim(),
       subtitle: formSubtitle.value.trim(),
       category: formCategory.value.trim() || '其他造物',
-      status: formStatus.value.trim() || 'Active',
+      status: formStatus.value.trim() || '进行中',
       description: formDescription.value.trim(),
       story: formStory.value.trim(),
       github_url: formGithubUrl.value.trim(),
@@ -294,7 +309,7 @@ const isGitHubUrl = (url?: string) => {
 
           <div class="flex items-center gap-3">
             <span class="border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs text-[11px] bg-[var(--bg-archive)] font-mono-archive">
-              {{ proj.status === 'Archived' ? '已封存' : proj.status === 'Maintained' ? '长期维护' : '进行中' }}
+              {{ projectStatusLabel(proj.status) }}
             </span>
             <template v-if="isAdmin">
               <button
@@ -473,9 +488,10 @@ const isGitHubUrl = (url?: string) => {
                 v-model="formStatus"
                 size="sm"
                 :options="[
-                  { value: 'Active', label: '进行中' },
-                  { value: 'Maintained', label: '长期维护' },
-                  { value: 'Archived', label: '已封存' },
+                  { value: '进行中', label: '进行中' },
+                  { value: '已完成', label: '已完成' },
+                  { value: '维护中', label: '维护中' },
+                  { value: '已搁置', label: '已搁置' },
                 ]"
               />
             </div>

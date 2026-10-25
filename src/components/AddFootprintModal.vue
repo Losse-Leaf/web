@@ -118,6 +118,11 @@ const handleSubmit = async () => {
     errorMsg.value = '请选择到访日期'
     return
   }
+  // 足迹是既成事实的记录：到访日期不得晚于今天（北京时间，字典序即时间序）
+  if (visitedAt.value > todayStr) {
+    errorMsg.value = '到访日期不能晚于今天'
+    return
+  }
   // 返程不得早于到访（YYYY-MM-DD 字典序即时间序），否则产生负跨度旅程
   if (departedAt.value && visitedAt.value && departedAt.value < visitedAt.value) {
     errorMsg.value = '返程日期不能早于到访日期'

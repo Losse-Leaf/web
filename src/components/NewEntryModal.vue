@@ -132,7 +132,7 @@ const restoreDraftFromStorage = (): boolean => {
     if (parsed.city_name) {
       selectedCityName.value = parsed.city_name
     }
-    if (parsed.projectId !== undefined && !props.initialProjectId) {
+    if (parsed.projectId !== undefined && selectedKind.value === 'project' && !props.initialProjectId) {
       selectedProjectId.value = parsed.projectId
     }
     hasRestoredDraft.value = true
@@ -180,7 +180,7 @@ const projectMode = ref<'new' | 'entry'>('new')
 const projTitle = ref('')
 const projSubtitle = ref('')
 const projCategory = ref('开源项目')
-const projStatus = ref('Active')
+const projStatus = ref('进行中')
 const projDescription = ref('')
 const projStory = ref('')
 const projGithubUrl = ref('')
@@ -204,21 +204,14 @@ const gearSpec = ref('')
 // 心愿单、旅程足迹与分期付款支持
 const availableWishes = ref<Wish[]>([])
 const availableFootprints = ref<Footprint[]>([])
+// 信贷渠道唯一事实源是后端渠道行（内置 huabei/baitiao 已在 DB 种子化且不可删）：
+// 不再保留前端兜底字典 —— 那会在用户修改渠道还款日后继续报旧值，形成第二事实源。
+// 列表为空（请求失败/未认证）时禁用分期开关并提示；印鉴认证成功后会重拉列表。
 const creditChannels = ref<CreditChannel[]>([])
 const selectedWishId = ref<number | null>(null)
 const isInstallment = ref(false)
 const installmentChannel = ref('huabei')
 const installmentMonths = ref(12)
-const customRepaymentDay = ref(15)
-
-const defaultCreditChannels: CreditChannel[] = [
-  { code: 'huabei', name: '花呗', repayment_day: 10 },
-  { code: 'baitiao', name: '京东白条', repayment_day: 20 },
-]
-
-const displayCreditChannels = computed<CreditChannel[]>(() => {
-  return creditChannels.value.length > 0 ? creditChannels.value : defaultCreditChannels
-})
 
 const currentTxCategories = computed(() => {
   return txType.value === 'income' ? incomeCategories.value : expenseCategories.value
@@ -229,6 +222,12 @@ watch(txType, (newType) => {
     txCategory.value = incomeCategories.value[0] || '工资收入'
   } else if (newType === 'expense' && !expenseCategories.value.includes(txCategory.value)) {
     txCategory.value = expenseCategories.value[0] || '餐饮'
+  }
+  // 心愿关联与旅程足迹仅支出语义：切到收入时清空，
+  // 避免被隐藏的选择器残留值随提交载荷写进一笔收入账
+  if (newType === 'income') {
+    selectedWishId.value = null
+    selectedFootprintId.value = null
   }
 })
 
@@ -331,10 +330,7 @@ const loadCreditChannelsList = async () => {
     const list = await fetchCreditChannels()
     if (Array.isArray(list) && list.length > 0) {
       creditChannels.value = list
-      if (
-        installmentChannel.value !== 'custom' &&
-        !list.some((c) => c.code === installmentChannel.value)
-      ) {
+      if (!list.some((c) => c.code === installmentChannel.value)) {
         installmentChannel.value = list[0].code
       }
     }
@@ -357,9 +353,13 @@ watch(
         selectedKind.value = 'project'
         projectMode.value = 'entry'
         selectedProjectId.value = initProjId
-      } else if (props.projects && props.projects.length > 0) {
+      } else if (props.projects && props.projects.length > 0 && selectedKind.value === 'project') {
+        // 项目预选仅服务于造物分支：日常/游历等分支不得静默携带 project_id
         projectMode.value = 'entry'
         selectedProjectId.value = props.projects[0].id
+      } else if (props.projects && props.projects.length > 0) {
+        projectMode.value = 'entry'
+        selectedProjectId.value = null
       } else {
         projectMode.value = 'new'
         selectedProjectId.value = null
@@ -395,26 +395,51 @@ const onWishSelected = () => {
   }
 }
 
+// 心愿关联与旅程足迹互斥：一笔账只允许一条归册路径，
+// 选其一时清空另一个（后端 CreateTransaction 对两键照单全收，无互斥校验）
+watch(selectedWishId, (val) => {
+  if (val && selectedFootprintId.value) {
+    selectedFootprintId.value = null
+  }
+})
+
+watch(selectedFootprintId, (val) => {
+  if (val && selectedWishId.value) {
+    selectedWishId.value = null
+  }
+})
+
 const calculatedMonthlyPay = computed(() => {
   const amtFloat = parseFloat(txAmount.value)
   if (isNaN(amtFloat) || amtFloat <= 0) return '0.00'
-  return (amtFloat / (installmentMonths.value || 1)).toFixed(2)
+  // 与提交口径一致：按分整除 floor（DEC-02 口径 A，尾差落在最后一期）
+  const cents = Math.floor((amtFloat * 100) / (installmentMonths.value || 1))
+  return (cents / 100).toFixed(2)
 })
 
+// 还款日单源化：一律派生自所选渠道行（custom 伪渠道已移除，后端同步强制按渠道派生）
 const effectiveRepaymentDay = computed(() => {
-  if (installmentChannel.value === 'custom') {
-    return customRepaymentDay.value || 15
-  }
-  const matched = displayCreditChannels.value.find((c) => c.code === installmentChannel.value)
-  if (matched) {
-    return matched.repayment_day
-  }
-  if (installmentChannel.value === 'huabei') return 10
-  if (installmentChannel.value === 'baitiao') return 20
-  return customRepaymentDay.value || 15
+  const matched = creditChannels.value.find((c) => c.code === installmentChannel.value)
+  return matched && matched.repayment_day > 0 ? matched.repayment_day : 10
 })
 
 const selectKind = (k: EntryKind) => {
+  if (selectedKind.value === k) return
+  // 分支切换即清理不归属新分支的关联 id，防止上一分支的选择静默泄漏进提交载荷
+  if (k !== 'transaction') {
+    selectedWishId.value = null
+  }
+  if (k !== 'travel' && k !== 'transaction') {
+    selectedFootprintId.value = null
+  }
+  if (k === 'project') {
+    projectMode.value = props.projects && props.projects.length > 0 ? 'entry' : 'new'
+    if (!selectedProjectId.value && props.projects && props.projects.length > 0) {
+      selectedProjectId.value = props.projects[0].id
+    }
+  } else if (selectedKind.value === 'project' && !props.initialProjectId) {
+    selectedProjectId.value = null
+  }
   selectedKind.value = k
   errorMsg.value = null
 }
@@ -448,9 +473,12 @@ const resetForm = () => {
     selectedCityName.value = ''
   }
   occurredAt.value = getBeijingDateTimeString()
-  selectedProjectId.value = props.initialProjectId || (props.projects?.[0]?.id ?? null)
   selectedFootprintId.value = null
   projectMode.value = props.initialProjectId || (props.projects && props.projects.length > 0) ? 'entry' : 'new'
+  // 项目预选仅造物分支生效，避免日常/游历等分支静默携带 project_id
+  selectedProjectId.value =
+    props.initialProjectId ||
+    (selectedKind.value === 'project' && props.projects?.length ? props.projects[0].id : null)
   attachmentIds.value = []
   txAmount.value = ''
   txType.value = 'expense'
@@ -462,13 +490,12 @@ const resetForm = () => {
   gearSpec.value = ''
   selectedWishId.value = null
   isInstallment.value = false
-  installmentChannel.value = displayCreditChannels.value[0]?.code || 'huabei'
+  installmentChannel.value = creditChannels.value[0]?.code || 'huabei'
   installmentMonths.value = 12
-  customRepaymentDay.value = 15
   projTitle.value = ''
   projSubtitle.value = ''
   projCategory.value = projectCategories.value[0] || '开源项目'
-  projStatus.value = 'Active'
+  projStatus.value = '进行中'
   projDescription.value = ''
   projStory.value = ''
   projGithubUrl.value = ''
@@ -508,6 +535,9 @@ const handleSubmit = async () => {
   // 若当前尚未登录主理人，呼出印鉴校验弹窗，校验成功后自动继续发布
   if (!Boolean(getAdminToken())) {
     emit('requestAuth', () => {
+      // 认证成功后补拉信贷渠道：此前未登录时渠道列表为空，分期开关是被禁用的，
+      // 不重拉的话用户必须关掉弹窗重开才能开启分期
+      loadCreditChannelsList()
       handleSubmit()
     })
     return
@@ -532,7 +562,7 @@ const handleSubmit = async () => {
       ? Math.floor(amountInCents / (installmentMonths.value || 1))
       : undefined
 
-    const matchedChannel = displayCreditChannels.value.find(
+    const matchedChannel = creditChannels.value.find(
       (c) => c.code === installmentChannel.value
     )
     // 渠道名取自后端渠道字典，前端不再硬编码渠道显示名 (FE-20)
@@ -553,11 +583,9 @@ const handleSubmit = async () => {
         category: txCategory.value,
         title: title.value.trim() || txCategory.value,
         note: noteText,
-        payment_method: isInstallment.value
-          ? channelLabel
-            ? `${channelLabel} (分期)`
-            : txPaymentMethod.value
-          : txPaymentMethod.value,
+        // 分期账目的支付方式由所选信贷渠道承载（installment_channel_code 单源），
+        // 不再往 payment_method 写「{渠道} (分期)」合成文本；用户显式选择的支付渠道仅在非分期时生效
+        payment_method: isInstallment.value ? undefined : txPaymentMethod.value,
         occurred_at: getBeijingISOString(occurredAt.value),
         wish_id: selectedWishId.value || undefined,
         footprint_id: selectedFootprintId.value || undefined,
@@ -580,7 +608,7 @@ const handleSubmit = async () => {
           txType.value === 'expense' && syncToGear.value ? gearCategory.value : undefined,
         gear_spec:
           txType.value === 'expense' && syncToGear.value
-            ? gearSpec.value.trim() || txNote.value.trim() || undefined
+            ? gearSpec.value.trim() || undefined
             : undefined,
       })
 
@@ -667,7 +695,7 @@ const handleSubmit = async () => {
           title: projTitle.value.trim(),
           subtitle: projSubtitle.value.trim(),
           category: projCategory.value.trim() || '开源项目',
-          status: projStatus.value || 'Active',
+          status: projStatus.value || '进行中',
           description: projDescription.value.trim(),
           story: projStory.value.trim(),
           github_url: projGithubUrl.value.trim(),
@@ -769,9 +797,10 @@ const handleSubmit = async () => {
       location: finalLocation,
       city_code: finalCityCode,
       city_name: finalCityName,
-      project_id: selectedProjectId.value,
-      wish_id: selectedWishId.value,
-      footprint_id: selectedFootprintId.value || undefined,
+      // 关联归属按分支过滤：日常不携带任何 project/wish/footprint 归属，
+      // 游历仅携带显式选择的旅程足迹 —— 防止其它分支的残留状态静默泄漏进提交载荷
+      footprint_id:
+        selectedKind.value === 'travel' ? selectedFootprintId.value || undefined : undefined,
       attachment_ids: attachmentIds.value,
     })
 
@@ -958,7 +987,11 @@ const handleSubmit = async () => {
               <PaperSelect
                 v-model="txPaymentMethod"
                 :options="paymentMethods.map((m) => ({ value: m, label: m }))"
+                :disabled="isInstallment"
               />
+              <p v-if="isInstallment" class="mt-1 text-[10px] font-mono-archive text-[var(--ink-muted)]">
+                分期账目由所选信贷渠道代扣，支付方式随分期渠道生效，不再单独记录
+              </p>
             </div>
           </div>
 
@@ -980,14 +1013,15 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          <!-- 关联旅程足迹 (支持一次旅程归集多笔账单) -->
-          <div v-if="availableFootprints.length > 0" class="space-y-1.5">
+          <!-- 关联旅程足迹 (支持一次旅程归集多笔账单；与心愿关联互斥，仅支出可见) -->
+          <div v-if="txType === 'expense' && availableFootprints.length > 0" class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               关联旅程足迹
             </label>
             <PaperSelect
               v-model="selectedFootprintId"
               @change="onFootprintSelected"
+              :disabled="!!selectedWishId"
               :options="[
                 { value: null, label: '-- 自动匹配同城近期旅程 / 不指定 --' },
                 ...availableFootprints.map((fp) => ({
@@ -996,6 +1030,9 @@ const handleSubmit = async () => {
                 })),
               ]"
             />
+            <p v-if="selectedWishId" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+              已关联心愿（二者互斥）：先取消心愿关联即可选择旅程足迹
+            </p>
           </div>
 
           <!-- 联动心愿单 -->
@@ -1004,6 +1041,7 @@ const handleSubmit = async () => {
             <PaperSelect
               v-model="selectedWishId"
               @change="onWishSelected"
+              :disabled="!!selectedFootprintId"
               :options="[
                 { value: null, label: '-- 不关联心愿 --' },
                 ...availableWishes.map((w) => ({
@@ -1012,36 +1050,43 @@ const handleSubmit = async () => {
                 })),
               ]"
             />
+            <p v-if="selectedFootprintId" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+              已关联旅程足迹（二者互斥）：先取消足迹关联即可选择心愿
+            </p>
           </div>
 
-          <!-- 分期付款支持 -->
+          <!-- 分期付款支持（渠道唯一事实源为后端渠道行；列表为空时禁用分期并对齐 Android 提示） -->
           <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5">
             <div class="flex items-center gap-2">
               <input
                 id="isInstallmentCheckbox"
                 v-model="isInstallment"
                 type="checkbox"
-                class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
+                :disabled="creditChannels.length === 0"
+                class="rounded-xs cursor-pointer accent-[var(--ink-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
               />
-              <label for="isInstallmentCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none">
-                分期付款 (花呗 / 京东白条 / 信用卡分期)
+              <label for="isInstallmentCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none" :class="creditChannels.length === 0 ? 'opacity-40' : ''">
+                分期付款 (花呗 / 京东白条 / 信用卡等信贷渠道)
               </label>
             </div>
 
-            <div v-if="isInstallment" class="space-y-3 pt-1 text-xs font-mono-archive">
+            <p v-if="creditChannels.length === 0" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
+              请先在信贷渠道管理添加分期渠道
+            </p>
+
+            <div v-if="isInstallment && creditChannels.length > 0" class="space-y-3 pt-1 text-xs font-mono-archive">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
                   <PaperSelect
                     v-model="installmentChannel"
                     size="sm"
-                    :options="[
-                      ...displayCreditChannels.map((ch) => ({
+                    :options="
+                      creditChannels.map((ch) => ({
                         value: ch.code,
                         label: `${ch.name} (每月 ${ch.repayment_day} 日还款)`,
-                      })),
-                      { value: 'custom', label: '信用卡 / 自定义分期' },
-                    ]"
+                      }))
+                    "
                   />
                 </div>
                 <div>
@@ -1061,19 +1106,8 @@ const handleSubmit = async () => {
                 </div>
               </div>
 
-              <div v-if="installmentChannel === 'custom'" class="space-y-1">
-                <label class="block text-[var(--ink-muted)]">每月独立还款日 (1~31)</label>
-                <input
-                  v-model.number="customRepaymentDay"
-                  type="number"
-                  min="1"
-                  max="31"
-                  class="w-32 px-2 py-1 text-xs border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent"
-                />
-              </div>
-
               <div class="p-2 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[11px] text-[var(--ink-secondary)] flex items-center justify-between">
-                <span>每期月供测算：<strong class="text-[var(--ink-primary)]">¥{{ calculatedMonthlyPay }}</strong> / 期</span>
+                <span>每期月供测算（整除口径，末期含尾差）：<strong class="text-[var(--ink-primary)]">¥{{ calculatedMonthlyPay }}</strong> / 期</span>
                 <span>绑定还款日：<strong>每月 {{ effectiveRepaymentDay }} 日</strong></span>
               </div>
             </div>
@@ -1159,7 +1193,7 @@ const handleSubmit = async () => {
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">选择造物项目 *</label>
               <PaperSelect
                 v-model="selectedProjectId"
-                :options="projects.map((p) => ({ value: p.id, label: `${p.title} (${p.status || 'Active'})` }))"
+                :options="projects.map((p) => ({ value: p.id, label: `${p.title} (${p.status || '进行中'})` }))"
               />
             </div>
 
@@ -1240,10 +1274,10 @@ const handleSubmit = async () => {
                 <PaperSelect
                   v-model="projStatus"
                   :options="[
-                    { value: 'Active', label: '活跃' },
-                    { value: 'Maintained', label: '维护' },
-                    { value: 'WIP', label: '构思试验' },
-                    { value: 'Archived', label: '归档' },
+                    { value: '进行中', label: '进行中' },
+                    { value: '已完成', label: '已完成' },
+                    { value: '维护中', label: '维护中' },
+                    { value: '已搁置', label: '已搁置' }
                   ]"
                 />
               </div>
