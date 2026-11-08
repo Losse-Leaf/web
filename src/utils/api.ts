@@ -873,12 +873,22 @@ export async function createTransaction(data: {
 
 // 3.1 Wishes (心愿单，公开只读与联动)
 export async function fetchWishes(params?: { kind?: string; status?: string }): Promise<Wish[]> {
-  const query = new URLSearchParams()
-  if (params?.kind) query.set('kind', params.kind)
-  if (params?.status) query.set('status', params.status)
-  const qs = query.toString()
-  const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes${qs ? '?' + qs : ''}`)
-  return Array.isArray(res) ? res : (res?.wishes || [])
+  const pageSize = 100
+  let page = 1
+  const all: Wish[] = []
+  while (page <= 50) {
+    const query = new URLSearchParams()
+    if (params?.kind) query.set('kind', params.kind)
+    if (params?.status) query.set('status', params.status)
+    query.set('page', String(page))
+    query.set('page_size', String(pageSize))
+    const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes?${query.toString()}`)
+    const batch = Array.isArray(res) ? res : (res?.wishes || [])
+    all.push(...batch)
+    if (batch.length < pageSize) break
+    page++
+  }
+  return all
 }
 
 export async function createWish(data: {
@@ -1002,7 +1012,7 @@ export async function deleteTransaction(id: number): Promise<boolean> {
 
 // 4. Projects
 export async function fetchProjects(): Promise<Project[]> {
-  return request<Project[]>(`${API_BASE}/projects`)
+  return request<Project[]>(`${API_BASE}/projects?limit=0`)
 }
 
 export async function createProject(data: {
