@@ -77,12 +77,13 @@ export function filterEntriesBySearch(entriesList: LifeEntry[], query: string): 
   })
 }
 
+let entriesFetchSeq = 0
+// 上一轮成功拉取的「按页快照」。第 N 页命中 304 时直接复用这一页，
+// 因此第 1 页 304 不会再让整次刷新提前 return（WEB-7）。
+let pageCache: LifeEntry[][] = []
+let entriesAbort: AbortController | null = null
+
 export function useArchive() {
-  let entriesFetchSeq = 0
-  // 上一轮成功拉取的「按页快照」。第 N 页命中 304 时直接复用这一页，
-  // 因此第 1 页 304 不会再让整次刷新提前 return（WEB-7）。
-  let pageCache: LifeEntry[][] = []
-  let entriesAbort: AbortController | null = null
 
   const seedPageCache = () => {
     if (pageCache.length > 0) return

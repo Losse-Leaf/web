@@ -870,11 +870,11 @@ const spectrumItems = computed(() => {
             </button>
           </div>
 
-          <div v-if="!isEditingLiquidBalance" class="font-serif-editorial text-2xl sm:text-3xl font-medium tracking-tight" :class="liquidBalanceDisplay >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
+          <div v-if="!isEditingLiquidBalance" class="min-h-[36px] flex items-center font-serif-editorial text-2xl sm:text-3xl font-medium tracking-tight tabular-nums" :class="liquidBalanceDisplay >= 0 ? 'text-[var(--ink-primary)]' : 'text-red-700'">
             {{ liquidBalanceDisplay < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(liquidBalanceDisplay)) }}
           </div>
 
-          <div v-else @click.stop class="flex items-center gap-1.5 pt-0.5 font-mono-archive">
+          <div v-else @click.stop class="min-h-[36px] flex items-center gap-1.5 font-mono-archive">
             <span class="text-xs text-[var(--ink-muted)]">¥</span>
             <input
               v-model="liquidBalanceInput"

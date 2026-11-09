@@ -361,9 +361,10 @@ onBeforeUnmount(() => {
       </div>
 
       <span
-        v-if="clearable && modelValue"
-        @click.stop="clearValue"
-        class="p-0.5 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] rounded-xs transition-colors"
+        v-if="clearable"
+        @click.stop="modelValue ? clearValue($event) : undefined"
+        class="p-0.5 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] rounded-xs transition-opacity shrink-0"
+        :class="modelValue ? 'opacity-100' : 'opacity-0 pointer-events-none'"
         title="清除日期"
       >
         <X class="w-3 h-3" />

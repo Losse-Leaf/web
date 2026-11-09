@@ -349,7 +349,7 @@ const getKindLabel = (type: string) => {
           <textarea
             v-model="editContent"
             rows="6"
-            class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+            class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
           ></textarea>
         </div>
 

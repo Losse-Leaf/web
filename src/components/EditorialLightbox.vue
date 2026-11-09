@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { X, Camera, MapPin, Calendar } from 'lucide-vue-next'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -91,16 +92,16 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 
+useBodyScrollLock(() => props.isOpen)
+
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
       window.addEventListener('keydown', handleKeydown)
-      document.body.style.overflow = 'hidden'
       reset()
     } else {
       window.removeEventListener('keydown', handleKeydown)
-      document.body.style.overflow = ''
     }
     // 捏合缩放/放大平移需要 preventDefault，touchmove 监听必须 non-passive：
     // Vue 的 .passive 修饰符会让 preventDefault 变成 no-op（浏览器忽略并告警），
@@ -117,7 +118,6 @@ watch(
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   imageStageRef.value?.removeEventListener('touchmove', onTouchMove)
-  document.body.style.overflow = ''
 })
 </script>
 

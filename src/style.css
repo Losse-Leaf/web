@@ -127,6 +127,7 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco,
       'Sarasa Mono SC', 'Noto Sans Mono CJK SC', monospace;
     letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
   }
 
   /* 模块化排版阶梯 (Modular Editorial Type Scale) */

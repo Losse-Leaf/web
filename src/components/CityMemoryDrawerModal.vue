@@ -73,21 +73,29 @@ const photos = computed<Attachment[]>(() => {
   return list
 })
 
+let drawerLoadSeq = 0
+
 const loadData = async () => {
+  const seq = ++drawerLoadSeq
   try {
     isLoading.value = true
     errorMsg.value = ''
     if (effectiveCityCode.value) {
       const data = await fetchCityMemoryDrawer(effectiveCityCode.value)
+      if (seq !== drawerLoadSeq) return
       drawerData.value = data
     } else if (effectiveAdcode.value) {
       const data = await fetchProvinceMemoryDrawer(effectiveAdcode.value)
+      if (seq !== drawerLoadSeq) return
       drawerData.value = data
     }
   } catch (err: any) {
+    if (seq !== drawerLoadSeq) return
     errorMsg.value = err.message || '加载回忆失败'
   } finally {
-    isLoading.value = false
+    if (seq === drawerLoadSeq) {
+      isLoading.value = false
+    }
   }
 }
 

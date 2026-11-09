@@ -171,16 +171,25 @@ onUnmounted(() => {
           placeholder="搜索……"
           class="w-full bg-transparent text-sm sm:text-base text-[var(--ink-primary)] placeholder-[var(--ink-muted)] focus:outline-hidden font-serif-editorial"
         />
+        <span class="w-4 h-4 shrink-0 flex items-center justify-center">
+          <Loader2
+            v-if="isSearchingRemote"
+            class="w-3.5 h-3.5 animate-spin text-[var(--accent-warm)]"
+            title="正在检索全量历史归档..."
+          />
+        </span>
         <button
-          v-if="query"
+          type="button"
+          :disabled="!query"
           @click="clearSearch"
-          class="text-xs text-[var(--ink-muted)] hover:text-[var(--ink-primary)] px-1.5 py-0.5 border border-[var(--border-subtle)] rounded-xs cursor-pointer"
+          class="text-xs text-[var(--ink-muted)] hover:text-[var(--ink-primary)] px-1.5 py-0.5 border border-[var(--border-subtle)] rounded-xs cursor-pointer shrink-0 transition-opacity"
+          :class="query ? 'opacity-100' : 'opacity-0 pointer-events-none'"
         >
           清空
         </button>
         <button
           @click="emit('close')"
-          class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+          class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer shrink-0"
         >
           <X class="w-5 h-5" />
         </button>
@@ -196,15 +205,6 @@ onUnmounted(() => {
         <div v-else-if="!hasAnyResults && !isSearchingRemote" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)]">
           <p>没有找到匹配的生活碎片</p>
           <p class="text-[11px] opacity-70 pt-1">换个关键词试试，生活总有些未曾命名的瞬间</p>
-        </div>
-
-        <!-- 远端全库检索状态指示 -->
-        <div
-          v-if="isSearchingRemote"
-          class="flex items-center gap-2 text-[11px] font-mono-archive text-[var(--ink-muted)] px-2"
-        >
-          <Loader2 class="w-3.5 h-3.5 animate-spin text-[var(--accent-warm)]" />
-          <span>正在检索全量历史归档...</span>
         </div>
 
         <!-- 1. 生活记录匹配结果 -->

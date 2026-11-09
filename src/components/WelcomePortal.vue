@@ -366,11 +366,15 @@ watch(
                   </div>
 
                   <div
-                    v-if="claimError"
-                    class="p-2.5 rounded-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] flex items-start gap-2"
+                    class="min-h-[36px] flex items-center"
                   >
-                    <AlertCircle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span>{{ claimError }}</span>
+                    <div
+                      v-if="claimError"
+                      class="w-full p-2 rounded-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] flex items-start gap-2"
+                    >
+                      <AlertCircle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>{{ claimError }}</span>
+                    </div>
                   </div>
 
                   <button

@@ -511,7 +511,7 @@ const isGitHubUrl = (url?: string) => {
             <textarea
               v-model="formDescription"
               rows="2"
-              class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm"
+              class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm resize-none"
             ></textarea>
           </div>
 
@@ -520,7 +520,7 @@ const isGitHubUrl = (url?: string) => {
             <textarea
               v-model="formStory"
               rows="3"
-              class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm"
+              class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm resize-none"
             ></textarea>
           </div>
         </div>

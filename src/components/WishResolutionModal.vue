@@ -288,7 +288,7 @@ const handleSubmit = async () => {
             <ShieldCheck class="w-4 h-4 text-emerald-600" />
             <span class="font-medium">已为你省下 100% 预算</span>
           </div>
-          <span class="font-serif-editorial text-base font-semibold">
+          <span class="font-serif-editorial text-base font-semibold tabular-nums">
             ¥{{ savedBudgetYuan }}
           </span>
         </div>
@@ -330,18 +330,23 @@ const handleSubmit = async () => {
           />
         </div>
 
-        <!-- 4. 信贷分期选项 (当有支出时) -->
-        <div v-if="resolutionType !== 'relinquished' && parseFloat(actualCostYuan) > 0" class="p-3 bg-[var(--bg-subtle)]/50 border border-[var(--border-subtle)] rounded-xs space-y-3">
+        <!-- 4. 信贷分期选项 (常驻渲染，不因输入金额跳动下方布局) -->
+        <div
+          v-if="resolutionType !== 'relinquished'"
+          class="p-3 bg-[var(--bg-subtle)]/50 border border-[var(--border-subtle)] rounded-xs space-y-3 transition-opacity"
+          :class="!(parseFloat(actualCostYuan) > 0) ? 'opacity-50' : ''"
+        >
           <label class="flex items-center gap-2 cursor-pointer">
             <input
               v-model="isInstallment"
               type="checkbox"
-              class="rounded-xs text-[var(--ink-primary)]"
+              :disabled="!(parseFloat(actualCostYuan) > 0)"
+              class="rounded-xs text-[var(--ink-primary)] disabled:cursor-not-allowed"
             />
             <span class="font-medium text-[var(--ink-primary)]">使用信贷分期付款</span>
           </label>
 
-          <div v-if="isInstallment" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-subtle)]">
+          <div v-if="isInstallment && parseFloat(actualCostYuan) > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-subtle)]">
             <div>
               <label class="block text-[11px] text-[var(--ink-muted)] mb-1">分期渠道</label>
               <PaperSelect
@@ -415,7 +420,7 @@ const handleSubmit = async () => {
           <textarea
             v-model="entryContent"
             rows="2"
-            class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
+            class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed resize-none"
           ></textarea>
         </div>
 

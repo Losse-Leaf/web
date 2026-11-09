@@ -243,9 +243,10 @@ const handleSubmit = async () => {
             v-model="selectedCityCode"
             @select="handleCitySelect"
           />
-          <div v-if="selectedCityName" class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--accent-moss)]">
-            <MapPin class="w-3.5 h-3.5" />
-            <span>已选定城市：{{ selectedCityName }} ({{ selectedCityCode }})</span>
+          <div class="mt-1.5 min-h-[18px] flex items-center gap-1.5 text-[11px]" :class="selectedCityCode && selectedCityName ? 'text-[var(--accent-moss)]' : 'text-[var(--ink-muted)]'">
+            <MapPin class="w-3.5 h-3.5 shrink-0" />
+            <span v-if="selectedCityCode && selectedCityName">已选定城市：{{ selectedCityName }} ({{ selectedCityCode }})</span>
+            <span v-else>输入城市名或拼音检索标准行政区划</span>
           </div>
         </div>
 
@@ -281,7 +282,7 @@ const handleSubmit = async () => {
           <textarea
             v-model="note"
             rows="3"
-            class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed"
+            class="w-full px-3 py-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-serif-editorial leading-relaxed resize-none"
           ></textarea>
         </div>
 

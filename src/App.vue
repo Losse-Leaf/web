@@ -230,10 +230,13 @@ const isSearchOpen = ref(false)
 // 断网时用户只看到「旧数据」，却不知道已经离线）
 const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
 
+const handleOnline = () => { isOnline.value = true }
+const handleOffline = () => { isOnline.value = false }
+
 const setupOnlineListeners = () => {
   if (typeof window === 'undefined') return
-  window.addEventListener('online', () => { isOnline.value = true })
-  window.addEventListener('offline', () => { isOnline.value = false })
+  window.addEventListener('online', handleOnline)
+  window.addEventListener('offline', handleOffline)
 }
 
 const isPairingOpen = ref(false)
@@ -249,17 +252,21 @@ const isIOS = typeof navigator !== 'undefined' &&
   /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream
 const showInstallTip = ref(false)
 
+const handleBeforeInstallPrompt = (e: any) => {
+  e.preventDefault()
+  deferredInstallPrompt.value = e
+  showInstallTip.value = true
+}
+
+const handleAppInstalled = () => {
+  deferredInstallPrompt.value = null
+  showInstallTip.value = false
+}
+
 const setupInstallPrompt = () => {
   if (typeof window === 'undefined') return
-  window.addEventListener('beforeinstallprompt', (e: any) => {
-    e.preventDefault()
-    deferredInstallPrompt.value = e
-    showInstallTip.value = true
-  })
-  window.addEventListener('appinstalled', () => {
-    deferredInstallPrompt.value = null
-    showInstallTip.value = false
-  })
+  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+  window.addEventListener('appinstalled', handleAppInstalled)
 }
 
 const promptInstall = async () => {
@@ -659,15 +666,23 @@ onMounted(async () => {
   lastDataRefreshAt = Date.now()
   lastDataRefreshedAsAdmin = Boolean(getAdminToken())
 
-  window.addEventListener('looseleaf-profile-updated', ((e: CustomEvent) => {
-    if (e.detail) {
-      curatorProfile.value = { ...curatorProfile.value, ...e.detail }
-    }
-  }) as EventListener)
+  window.addEventListener('looseleaf-profile-updated', handleProfileUpdatedEvent)
 })
+
+const handleProfileUpdatedEvent = ((e: CustomEvent) => {
+  if (e.detail) {
+    curatorProfile.value = { ...curatorProfile.value, ...e.detail }
+  }
+}) as EventListener
 
 onUnmounted(() => {
   window.removeEventListener('looseleaf-auth-expired', handleAuthExpired)
+  window.removeEventListener('looseleaf-profile-updated', handleProfileUpdatedEvent)
+  window.removeEventListener('online', handleOnline)
+  window.removeEventListener('offline', handleOffline)
+  window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+  window.removeEventListener('appinstalled', handleAppInstalled)
+  window.removeEventListener('hashchange', handleHashChange)
 })
 
 // 认领成功页存活期间抑制「会话/entered 标记 → 自动进馆」：

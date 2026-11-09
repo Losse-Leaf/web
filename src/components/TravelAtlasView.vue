@@ -157,10 +157,13 @@ const loadAtlas = async () => {
       focusedCityCode.value = atlasRes.cities[0].city_code
     }
   } catch (err: any) {
+    if (seq !== atlasLoadSeq) return
     console.error('Failed to load footprints atlas:', err)
     loadError.value = err?.message || '山河印迹加载失败，请检查服务连接'
   } finally {
-    isLoading.value = false
+    if (seq === atlasLoadSeq) {
+      isLoading.value = false
+    }
   }
 }
 

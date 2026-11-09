@@ -47,7 +47,7 @@ const handleInput = () => {
     (c) => c.name === trimmed || c.name.replace(/市$/, '') === trimmed.replace(/市$/, '')
   )
   emit('update:modelValue', exact ? exact.code : '')
-  emit('select', { code: exact ? exact.code : '', name: exact ? exact.name : trimmed })
+  emit('select', { code: exact ? exact.code : '', name: exact ? exact.name : '' })
 }
 
 const handleBlur = () => {

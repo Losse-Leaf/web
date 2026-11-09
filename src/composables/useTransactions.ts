@@ -50,28 +50,43 @@ export const txToEntry = (tx: Transaction): LifeEntry => {
   }
 }
 
+let txFetchSeq = 0
+
+function sortTransactionsDesc(list: Transaction[]): Transaction[] {
+  return [...list].sort((a, b) => {
+    const cmp = (b.occurred_at || '').localeCompare(a.occurred_at || '')
+    return cmp !== 0 ? cmp : (b.id || 0) - (a.id || 0)
+  })
+}
+
 export function useTransactions() {
   const loadRemoteTransactions = async (params?: { year?: number; month?: number }) => {
+    const seq = ++txFetchSeq
     try {
       const data = await fetchTransactions(params)
+      if (seq !== txFetchSeq) return
       if (Array.isArray(data)) {
-        transactions.value = data
-        throttledSaveTransactions(data)
+        const sorted = sortTransactionsDesc(data)
+        transactions.value = sorted
+        throttledSaveTransactions(sorted)
       }
     } catch (err) {
+      if (seq !== txFetchSeq) return
       console.warn('Backend transactions unreachable, serving local cache:', err)
     }
   }
 
   const addTransaction = (tx: Transaction) => {
-    transactions.value = [tx, ...transactions.value.filter((t) => t.id !== tx.id)]
+    transactions.value = sortTransactionsDesc([tx, ...transactions.value.filter((t) => t.id !== tx.id)])
     throttledSaveTransactions(transactions.value)
   }
 
   const updateTransactionItem = (tx: Transaction) => {
     const idx = transactions.value.findIndex((t) => t.id === tx.id)
     if (idx !== -1) {
-      transactions.value[idx] = tx
+      const next = [...transactions.value]
+      next[idx] = tx
+      transactions.value = sortTransactionsDesc(next)
     }
     throttledSaveTransactions(transactions.value)
   }

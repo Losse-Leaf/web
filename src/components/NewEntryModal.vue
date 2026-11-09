@@ -372,10 +372,21 @@ watch(
   { immediate: true }
 )
 
+let draftSaveTimer: number | null = null
+const scheduleSaveDraft = () => {
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer)
+  }
+  draftSaveTimer = window.setTimeout(() => {
+    draftSaveTimer = null
+    saveDraftToStorage()
+  }, 250)
+}
+
 watch(
   [title, content, location, selectedCityCode, selectedCityName, selectedKind, selectedProjectId],
   () => {
-    saveDraftToStorage()
+    scheduleSaveDraft()
   }
 )
 
@@ -701,24 +712,30 @@ const handleSubmit = async () => {
           github_url: projGithubUrl.value.trim(),
         })
 
-        // 复用后端刚伴生创建的同项目记录并绑定附件与时间
-        const createdEntry = await createLifeEntry({
-          type: 'project',
-          title: projTitle.value.trim(),
-          content:
-            projDescription.value.trim() ||
-            projStory.value.trim() ||
-            `立项开启造物项目「${projTitle.value.trim()}」。`,
-          occurred_at: occurredAt.value,
-          project_id: createdProj.id,
-          attachment_ids: attachmentIds.value,
-        })
+        // 后端 CreateProject 已原子创建伴生手记；仅当用户同时上传了相册附件时，
+        // 才调用 createLifeEntry 命中后端 10s 伴生复用窗口以绑定附件，避免重复立项手记。
+        let createdEntry: LifeEntry | null = null
+        if (attachmentIds.value.length > 0) {
+          createdEntry = await createLifeEntry({
+            type: 'project',
+            title: projTitle.value.trim(),
+            content:
+              projDescription.value.trim() ||
+              projStory.value.trim() ||
+              `立项开启造物项目「${projTitle.value.trim()}」。`,
+            occurred_at: occurredAt.value,
+            project_id: createdProj.id,
+            attachment_ids: attachmentIds.value,
+          })
+        }
 
         audio.playShutter()
         imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
         emit('projectCreated', createdProj)
-        emit('entryCreated', createdEntry)
+        if (createdEntry) {
+          emit('entryCreated', createdEntry)
+        }
         forceClose()
       } catch (err: any) {
         if (!getAdminToken()) {
@@ -886,11 +903,6 @@ const handleSubmit = async () => {
 
       <!-- 统一发布表单 -->
       <form @submit.prevent="handleSubmit" class="space-y-5">
-        <!-- 错误提示 -->
-        <div v-if="errorMsg" class="p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
-          {{ errorMsg }}
-        </div>
-
         <!-- ==================== 分支 A：账目 (transaction) ==================== -->
         <template v-if="selectedKind === 'transaction'">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1212,7 +1224,7 @@ const handleSubmit = async () => {
                 v-model="content"
                 rows="5"
                 :placeholder="contentPlaceholder"
-                class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+                class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
               ></textarea>
             </div>
 
@@ -1297,7 +1309,7 @@ const handleSubmit = async () => {
               <textarea
                 v-model="projStory"
                 rows="3"
-                class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+                class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
               ></textarea>
             </div>
 
@@ -1400,7 +1412,7 @@ const handleSubmit = async () => {
               v-model="content"
               rows="4"
               :placeholder="contentPlaceholder"
-              class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+              class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
             ></textarea>
           </div>
 
@@ -1478,7 +1490,7 @@ const handleSubmit = async () => {
               v-model="content"
               rows="5"
               :placeholder="contentPlaceholder"
-              class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-y"
+              class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
             ></textarea>
           </div>
 
