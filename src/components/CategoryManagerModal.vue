@@ -82,6 +82,7 @@ const handleDelete = async (item: CategoryOption) => {
 <template>
   <div
     v-if="isCategoryManagerOpen"
+    role="dialog" aria-modal="true" aria-label="管理分类"
     class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="closeCategoryManager"
   >
@@ -156,7 +157,7 @@ const handleDelete = async (item: CategoryOption) => {
         <!-- 状态提示：常驻固定高度槽，三态切换不挤动布局 -->
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
           <div
-            class="w-full p-2.5 text-xs font-mono-archive rounded-xs border transition-opacity"
+            class="w-full p-2.5 text-xs font-mono-archive rounded-xs border transition-opacity truncate"
             :class="errorMsg ? 'bg-red-500/10 border-red-500/20 text-red-600 opacity-100' : successMsg ? 'bg-[var(--accent-moss)]/10 border-[var(--accent-moss)]/30 text-[var(--accent-moss)] opacity-100' : 'border-transparent opacity-0'"
           >
             {{ errorMsg || successMsg }}

@@ -51,6 +51,7 @@ onMounted(() => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog" aria-modal="true" aria-label="检查更新"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs transition-opacity duration-200"
     @click.self="emit('close')"
   >

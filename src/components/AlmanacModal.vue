@@ -90,6 +90,7 @@ const formatDate = (dateStr?: string) => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog" aria-modal="true" aria-label="年度黄历"
     class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[var(--ink-primary)]/50 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >

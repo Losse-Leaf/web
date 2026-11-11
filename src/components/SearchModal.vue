@@ -30,6 +30,7 @@ let debounceTimer: number | null = null
 let activeSearchReqId = 0
 
 watch(query, (newQ) => {
+  activeIndex.value = 0
   if (debounceTimer) clearTimeout(debounceTimer)
   const trimmed = newQ.trim()
   if (!trimmed) {
@@ -99,14 +100,61 @@ const hasAnyResults = computed(() => {
   )
 })
 
-const handleSelect = (entry: LifeEntry) => {
+// 键盘导航：按显示顺序拍平四组结果（生活印记 → 山川足迹 → 心愿清单 → 造物项目）
+type FlatResult =
+  | { kind: 'entry'; item: LifeEntry }
+  | { kind: 'footprint'; item: Footprint }
+  | { kind: 'wish'; item: Wish }
+  | { kind: 'project'; item: Project }
+
+const flatResults = computed<FlatResult[]>(() => [
+  ...results.value.map((item) => ({ kind: 'entry' as const, item })),
+  ...remoteFootprints.value.map((item) => ({ kind: 'footprint' as const, item })),
+  ...remoteWishes.value.map((item) => ({ kind: 'wish' as const, item })),
+  ...remoteProjects.value.map((item) => ({ kind: 'project' as const, item })),
+])
+
+// 各组在 flatResults 中的起始偏移，用于把组内局部 index 映射回全局 index
+const footprintOffset = computed(() => results.value.length)
+const wishOffset = computed(() => footprintOffset.value + remoteFootprints.value.length)
+const projectOffset = computed(() => wishOffset.value + remoteWishes.value.length)
+
+const activeIndex = ref(0)
+
+// 结果集变化时钳制越界的高亮位置；query 变化 / 清空时在下方 watch 与 clearSearch 中重置
+watch(flatResults, () => {
+  const count = flatResults.value.length
+  if (activeIndex.value >= count) {
+    activeIndex.value = count > 0 ? count - 1 : 0
+  }
+})
+
+watch(activeIndex, () => {
+  nextTick(() => {
+    document
+      .getElementById(`search-result-item-${activeIndex.value}`)
+      ?.scrollIntoView({ block: 'nearest' })
+  })
+})
+
+const handleSelect = (result: FlatResult) => {
   audio.playPaperFlip()
-  emit('selectEntry', entry)
+  if (result.kind === 'entry') {
+    emit('selectEntry', result.item)
+  } else if (result.kind === 'footprint') {
+    // 足迹视图不支持按城市聚焦定位，退化为仅切换到足迹页（hash 路由）
+    window.location.hash = 'atlas'
+  } else if (result.kind === 'wish') {
+    window.location.hash = 'wishes'
+  } else {
+    window.location.hash = 'projects'
+  }
   emit('close')
 }
 
 const clearSearch = () => {
   if (debounceTimer) clearTimeout(debounceTimer)
+  activeIndex.value = 0
   activeSearchReqId++
   query.value = ''
   debouncedQuery.value = ''
@@ -131,8 +179,23 @@ watch(
 )
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen) {
+  if (!props.isOpen) return
+  if (e.key === 'Escape') {
     emit('close')
+    return
+  }
+  const count = flatResults.value.length
+  if (count === 0) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    activeIndex.value = (activeIndex.value + 1) % count
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    activeIndex.value = (activeIndex.value - 1 + count) % count
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    const target = flatResults.value[activeIndex.value]
+    if (target) handleSelect(target)
   }
 }
 
@@ -149,8 +212,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
 
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => props.isOpen)
+// MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+useBodyScrollLock(() => props.isOpen)
 </script>
 
 <template>
@@ -219,10 +282,13 @@ onUnmounted(() => {
           </div>
           <div class="divide-y divide-[var(--border-subtle)]/60">
             <div
-              v-for="item in results"
+              v-for="(item, idx) in results"
+              :id="`search-result-item-${idx}`"
               :key="item.id"
-              @click="handleSelect(item)"
+              @click="handleSelect({ kind: 'entry', item })"
+              @mouseenter="activeIndex = idx"
               class="py-3 px-2 hover:bg-[var(--bg-subtle)]/80 rounded-xs cursor-pointer transition-colors group space-y-1.5"
+              :class="activeIndex === idx ? 'bg-[var(--bg-subtle)]/80' : ''"
             >
               <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
                 <span class="text-[var(--accent-warm)] uppercase tracking-wider text-[11px]">
@@ -260,9 +326,13 @@ onUnmounted(() => {
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2">
             <div
-              v-for="fp in remoteFootprints"
+              v-for="(fp, idx) in remoteFootprints"
+              :id="`search-result-item-${footprintOffset + idx}`"
               :key="fp.id"
-              class="p-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 space-y-1"
+              @click="handleSelect({ kind: 'footprint', item: fp })"
+              @mouseenter="activeIndex = footprintOffset + idx"
+              class="p-2.5 rounded-xs border border-[var(--border-subtle)] space-y-1 cursor-pointer hover:bg-[var(--bg-subtle)]/80 transition-colors"
+              :class="activeIndex === footprintOffset + idx ? 'bg-[var(--bg-subtle)]/80' : 'bg-[var(--bg-subtle)]/40'"
             >
               <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
                 <span>{{ fp.city_name }} · {{ fp.title || '旅程足迹' }}</span>
@@ -285,9 +355,13 @@ onUnmounted(() => {
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2">
             <div
-              v-for="w in remoteWishes"
+              v-for="(w, idx) in remoteWishes"
+              :id="`search-result-item-${wishOffset + idx}`"
               :key="w.id"
-              class="p-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 space-y-1"
+              @click="handleSelect({ kind: 'wish', item: w })"
+              @mouseenter="activeIndex = wishOffset + idx"
+              class="p-2.5 rounded-xs border border-[var(--border-subtle)] space-y-1 cursor-pointer hover:bg-[var(--bg-subtle)]/80 transition-colors"
+              :class="activeIndex === wishOffset + idx ? 'bg-[var(--bg-subtle)]/80' : 'bg-[var(--bg-subtle)]/40'"
             >
               <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
                 <span class="truncate">{{ w.title }}</span>
@@ -310,9 +384,13 @@ onUnmounted(() => {
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2">
             <div
-              v-for="proj in remoteProjects"
+              v-for="(proj, idx) in remoteProjects"
+              :id="`search-result-item-${projectOffset + idx}`"
               :key="proj.id"
-              class="p-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 space-y-1"
+              @click="handleSelect({ kind: 'project', item: proj })"
+              @mouseenter="activeIndex = projectOffset + idx"
+              class="p-2.5 rounded-xs border border-[var(--border-subtle)] space-y-1 cursor-pointer hover:bg-[var(--bg-subtle)]/80 transition-colors"
+              :class="activeIndex === projectOffset + idx ? 'bg-[var(--bg-subtle)]/80' : 'bg-[var(--bg-subtle)]/40'"
             >
               <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
                 <span class="truncate">{{ proj.title }}</span>
@@ -329,7 +407,7 @@ onUnmounted(() => {
       <!-- 底部快捷操作说明 -->
       <div class="px-4 py-2 border-t border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
         <span>已收录 {{ entries.length }} 条生活印记</span>
-        <span>ESC 关闭</span>
+        <span>↑↓ 选择 · ↵ 打开 · ESC 关闭</span>
       </div>
     </div>
   </div>

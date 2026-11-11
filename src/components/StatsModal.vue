@@ -20,6 +20,7 @@ const emit = defineEmits<{
 <template>
   <div
     v-if="isOpen"
+    role="dialog" aria-modal="true" aria-label="数据统计"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >

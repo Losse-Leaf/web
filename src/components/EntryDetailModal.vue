@@ -323,7 +323,7 @@ const getKindLabel = (type: string) => {
       <form v-if="isEditing" @submit.prevent="handleSaveEdit" class="space-y-6">
         <!-- 编辑错误：常驻固定高度槽，文案 v-if 切换，校验失败不下推表单 (UI 稳定性) -->
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
-          <div v-if="errorMsg" class="w-full p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
+          <div v-if="errorMsg" class="w-full p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200 truncate">
             {{ errorMsg }}
           </div>
         </div>

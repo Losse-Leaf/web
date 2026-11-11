@@ -607,7 +607,9 @@ const startEdit = (tx: Transaction) => {
   editType.value = tx.type
   editNote.value = tx.note || ''
   editPaymentMethod.value = tx.payment_method || ''
-  editOccurredAt.value = tx.occurred_at ? tx.occurred_at.slice(0, 16) : ''
+  editOccurredAt.value = tx.occurred_at
+    ? `${parseOccurredDate(tx.occurred_at).dateKey}T${parseOccurredDate(tx.occurred_at).time}`
+    : ''
   editCityCode.value = tx.city_code || ''
   editIsInstallment.value = Boolean(tx.is_installment)
   editInstallmentChannel.value = tx.installment_channel_code || 'huabei'

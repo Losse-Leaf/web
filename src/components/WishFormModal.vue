@@ -187,6 +187,7 @@ const handleSubmit = async () => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog" aria-modal="true" aria-label="编辑心愿"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--ink-primary)]/40 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="handleClose"
   >
@@ -216,7 +217,7 @@ const handleSubmit = async () => {
 
       <!-- 错误提示 -->
       <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
-        <div v-if="errorMsg" class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+        <div v-if="errorMsg" class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs truncate">
           {{ errorMsg }}
         </div>
       </div>
@@ -281,6 +282,7 @@ const handleSubmit = async () => {
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
             <CityPicker
               v-model="cityCode"
+              :disabled="kind !== 'travel'"
               @select="onCityPicked"
             />
           </div>

@@ -440,7 +440,7 @@ const isGitHubUrl = (url?: string) => {
         </div>
 
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
-          <div v-if="formError" class="w-full p-2.5 rounded-xs bg-red-500/10 border border-red-500/20 text-red-600 text-xs font-mono-archive flex items-center gap-2">
+          <div v-if="formError" class="w-full p-2.5 rounded-xs bg-red-500/10 border border-red-500/20 text-red-600 text-xs font-mono-archive flex items-center gap-2 truncate">
             <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
             <span>{{ formError }}</span>
           </div>

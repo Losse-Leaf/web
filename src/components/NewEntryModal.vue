@@ -228,6 +228,9 @@ watch(txType, (newType) => {
   if (newType === 'income') {
     selectedWishId.value = null
     selectedFootprintId.value = null
+    // 分期仅支出语义：切到收入时复位，避免 checkbox 被 disabled 但值残留，
+    // 提交时 note 拼入分期标签而 is_installment 又为 false 的口径矛盾
+    isInstallment.value = false
   }
 })
 
@@ -846,6 +849,7 @@ const handleSubmit = async () => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog" aria-modal="true" aria-label="记录生活档案"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="handleClose"
   >
@@ -1547,7 +1551,7 @@ const handleSubmit = async () => {
 
         <!-- 底部错误提示与操作按钮 -->
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
-          <div v-if="errorMsg" class="w-full p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
+          <div v-if="errorMsg" class="w-full p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200 truncate">
             {{ errorMsg }}
           </div>
         </div>

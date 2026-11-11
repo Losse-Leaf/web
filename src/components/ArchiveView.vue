@@ -37,9 +37,8 @@ const loadAllEntriesForYear = async (yr: string) => {
   if (hasLocalYear || fetchedYearEntries.value[yr]) return
 
   inFlightYears.add(yr)
-  // 同一年的多页必须共享一个 AbortSignal：
-  // fetchEntries 在不传 signal 时会按 scope 互相 abort（同一 scope = year:<yr>），
-  // 4 路并发会变成「后一页取消前一页」，结果全是 null，年份永远补不回来。
+  // 同一年的多页请求共享一个显式 AbortSignal（fetchEntries 仅透传 signal，
+  // 不再做 scope 级别的互相 abort）；切换年份时由这里先 abort 上一次补拉。
   yearAbort?.abort()
   const controller = new AbortController()
   yearAbort = controller

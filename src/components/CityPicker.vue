@@ -6,6 +6,7 @@ import { searchCities, findCityByCode, type CityOption } from '../utils/cities'
 const props = defineProps<{
   modelValue?: string
   placeholder?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +39,12 @@ const handleSelect = (city: CityOption) => {
   emit('update:modelValue', city.code)
   emit('select', { code: city.code, name: city.name })
   isOpen.value = false
+}
+
+// 禁用态（如心愿非旅程维度）不允许展开下拉：pointer-events 只挡鼠标，键盘 Tab 聚焦仍会触发 focus
+const handleFocus = () => {
+  if (props.disabled) return
+  isOpen.value = true
 }
 
 const handleInput = () => {
@@ -130,7 +137,8 @@ onBeforeUnmount(() => {
         v-model="keyword"
         type="text"
         :placeholder="placeholder || '输入城市名称或拼音进行检索...'"
-        @focus="isOpen = true"
+        :disabled="disabled"
+        @focus="handleFocus"
         @input="handleInput"
         @blur="handleBlur"
         class="w-full pl-8 pr-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive"

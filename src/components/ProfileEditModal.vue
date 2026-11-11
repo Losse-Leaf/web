@@ -397,6 +397,7 @@ onUnmounted(() => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog" aria-modal="true" aria-label="编辑主理人档案"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >
@@ -521,7 +522,7 @@ onUnmounted(() => {
 
               <!-- 头像上传反馈：常驻固定高度槽，避免下推右侧说明区 (UI 稳定性) -->
               <div class="min-h-[18px] flex items-center" role="alert" aria-live="polite">
-                <div v-if="avatarUploadError" class="text-xs font-mono-archive text-amber-600">
+                <div v-if="avatarUploadError" class="text-xs font-mono-archive text-amber-600 truncate">
                   {{ avatarUploadError }}
                 </div>
               </div>
@@ -630,7 +631,7 @@ onUnmounted(() => {
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
           <div
             v-if="gearErrorMsg"
-            class="w-full p-2.5 text-xs font-mono-archive text-red-600 bg-red-500/5 border border-red-600/20 rounded-xs"
+            class="w-full p-2.5 text-xs font-mono-archive text-red-600 bg-red-500/5 border border-red-600/20 rounded-xs truncate"
           >
             {{ gearErrorMsg }}
           </div>
@@ -870,7 +871,7 @@ onUnmounted(() => {
 
       <!-- 保存错误：常驻固定高度槽，避免下推底部控制栏 (UI 稳定性) -->
       <div class="min-h-[18px] flex items-center" role="alert" aria-live="polite">
-        <div v-if="saveError" class="text-xs font-mono-archive text-red-600">
+        <div v-if="saveError" class="text-xs font-mono-archive text-red-600 truncate">
           {{ saveError }}
         </div>
       </div>
