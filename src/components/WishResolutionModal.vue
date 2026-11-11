@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { X, Sparkles, Check, ShieldCheck } from 'lucide-vue-next'
 import { resolveWish, fetchCreditChannels, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
-import { getBeijingDateString, getBeijingISOString } from '../utils/format'
+import { getBeijingDateString, getBeijingISOString, parseOccurredDate } from '../utils/format'
 import type { Wish, CreditChannel } from '../types'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -144,7 +144,7 @@ const handleSubmit = async () => {
   }
   // 日期串按 UTC 零点解析会相当于北京时间 08:00 —— 凌晨选“今天”会被误判为未来。
   // 统一按北京自然日比较。
-  const selectedDate = fulfilledDate.value.slice(0, 10)
+  const selectedDate = parseOccurredDate(fulfilledDate.value).dateKey
   if (selectedDate > getBeijingDateString()) {
     errorMsg.value = '达成日期不能晚于今天（拒绝时间穿越）'
     return
@@ -155,6 +155,10 @@ const handleSubmit = async () => {
     const costVal = parseFloat(actualCostYuan.value)
     if (isNaN(costVal) || costVal < 0) {
       errorMsg.value = '请输入有效实际支出金额'
+      return
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(actualCostYuan.value.trim())) {
+      errorMsg.value = '金额最多保留两位小数'
       return
     }
     costCents = Math.round(costVal * 100)
@@ -238,8 +242,10 @@ const handleSubmit = async () => {
       </div>
 
       <!-- 错误提示 -->
-      <div v-if="errorMsg" class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
-        {{ errorMsg }}
+      <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+        <div v-if="errorMsg" class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+          {{ errorMsg }}
+        </div>
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-6 font-mono-archive text-xs">
@@ -281,8 +287,8 @@ const handleSubmit = async () => {
 
         <!-- 拔草释怀印记勋章 (路径三专属) -->
         <div
-          v-if="resolutionType === 'relinquished'"
-          class="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xs flex items-center justify-between text-emerald-800 dark:text-emerald-200 font-mono-archive"
+          class="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xs flex items-center justify-between text-emerald-800 dark:text-emerald-200 font-mono-archive transition-opacity"
+          :class="resolutionType === 'relinquished' ? '' : 'opacity-50 pointer-events-none'"
         >
           <div class="flex items-center gap-2">
             <ShieldCheck class="w-4 h-4 text-emerald-600" />
@@ -294,7 +300,7 @@ const handleSubmit = async () => {
         </div>
 
         <!-- 2. 金额与品名细节 (路径一与二) -->
-        <div v-if="resolutionType !== 'relinquished'" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 transition-opacity" :class="resolutionType === 'relinquished' ? 'opacity-50 pointer-events-none' : ''">
           <div>
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">
               {{ resolutionType === 'exact' ? '实际支出金额 (¥)' : '替代方案实付金额 (¥)' }} *
@@ -306,18 +312,20 @@ const handleSubmit = async () => {
                 type="number"
                 step="0.01"
                 required
-                class="w-full pl-6 pr-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive"
+                :disabled="resolutionType === 'relinquished'"
+                class="w-full pl-6 pr-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] font-mono-archive disabled:opacity-60"
               />
             </div>
           </div>
 
-          <div v-if="resolutionType === 'altered'">
+          <div class="transition-opacity" :class="resolutionType === 'altered' ? '' : 'opacity-50 pointer-events-none'">
             <label class="block text-[11px] text-[var(--ink-muted)] mb-1">最终购买实际品名 *</label>
             <input
               v-model="actualTitle"
               type="text"
               required
-              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
+              :disabled="resolutionType !== 'altered'"
+              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] disabled:opacity-60"
             />
           </div>
         </div>
@@ -438,8 +446,10 @@ const handleSubmit = async () => {
             :disabled="isSubmitting"
             class="px-5 py-1.5 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer font-serif-editorial inline-flex items-center gap-1.5"
           >
-            <Check class="w-3.5 h-3.5" />
-            <span>{{ isSubmitting ? '正在归册...' : '完成归册仪式' }}</span>
+            <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+              <Check class="w-3.5 h-3.5" />
+            </span>
+            <span class="min-w-[7em] text-center">{{ isSubmitting ? '正在归册...' : '完成归册仪式' }}</span>
           </button>
         </div>
       </form>

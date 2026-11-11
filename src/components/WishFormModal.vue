@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { X, Sparkles } from 'lucide-vue-next'
+import { X, Sparkles, Check } from 'lucide-vue-next'
 import { createWish, updateWish, getAdminToken } from '../utils/api'
-import { getBeijingDateString } from '../utils/format'
+import { getBeijingDateString, parseOccurredDate } from '../utils/format'
 import type { Wish, Attachment } from '../types'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -54,8 +54,8 @@ watch(
       cityName.value = w.city_name || ''
       cityCode.value = w.city_code || ''
       budgetYuan.value = w.budget > 0 ? (w.budget / 100).toFixed(2) : ''
-      targetDate.value = w.target_date ? w.target_date.slice(0, 10) : ''
-      plantedAt.value = w.planted_at ? w.planted_at.slice(0, 10) : getBeijingDateString()
+      targetDate.value = w.target_date ? parseOccurredDate(w.target_date).dateKey : ''
+      plantedAt.value = w.planted_at ? parseOccurredDate(w.planted_at).dateKey : getBeijingDateString()
       attachments.value = w.attachments ? [...w.attachments] : []
       attachmentIds.value = attachments.value.map((a) => a.id)
     } else {
@@ -99,6 +99,11 @@ const handleSubmit = async () => {
   const budgetValue = Number(budgetYuan.value)
   if (!Number.isFinite(budgetValue) || budgetValue < 0) {
     errorMsg.value = '请输入有效的非负预算金额'
+    return
+  }
+  const budgetRaw = String(budgetYuan.value).trim()
+  if (budgetRaw && !/^\d+(\.\d{1,2})?$/.test(budgetRaw)) {
+    errorMsg.value = '预算金额最多保留两位小数'
     return
   }
   const budgetCents = Math.round(budgetValue * 100)
@@ -210,8 +215,10 @@ const handleSubmit = async () => {
       </div>
 
       <!-- 错误提示 -->
-      <div v-if="errorMsg" class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
-        {{ errorMsg }}
+      <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+        <div v-if="errorMsg" class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+          {{ errorMsg }}
+        </div>
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-5 font-mono-archive text-xs">
@@ -257,23 +264,26 @@ const handleSubmit = async () => {
           />
         </div>
 
-        <!-- 好物专属：期望规格型号 -->
-        <div v-if="kind === 'item'">
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">规格型号</label>
-          <input
-            v-model="spec"
-            type="text"
-            class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
-          />
-        </div>
+        <!-- 维度专属字段：常驻同一 grid，切换维度不改变下方布局 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="transition-opacity" :class="kind === 'item' ? '' : 'opacity-50 pointer-events-none'">
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">规格型号</label>
+            <input
+              v-model="spec"
+              type="text"
+              :disabled="kind !== 'item'"
+              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] disabled:opacity-60"
+            />
+          </div>
 
-        <!-- 旅程专属：目标城市 (CityPicker 同时派生 city_code 与 city_name，锁定单源) -->
-        <div v-if="kind === 'travel'">
-          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
-          <CityPicker
-            v-model="cityCode"
-            @select="onCityPicked"
-          />
+          <!-- 旅程专属：目标城市 (CityPicker 同时派生 city_code 与 city_name，锁定单源) -->
+          <div class="transition-opacity" :class="kind === 'travel' ? '' : 'opacity-50 pointer-events-none'">
+            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
+            <CityPicker
+              v-model="cityCode"
+              @select="onCityPicked"
+            />
+          </div>
         </div>
 
         <!-- 预算与目标期 -->
@@ -342,9 +352,12 @@ const handleSubmit = async () => {
           <button
             type="submit"
             :disabled="isSubmitting"
-            class="px-5 py-1.5 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer font-serif-editorial"
+            class="px-5 py-1.5 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer font-serif-editorial inline-flex items-center gap-1.5"
           >
-            {{ isSubmitting ? '保存中...' : (editingWish ? '保存修改' : '确认许下心愿') }}
+            <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+              <Check v-if="!isSubmitting" class="w-3.5 h-3.5" />
+            </span>
+            <span class="min-w-[7em] text-center">{{ isSubmitting ? '保存中...' : (editingWish ? '保存修改' : '确认许下心愿') }}</span>
           </button>
         </div>
       </form>

@@ -11,7 +11,7 @@ import {
   Compass,
 } from 'lucide-vue-next'
 import { fetchWishes, deleteWish, getAdminToken } from '../utils/api'
-import { formatMoney } from '../utils/format'
+import { formatMoney, parseOccurredDate } from '../utils/format'
 import type { Wish } from '../types'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 
@@ -219,10 +219,13 @@ onMounted(() => {
       <div>
         <span class="text-[var(--ink-muted)] block text-[11px]">在愿向往 (进行中)</span>
         <div class="flex items-baseline gap-2 mt-1">
-          <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
+          <span class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium tabular-nums">
             {{ wantingWishes.length }} 项
           </span>
-          <span v-if="totalWantingBudget > 0" class="text-[11px] text-[var(--ink-muted)]">
+          <span
+            class="text-[11px] text-[var(--ink-muted)] tabular-nums transition-opacity"
+            :class="totalWantingBudget > 0 ? '' : 'opacity-0 pointer-events-none'"
+          >
             (预算 ¥{{ formatMoney(totalWantingBudget) }})
           </span>
         </div>
@@ -231,10 +234,13 @@ onMounted(() => {
       <div>
         <span class="text-[var(--ink-muted)] block text-[11px]">圆满达成 (已归册)</span>
         <div class="flex items-baseline gap-2 mt-1">
-          <span class="font-serif-editorial text-2xl text-[var(--accent-moss)] font-medium">
+          <span class="font-serif-editorial text-2xl text-[var(--accent-moss)] font-medium tabular-nums">
             {{ fulfilledWishes.length }} 项
           </span>
-          <span v-if="isAdmin && totalFulfilledActual > 0" class="text-[11px] text-[var(--ink-muted)]">
+          <span
+            class="text-[11px] text-[var(--ink-muted)] tabular-nums transition-opacity"
+            :class="isAdmin && totalFulfilledActual > 0 ? '' : 'opacity-0 pointer-events-none'"
+          >
             (投入 ¥{{ formatMoney(totalFulfilledActual) }})
           </span>
         </div>
@@ -243,10 +249,13 @@ onMounted(() => {
       <div>
         <span class="text-[var(--ink-muted)] block text-[11px]">理性拔草 (已释怀)</span>
         <div class="flex items-baseline gap-2 mt-1">
-          <span class="font-serif-editorial text-2xl text-emerald-700 dark:text-emerald-400 font-medium">
+          <span class="font-serif-editorial text-2xl text-emerald-700 dark:text-emerald-400 font-medium tabular-nums">
             {{ relinquishedWishes.length }} 项
           </span>
-          <span v-if="totalSavedBudget > 0" class="text-[11px] text-emerald-600">
+          <span
+            class="text-[11px] text-emerald-600 tabular-nums transition-opacity"
+            :class="totalSavedBudget > 0 ? '' : 'opacity-0 pointer-events-none'"
+          >
             (省下 ¥{{ formatMoney(totalSavedBudget) }})
           </span>
         </div>
@@ -322,14 +331,14 @@ onMounted(() => {
     </div>
 
     <!-- 列表展示区 -->
-    <div v-if="isLoading" class="text-xs font-mono-archive text-[var(--ink-muted)] py-16 text-center">
+    <div v-if="isLoading" class="min-h-[240px] flex items-center justify-center text-xs font-mono-archive text-[var(--ink-muted)]">
       正在翻阅心愿纸笺...
     </div>
 
     <!-- 错误状态 -->
     <div
       v-else-if="loadError"
-      class="py-16 text-center border border-dashed border-rose-500/40 rounded-xs space-y-3 font-mono-archive"
+      class="min-h-[240px] flex flex-col items-center justify-center text-center border border-dashed border-rose-500/40 rounded-xs space-y-3 font-mono-archive"
     >
       <p class="text-xs text-rose-600 dark:text-rose-400">{{ loadError }}</p>
       <button
@@ -343,16 +352,17 @@ onMounted(() => {
     <!-- 空状态 -->
     <div
       v-else-if="filteredWishes.length === 0"
-      class="py-16 text-center border border-dashed border-[var(--border-subtle)] rounded-xs space-y-3 font-mono-archive"
+      class="min-h-[240px] flex flex-col items-center justify-center text-center border border-dashed border-[var(--border-subtle)] rounded-xs space-y-3 font-mono-archive"
     >
       <Compass class="w-6 h-6 mx-auto text-[var(--ink-muted)]" />
       <p class="text-xs text-[var(--ink-muted)]">
         {{ selectedStatus === 'wanting' ? '当前没有在愿的心愿。' : '暂无对应分类的心愿记录。' }}
       </p>
       <button
-        v-if="selectedStatus === 'wanting'"
         @click="openCreateWish"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer"
+        :disabled="selectedStatus !== 'wanting'"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer transition-opacity"
+        :class="selectedStatus === 'wanting' ? '' : 'opacity-0 pointer-events-none'"
       >
         <Plus class="w-3.5 h-3.5" />
         <span>{{ isAdmin ? '写下第一个向往' : '以主理人身份写下第一个向往' }}</span>
@@ -429,7 +439,7 @@ onMounted(() => {
               圆满归册
             </span>
             <span v-if="w.fulfilled_at" class="text-[var(--ink-muted)]">
-              · {{ w.fulfilled_at.slice(0, 10) }}
+              · {{ parseOccurredDate(w.fulfilled_at).dateKey }}
             </span>
           </div>
 
@@ -442,14 +452,14 @@ onMounted(() => {
 
           <div v-else-if="w.target_date" class="pt-1 flex items-center gap-1 font-mono-archive text-[11px] text-[var(--ink-muted)]">
             <Calendar class="w-3 h-3" />
-            <span>愿景目标期: {{ w.target_date.slice(0, 10) }}</span>
+            <span>愿景目标期: {{ parseOccurredDate(w.target_date).dateKey }}</span>
           </div>
         </div>
 
         <!-- 底部操作按钮 -->
         <div class="pt-3 border-t border-[var(--border-subtle)]/60 flex items-center justify-between font-mono-archive text-[11px]">
           <span class="text-[11px] text-[var(--ink-muted)]">
-            {{ w.created_at ? w.created_at.slice(0, 10) : '' }} 许下
+            {{ w.created_at ? parseOccurredDate(w.created_at).dateKey : '' }} 许下
           </span>
 
           <div class="flex items-center gap-2">

@@ -4,7 +4,7 @@ import { entryMatchesCategory } from '../types'
 import { fetchEntries, resetEntriesETag } from '../utils/api'
 import { parseOccurredDate } from '../utils/format'
 
-const ENTRIES_CACHE_KEY = 'looseleaf_cached_entries'
+const ENTRIES_CACHE_KEY = 'looseleaf_cached_entries_v2'
 const PAGE_SIZE = 100
 const MAX_PAGES = 50
 // WEB-7：有界并发。4 路既能摊平 7 页的串行 RTT，又不会在移动网络下
@@ -77,11 +77,17 @@ export function filterEntriesBySearch(entriesList: LifeEntry[], query: string): 
   })
 }
 
-let entriesFetchSeq = 0
+// WEB 第2批：全量分页与单年补拉各用独立版本戳。若共用同一个 seq，
+// 单年刷新会把正在飞的全量分页判为「过期」并静默 return，时间流会缺数据。
+let entriesFullSeq = 0
+let entriesYearSeq = 0
 // 上一轮成功拉取的「按页快照」。第 N 页命中 304 时直接复用这一页，
 // 因此第 1 页 304 不会再让整次刷新提前 return（WEB-7）。
 let pageCache: LifeEntry[][] = []
-let entriesAbort: AbortController | null = null
+// WEB 第2批：全量分页与单年补拉各用独立 AbortController，互不 abort；
+// seq 仍为全局版本戳，仅用于丢弃过期响应。
+let entriesAbortFull: AbortController | null = null
+let entriesAbortYear: AbortController | null = null
 
 export function useArchive() {
 
@@ -126,10 +132,10 @@ export function useArchive() {
   //
   // WEB-7：每 4 页一批并发，结果按页序拼装；每页独立 ETag / 独立重试。
   const loadRemoteEntries = async () => {
-    const seq = ++entriesFetchSeq
-    entriesAbort?.abort()
+    const seq = ++entriesFullSeq
+    entriesAbortFull?.abort()
     const controller = new AbortController()
-    entriesAbort = controller
+    entriesAbortFull = controller
     seedPageCache()
 
     try {
@@ -167,7 +173,7 @@ export function useArchive() {
           }),
         )
 
-        if (controller.signal.aborted || seq !== entriesFetchSeq) return
+        if (controller.signal.aborted || seq !== entriesFullSeq) return
         if (results.some((r) => r.aborted || !Array.isArray(r.data))) {
           done = true
           break
@@ -200,7 +206,7 @@ export function useArchive() {
         page = batch[batch.length - 1] + 1
       }
 
-      if (seq !== entriesFetchSeq) return
+      if (seq !== entriesFullSeq) return
       // 全部 304：保持现有数组引用，跳过重渲染与磁盘写入。
       if (!anyFresh) return
 
@@ -221,10 +227,10 @@ export function useArchive() {
       new Set((Array.isArray(yearOrYears) ? yearOrYears : [yearOrYears]).filter(Boolean)),
     )
     if (years.length === 0) return
-    const seq = ++entriesFetchSeq
-    entriesAbort?.abort()
+    const seq = ++entriesYearSeq
+    entriesAbortYear?.abort()
     const controller = new AbortController()
-    entriesAbort = controller
+    entriesAbortYear = controller
     // 年份数据变了，全量列表的 ETag 也不能再信。
     resetEntriesETag()
 
@@ -241,7 +247,7 @@ export function useArchive() {
           const results = await Promise.all(
             batch.map((p) => fetchPageWithRetry(p, { year, signal: controller.signal })),
           )
-          if (controller.signal.aborted || seq !== entriesFetchSeq) return
+          if (controller.signal.aborted || seq !== entriesYearSeq) return
           for (const data of results) {
             if (!Array.isArray(data)) {
               // 年份请求不参与 ETag，null 只可能来自超时/中止。
@@ -258,7 +264,7 @@ export function useArchive() {
         }
       }
 
-      if (seq !== entriesFetchSeq) return
+      if (seq !== entriesYearSeq) return
       const others = entries.value.filter(
         (e) => !years.includes(parseOccurredDate(e.occurred_at).year),
       )
@@ -283,9 +289,13 @@ export function useArchive() {
   // 本地写之前先作废在途的全量刷新：否则启动/同步的旧响应回来时会整体
   // 覆盖 entries.value，把用户刚保存的增删改静默擦掉（App 已不再补一次全量重拉）。
   const cancelPendingFetch = () => {
-    entriesFetchSeq += 1
-    entriesAbort?.abort()
-    entriesAbort = null
+    // 本地写操作要同时作废两类在途刷新，避免旧响应擦掉刚保存的增删改。
+    entriesFullSeq += 1
+    entriesYearSeq += 1
+    entriesAbortFull?.abort()
+    entriesAbortYear?.abort()
+    entriesAbortFull = null
+    entriesAbortYear = null
   }
 
   // 乐观写入的插入位置：按 occurred_at 时间戳降序（新→旧，与全量刷新后的排序同构）。

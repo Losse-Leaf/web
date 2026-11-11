@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { X, ShieldAlert, ScanLine } from 'lucide-vue-next'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
@@ -11,13 +12,61 @@ const emit = defineEmits<{
 }>()
 
 useBodyScrollLock(() => props.isOpen)
+
+const dialogRef = ref<HTMLElement | null>(null)
+let previouslyFocused: HTMLElement | null = null
+
+const focusDialog = () => {
+  previouslyFocused = document.activeElement as HTMLElement | null
+  nextTick(() => dialogRef.value?.focus())
+}
+
+const restoreFocus = () => {
+  previouslyFocused?.focus?.()
+  previouslyFocused = null
+}
+
+const closeDialog = () => {
+  restoreFocus()
+  emit('close')
+}
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && props.isOpen) {
+    e.preventDefault()
+    closeDialog()
+  }
+}
+
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) focusDialog()
+    else restoreFocus()
+  }
+)
+
+onMounted(() => {
+  focusDialog()
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+  restoreFocus()
+})
 </script>
 
 <template>
   <div
     v-if="isOpen"
+    ref="dialogRef"
+    tabindex="-1"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="session-expired-title"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--ink-primary)]/40 backdrop-blur-xs animate-in fade-in duration-200"
-    @click.self="emit('close')"
+    @click.self="closeDialog"
   >
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-md rounded-xs shadow-2xl p-6 sm:p-7 space-y-5 text-left pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
@@ -28,7 +77,7 @@ useBodyScrollLock(() => props.isOpen)
             <ShieldAlert class="w-4 h-4" />
           </div>
           <div>
-            <h2 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
+            <h2 id="session-expired-title" class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
               主理人会话已失效
             </h2>
             <p class="font-serif-editorial text-[11px] text-[var(--ink-muted)]">
@@ -38,7 +87,8 @@ useBodyScrollLock(() => props.isOpen)
         </div>
         <button
           type="button"
-          @click="emit('close')"
+          aria-label="关闭"
+          @click="closeDialog"
           class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 cursor-pointer transition-colors"
         >
           <X class="w-4 h-4" />
@@ -60,7 +110,7 @@ useBodyScrollLock(() => props.isOpen)
       <div class="pt-1 flex items-center justify-end font-mono-archive text-xs">
         <button
           type="button"
-          @click="emit('close')"
+          @click="closeDialog"
           class="px-4 py-1.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 cursor-pointer font-medium transition-opacity"
         >
           知道了

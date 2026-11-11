@@ -7,7 +7,7 @@ import {
   Printer,
 } from 'lucide-vue-next'
 import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
-import { formatMoney, getBeijingYear } from '../utils/format'
+import { formatMoney, getBeijingYear, parseOccurredDate } from '../utils/format'
 import type { AnnualAlmanacSummary } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
@@ -80,7 +80,7 @@ const handlePrint = () => {
 // 格式化日期简写
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return ''
-  return dateStr.slice(0, 10).replace(/-/g, '.')
+  return parseOccurredDate(dateStr).dateKey.replace(/-/g, '.')
 }
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）

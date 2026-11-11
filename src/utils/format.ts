@@ -65,7 +65,7 @@ export function getBeijingISOString(dateStrOrDate?: string | Date): string {
     if (clean.length === 10) return `${clean}T12:00:00+08:00`
     if (clean.length === 16) return `${clean}:00+08:00`
     if (clean.length === 19) return `${clean}+08:00`
-    return clean
+    throw new Error(`无法识别的日期格式: ${clean}`)
   }
   const d = toBeijingDate(dateStrOrDate)
   const pad = (n: number) => String(n).padStart(2, '0')

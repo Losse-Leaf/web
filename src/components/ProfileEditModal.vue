@@ -217,6 +217,11 @@ const handleAddGear = async () => {
     gearErrorMsg.value = '请填写设备名称'
     return
   }
+  const priceRaw = newGearPrice.value.trim()
+  if (priceRaw && !/^\d+(\.\d{1,2})?$/.test(priceRaw)) {
+    gearErrorMsg.value = '金额最多保留两位小数'
+    return
+  }
   const priceFloat = parseFloat(newGearPrice.value)
   const priceCents = !isNaN(priceFloat) && priceFloat > 0 ? Math.round(priceFloat * 100) : undefined
   const purchaseDate = newGearPurchaseDate.value || getBeijingDateString()
@@ -302,6 +307,10 @@ const confirmSellGear = async () => {
   const soldFloat = parseFloat(sellingPriceInput.value)
   if (isNaN(soldFloat) || soldFloat <= 0) {
     sellingErrorMsg.value = '请输入大于 0 的转让回血金额'
+    return
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(String(sellingPriceInput.value).trim())) {
+    sellingErrorMsg.value = '金额最多保留两位小数'
     return
   }
 
@@ -510,8 +519,11 @@ onUnmounted(() => {
                 直接选择你的真实照片或拖入画框，保存后自动同步。
               </p>
 
-              <div v-if="avatarUploadError" class="text-xs font-mono-archive text-amber-600">
-                {{ avatarUploadError }}
+              <!-- 头像上传反馈：常驻固定高度槽，避免下推右侧说明区 (UI 稳定性) -->
+              <div class="min-h-[18px] flex items-center" role="alert" aria-live="polite">
+                <div v-if="avatarUploadError" class="text-xs font-mono-archive text-amber-600">
+                  {{ avatarUploadError }}
+                </div>
               </div>
             </div>
           </div>
@@ -614,19 +626,22 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- 错误提示条 -->
-        <div
-          v-if="gearErrorMsg"
-          class="p-2.5 text-xs font-mono-archive text-red-600 bg-red-500/5 border border-red-600/20 rounded-xs"
-        >
-          {{ gearErrorMsg }}
+        <!-- 错误提示条：常驻固定高度槽，文案 v-if 切换，避免下推添加抽屉与设备列表 (UI 稳定性) -->
+        <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+          <div
+            v-if="gearErrorMsg"
+            class="w-full p-2.5 text-xs font-mono-archive text-red-600 bg-red-500/5 border border-red-600/20 rounded-xs"
+          >
+            {{ gearErrorMsg }}
+          </div>
         </div>
 
-        <!-- 展开的添加设备小抽屉 -->
+        <!-- 添加设备小抽屉：常驻渲染 + 禁用态，展开/收起不增删 DOM、不推动下方设备列表与控制栏 (UI 稳定性) -->
         <div
-          v-if="showAddGear"
-          class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 space-y-3"
+          class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 transition-opacity"
+          :class="!showAddGear ? 'opacity-50 pointer-events-none' : ''"
         >
+          <fieldset :disabled="!showAddGear" class="m-0 p-0 border-0 min-w-0 space-y-3">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <div class="flex items-center justify-between mb-1">
@@ -738,6 +753,7 @@ onUnmounted(() => {
               {{ isAddingGear ? '正在录入...' : '确认添入列表' }}
             </button>
           </div>
+          </fieldset>
         </div>
 
         <!-- 设备列表渲染 -->
@@ -745,7 +761,7 @@ onUnmounted(() => {
           <div
             v-for="(item, idx) in (form.edc_gear || [])"
             :key="item.id || idx"
-            class="py-3 space-y-2 group"
+            class="py-3 space-y-2 group relative"
           >
             <div class="flex items-start justify-between gap-4">
               <div class="space-y-1">
@@ -795,10 +811,11 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- 内联出二手回血纸卡确认面板 (RC-54，彻底替代原生 prompt/alert) -->
+            <!-- 内联出二手回血纸卡确认面板 (RC-54)：absolute 浮层覆盖下方设备行，
+                 出现/关闭不推动后续设备行 (UI 稳定性) -->
             <div
               v-if="sellingGearIndex === idx"
-              class="p-3 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs space-y-2.5 font-mono-archive text-xs animate-in fade-in duration-150"
+              class="absolute top-full left-0 right-0 z-10 mt-1 p-3 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs space-y-2.5 font-mono-archive text-xs shadow-[0_10px_28px_rgba(0,0,0,0.14)] animate-in fade-in duration-150"
             >
               <div class="flex items-center justify-between pb-1 border-b border-[var(--border-subtle)]/60">
                 <span class="font-medium text-[var(--ink-primary)]">设备转让与出二手回血结算</span>
@@ -843,7 +860,7 @@ onUnmounted(() => {
                   :disabled="isSellingSubmitting"
                   class="px-3 py-1 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90 transition-opacity"
                 >
-                  {{ isSellingSubmitting ? '正在结算...' : '确认回血并生成收入账单' }}
+                  <span class="min-w-[7em] text-center">{{ isSellingSubmitting ? '正在结算...' : '确认回血并生成收入账单' }}</span>
                 </button>
               </div>
             </div>
@@ -851,10 +868,14 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 底部控制栏 -->
-      <div v-if="saveError" class="text-xs font-mono-archive text-red-600">
-        {{ saveError }}
+      <!-- 保存错误：常驻固定高度槽，避免下推底部控制栏 (UI 稳定性) -->
+      <div class="min-h-[18px] flex items-center" role="alert" aria-live="polite">
+        <div v-if="saveError" class="text-xs font-mono-archive text-red-600">
+          {{ saveError }}
+        </div>
       </div>
+
+      <!-- 底部控制栏 -->
       <div class="pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
         <button
           @click="handleResetDefault"
@@ -879,9 +900,11 @@ onUnmounted(() => {
             type="button"
             class="px-5 py-2 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 disabled:opacity-50 rounded-xs transition-opacity cursor-pointer flex items-center gap-1.5"
           >
-            <Loader2 v-if="isSaving" class="w-3.5 h-3.5 animate-spin" />
-            <Check v-else class="w-3.5 h-3.5" />
-            <span>{{ isSaving ? '保存与同步中...' : '保存资料' }}</span>
+            <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+              <Loader2 v-if="isSaving" class="w-3.5 h-3.5 animate-spin" />
+              <Check v-else class="w-3.5 h-3.5" />
+            </span>
+            <span class="min-w-[7em] text-center">{{ isSaving ? '保存与同步中...' : '保存资料' }}</span>
           </button>
         </div>
       </div>

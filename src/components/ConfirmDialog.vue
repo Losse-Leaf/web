@@ -21,6 +21,7 @@ const { confirmRequest, respond } = useConfirm()
         class="w-full max-w-sm bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl rounded-xs p-5 sm:p-6 text-left"
         role="alertdialog"
         aria-modal="true"
+        aria-label="确认提示"
       >
         <!-- 标题 -->
         <div class="flex items-start justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">

@@ -298,10 +298,8 @@ onUnmounted(() => {
         />
 
         <!-- 点击具体日期后展开当日手记速览抽屉 -->
-        <div
-          v-if="selectedHeatmapDate"
-          class="pt-4 border-t border-[var(--border-subtle)] space-y-3 animate-in fade-in duration-200"
-        >
+        <div class="pt-4 border-t border-[var(--border-subtle)] min-h-[220px]">
+          <div v-if="selectedHeatmapDate" class="space-y-3">
           <div class="flex items-center justify-between text-xs font-mono-archive">
             <div class="flex items-center gap-2 text-[var(--ink-primary)]">
               <Calendar class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
@@ -318,11 +316,11 @@ onUnmounted(() => {
 
           <div
             v-if="selectedDateEntries.length === 0"
-            class="text-xs font-serif-editorial text-[var(--ink-muted)] py-2"
+            class="text-xs font-serif-editorial text-[var(--ink-muted)] py-2 min-h-[160px]"
           >
             该日未留下公开或私密手记。
           </div>
-          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-[160px]">
             <button
               v-for="item in selectedDateEntries"
               :key="item.id"
@@ -341,6 +339,10 @@ onUnmounted(() => {
                 {{ item.content }}
               </p>
             </button>
+          </div>
+          </div>
+          <div v-else class="min-h-[160px] flex items-center justify-center text-[11px] font-mono-archive text-[var(--ink-muted)]">
+            点选热力图上的日期，回看当日手记
           </div>
         </div>
       </div>

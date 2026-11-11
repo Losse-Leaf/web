@@ -282,7 +282,7 @@ onUnmounted(() => {
         @change="onFilesSelected"
       />
 
-      <div class="flex flex-wrap gap-3 items-center">
+      <div class="flex flex-nowrap overflow-x-auto gap-3 items-center">
         <!-- 已选/上传中的缩略图 -->
         <div
           v-for="item in items"
@@ -356,7 +356,11 @@ onUnmounted(() => {
           <span class="text-[11px] font-mono-archive">添加照片</span>
         </button>
 
-        <div v-if="items.length === 0" class="text-xs text-[var(--ink-muted)] font-serif-editorial ml-2">
+        <!-- 空态提示：常驻占位，0→N 张时仅切换透明度，不增删 DOM、不改变容器高度 (UI 稳定性) -->
+        <div
+          class="text-xs text-[var(--ink-muted)] font-serif-editorial ml-2 whitespace-nowrap shrink-0 pointer-events-none transition-opacity duration-150"
+          :class="items.length === 0 ? 'opacity-100' : 'opacity-0'"
+        >
           点击添加照片（可从相册选择或直接拍摄）
         </div>
       </div>

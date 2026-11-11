@@ -95,6 +95,7 @@ onBeforeUnmount(() => {
   <div
     v-if="visible"
     role="status"
+    aria-label="新刊更新提示"
     aria-live="polite"
     class="fixed inset-x-3 bottom-20 md:bottom-6 z-[1250] mx-auto max-w-lg bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl px-4 py-3.5"
   >

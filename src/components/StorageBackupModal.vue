@@ -666,19 +666,27 @@ onMounted(() => {
         </button>
       </div>
 
-      <!-- 操作反馈提示条 -->
+      <!-- 操作反馈提示条：常驻固定高度槽，无消息时 opacity-0 但保留高度，
+           5s 自动消失/新消息出现都不引起整块上下跳 (UI 稳定性) -->
       <div
-        v-if="alertMessage"
-        class="p-3 rounded-xs border text-xs font-serif-editorial flex items-start gap-2.5 transition-all"
-        :class="
-          alertMessage.type === 'success'
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
-            : 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
-        "
+        class="min-h-[44px] flex items-center transition-opacity duration-200"
+        :class="alertMessage ? 'opacity-100' : 'opacity-0'"
+        role="alert"
+        aria-live="polite"
       >
-        <Check v-if="alertMessage.type === 'success'" class="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-        <AlertTriangle v-else class="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-        <span class="flex-1 leading-relaxed">{{ alertMessage.text }}</span>
+        <div
+          v-if="alertMessage"
+          class="w-full p-3 rounded-xs border text-xs font-serif-editorial flex items-start gap-2.5"
+          :class="
+            alertMessage.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
+          "
+        >
+          <Check v-if="alertMessage.type === 'success'" class="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+          <AlertTriangle v-else class="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+          <span class="flex-1 min-w-0 leading-relaxed truncate">{{ alertMessage.text }}</span>
+        </div>
       </div>
 
       <!-- ========================================== -->
@@ -715,9 +723,11 @@ onMounted(() => {
               :disabled="isCreatingBackup"
               class="px-4 py-1.5 text-xs font-serif-editorial font-medium border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs cursor-pointer flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
             >
-              <Loader2 v-if="isCreatingBackup" class="w-3.5 h-3.5 animate-spin" />
-              <Archive v-else class="w-3.5 h-3.5" />
-              <span>{{ isCreatingBackup ? '正在生成...' : '立即生成快照' }}</span>
+              <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+                <Loader2 v-if="isCreatingBackup" class="w-3.5 h-3.5 animate-spin" />
+                <Archive v-else class="w-3.5 h-3.5" />
+              </span>
+              <span class="min-w-[7em] text-center">{{ isCreatingBackup ? '正在生成...' : '立即生成快照' }}</span>
             </button>
           </div>
         </div>
@@ -731,13 +741,16 @@ onMounted(() => {
             <span class="font-serif-editorial text-[11px]">按时间倒序 · 独立可移植</span>
           </div>
 
-          <div
-            v-if="loadError"
-            class="p-3 rounded-xs border border-rose-500/30 bg-rose-500/10 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2"
-          >
-            <AlertTriangle class="w-4 h-4 shrink-0" />
-            <span class="flex-1">{{ loadError }}</span>
-            <button type="button" class="underline cursor-pointer" @click="loadData">重试</button>
+          <!-- 加载错误：常驻固定高度槽，避免下推下方加载/空态/列表 (UI 稳定性) -->
+          <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+            <div
+              v-if="loadError"
+              class="w-full p-3 rounded-xs border border-rose-500/30 bg-rose-500/10 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2"
+            >
+              <AlertTriangle class="w-4 h-4 shrink-0" />
+              <span class="flex-1 min-w-0 truncate">{{ loadError }}</span>
+              <button type="button" class="underline cursor-pointer shrink-0" @click="loadData">重试</button>
+            </div>
           </div>
 
           <div v-if="isLoadingList && backups.length === 0" class="py-12 text-center text-xs font-serif-editorial text-[var(--ink-muted)] space-y-2">
@@ -858,7 +871,7 @@ onMounted(() => {
             @dragover.prevent="isDragging = true"
             @dragleave.prevent="isDragging = false"
             @drop.prevent="onFileDrop"
-            class="p-3.5 border rounded-xs transition-all"
+            class="p-3.5 border rounded-xs transition-all min-h-[120px]"
             :class="[
               isDragging ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30',
             ]"
@@ -915,11 +928,11 @@ onMounted(() => {
                 </div>
               </div>
 
-              <!-- 上传进度条 -->
-              <div v-if="isRestoring && uploadProgress > 0 && uploadProgress < 100" class="w-full bg-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden">
+              <!-- 上传进度条：轨道常驻预留高度，宽度随进度，避免上传时突然插入撑高 (UI 稳定性) -->
+              <div class="w-full bg-[var(--border-subtle)] h-1.5 rounded-full overflow-hidden">
                 <div
                   class="bg-amber-600 h-full transition-all duration-150"
-                  :style="{ width: `${uploadProgress}%` }"
+                  :style="{ width: `${isRestoring && uploadProgress > 0 && uploadProgress < 100 ? uploadProgress : 0}%` }"
                 ></div>
               </div>
             </div>
@@ -1116,23 +1129,30 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 测试结果与延迟反馈卡片 -->
+          <!-- 测试结果与延迟反馈卡片：常驻固定高度槽，消除「先清后置」导致的双跳 (UI 稳定性) -->
           <div
-            v-if="storageTestResult"
-            class="p-3 rounded-xs border text-xs font-serif-editorial flex items-start gap-2.5 transition-all"
-            :class="
-              storageTestResult.success
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
-            "
+            class="min-h-[64px] flex items-center transition-opacity duration-200"
+            :class="storageTestResult ? 'opacity-100' : 'opacity-0'"
+            role="alert"
+            aria-live="polite"
           >
-            <CheckCircle2 v-if="storageTestResult.success" class="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-            <AlertTriangle v-else class="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-            <div class="flex-1 space-y-0.5 leading-relaxed">
-              <div class="font-medium">
-                {{ storageTestResult.success ? '对象存储连接握手成功' : '对象存储握手测试未通过' }}
+            <div
+              v-if="storageTestResult"
+              class="w-full p-3 rounded-xs border text-xs font-serif-editorial flex items-start gap-2.5"
+              :class="
+                storageTestResult.success
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
+              "
+            >
+              <CheckCircle2 v-if="storageTestResult.success" class="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+              <AlertTriangle v-else class="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+              <div class="flex-1 min-w-0 space-y-0.5 leading-relaxed">
+                <div class="font-medium">
+                  {{ storageTestResult.success ? '对象存储连接握手成功' : '对象存储握手测试未通过' }}
+                </div>
+                <p class="text-[11px] opacity-90 truncate">{{ storageTestResult.message }}</p>
               </div>
-              <p class="text-[11px] opacity-90">{{ storageTestResult.message }}</p>
             </div>
           </div>
 

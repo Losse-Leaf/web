@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import type { Transaction, LifeEntry } from '../types'
 import { fetchTransactions } from '../utils/api'
 
-const TX_CACHE_KEY = 'looseleaf_cached_transactions'
+const TX_CACHE_KEY = 'looseleaf_cached_transactions_v2'
 
 function getInitialTransactions(): Transaction[] {
   try {

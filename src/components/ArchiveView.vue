@@ -265,12 +265,12 @@ const formatMonthDay = (occurredAt?: string) => {
     </div>
 
     <!-- 极轻量文本统计（非 Dashboard，纯文字注脚） -->
-    <div class="font-mono-archive text-xs text-[var(--ink-muted)] pb-8 mb-12 border-b border-[var(--border-subtle)] flex flex-wrap items-center gap-y-1">
-      <span>{{ selectedYear }}年 · </span>
-      <span class="text-[var(--ink-secondary)] font-medium ml-1">共 {{ yearEntries.length }} 条生活记录</span>
+    <div class="font-mono-archive text-xs text-[var(--ink-muted)] pb-8 mb-12 border-b border-[var(--border-subtle)] flex items-center overflow-x-auto whitespace-nowrap min-h-[20px]">
+      <span class="shrink-0">{{ selectedYear }}年 · </span>
+      <span class="text-[var(--ink-secondary)] font-medium ml-1 shrink-0">共 {{ yearEntries.length }} 条生活记录</span>
       <template v-if="Object.keys(yearStats).length > 0">
-        <span class="mx-2">·</span>
-        <span v-for="(count, type) in yearStats" :key="type" class="mr-3">
+        <span class="mx-2 shrink-0">·</span>
+        <span v-for="(count, type) in yearStats" :key="type" class="mr-3 shrink-0">
           {{ count }} 条{{ type }}
         </span>
       </template>
@@ -279,14 +279,14 @@ const formatMonthDay = (occurredAt?: string) => {
     <!-- 空状态 (RG-12) -->
     <div
       v-if="monthGroups.size === 0"
-      class="py-20 text-center space-y-3 font-serif-editorial text-[var(--ink-muted)] border border-dashed border-[var(--border-subtle)] rounded-xs"
+      class="min-h-[280px] flex flex-col items-center justify-center text-center space-y-3 font-serif-editorial text-[var(--ink-muted)] border border-dashed border-[var(--border-subtle)] rounded-xs"
     >
       <p class="text-base text-[var(--ink-primary)]">该年份尚未收录任何生活散页</p>
       <p class="text-xs font-mono-archive text-[var(--ink-secondary)]">点击右下角「+」或顶部「＋ 记录」写下此时此刻的印记</p>
     </div>
 
     <!-- 按月份沉浸式浏览时间线清单 -->
-    <div v-else class="space-y-16">
+    <div v-else class="space-y-16 min-h-[280px]">
       <section
         v-for="[month, items] in monthGroups"
         :key="month"
@@ -308,7 +308,7 @@ const formatMonthDay = (occurredAt?: string) => {
               <span class="font-mono-archive text-xs text-[var(--ink-muted)] shrink-0 w-12">
                 {{ formatMonthDay(item.occurred_at) }}
               </span>
-              <span class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors">
+              <span class="font-serif-editorial text-base sm:text-lg text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors truncate min-w-0">
                 {{ item.title }}
               </span>
             </div>
@@ -326,7 +326,7 @@ const formatMonthDay = (occurredAt?: string) => {
     <AlmanacModal
       v-if="isAlmanacOpen"
       :isOpen="isAlmanacOpen"
-      :initialYear="parseInt(selectedYear) || 2026"
+      :initialYear="parseInt(selectedYear) || getBeijingYear()"
       :availableYears="availableAlmanacYears"
       @close="isAlmanacOpen = false"
     />

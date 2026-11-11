@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { MapPin } from 'lucide-vue-next'
 import { searchCities, findCityByCode, type CityOption } from '../utils/cities'
 
@@ -76,6 +76,27 @@ const removeDropdownListeners = () => {
   window.removeEventListener('resize', updateDropdownPosition)
 }
 
+// 下拉浮层引用：用于「点击外部关闭」判断点击是否落在浮层内（对齐 PaperSelect.vue）
+const menuRef = ref<HTMLElement | null>(null)
+
+const handleClickOutside = (e: MouseEvent) => {
+  if (!isOpen.value) return
+  const target = e.target as Node
+  if (inputEl.value?.contains(target) || menuRef.value?.contains(target)) {
+    return
+  }
+  isOpen.value = false
+}
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (!isOpen.value) return
+  if (e.key === 'Escape') {
+    // capture 阶段拦截：只关下拉，不冒泡关闭父弹窗（对齐 PaperSelect.vue）
+    e.stopPropagation()
+    isOpen.value = false
+  }
+}
+
 watch(isOpen, (open) => {
   if (!open) {
     removeDropdownListeners()
@@ -86,9 +107,18 @@ watch(isOpen, (open) => {
   window.addEventListener('resize', updateDropdownPosition)
 })
 
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutside)
+  window.addEventListener('keydown', handleKeydown, true)
+})
+
 // 卸载兜底：下拉打开时父弹窗被关闭卸载，watch 的移除分支不会执行 ——
-// 必须在这里移除，否则 window 上的 scroll/resize 监听随组件一起泄漏。
-onBeforeUnmount(removeDropdownListeners)
+// 必须在这里移除，否则 window 上的 scroll/resize/document mousedown 监听随组件一起泄漏。
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleClickOutside)
+  window.removeEventListener('keydown', handleKeydown, true)
+  removeDropdownListeners()
+})
 </script>
 
 <template>
@@ -113,10 +143,18 @@ onBeforeUnmount(removeDropdownListeners)
          这里 Teleport 到 body 并按输入框的实际位置做固定定位，彻底脱离裁剪链。 -->
     <Teleport to="body">
       <div
-        v-if="isOpen && filteredList.length > 0"
+        v-if="isOpen"
+        ref="menuRef"
         class="fixed z-[1100] bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-lg max-h-56 overflow-y-auto divide-y divide-[var(--border-subtle)]/50"
         :style="dropdownStyle"
       >
+        <!-- 空集反馈：固定高度，避免无匹配时候选层整体不渲染、用户看不到任何提示 -->
+        <div
+          v-if="filteredList.length === 0"
+          class="h-12 flex items-center justify-center text-[var(--ink-muted)] text-center italic font-serif-editorial"
+        >
+          无匹配城市
+        </div>
         <div
           v-for="city in filteredList"
           :key="city.code"

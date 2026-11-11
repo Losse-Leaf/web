@@ -176,8 +176,10 @@ onMounted(() => {
       </div>
 
       <!-- 错误提示 -->
-      <div v-if="errorMsg" class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
-        {{ errorMsg }}
+      <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+        <div v-if="errorMsg" class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+          {{ errorMsg }}
+        </div>
       </div>
 
       <!-- 渠道列表 -->
@@ -206,8 +208,7 @@ onMounted(() => {
                   {{ ch.name }}
                 </span>
                 <input
-                  v-else
-                  v-if="ch.id && editingMap[ch.id]"
+                  v-if="!ch.is_builtin && ch.id && editingMap[ch.id]"
                   v-model="editingMap[ch.id].name"
                   type="text"
                   class="font-medium text-[var(--ink-primary)] text-sm bg-[var(--bg-archive)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-xs outline-none focus:border-[var(--ink-primary)]"
@@ -251,8 +252,10 @@ onMounted(() => {
                 :disabled="editingMap[ch.id].isSaving"
                 class="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--bg-archive)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer"
               >
-                <Check class="w-3 h-3" />
-                <span>{{ editingMap[ch.id].isSaving ? '保存中...' : '保存还款日' }}</span>
+                <span class="w-3 h-3 inline-flex items-center justify-center shrink-0">
+                  <Check class="w-3 h-3" />
+                </span>
+                <span class="min-w-[7em] text-center">{{ editingMap[ch.id].isSaving ? '保存中...' : '保存还款日' }}</span>
               </button>
             </div>
           </div>

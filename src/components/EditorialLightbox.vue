@@ -124,6 +124,9 @@ onBeforeUnmount(() => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog"
+    aria-modal="true"
+    aria-label="暗房底片灯箱"
     class="fixed inset-0 z-[100] flex flex-col justify-between p-3 sm:p-8 bg-[#121110]/95 backdrop-blur-md text-[#ece9e1] animate-in fade-in duration-200 select-none cursor-default"
     style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px)); padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));"
     @click.self="emit('close')"

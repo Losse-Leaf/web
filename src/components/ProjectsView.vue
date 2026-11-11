@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import type { Project, LifeEntry } from '../types'
 import { ArrowUpRight, Github, Globe, Plus, Edit2, Trash2, X, AlertTriangle, BookOpen, ChevronRight, SlidersHorizontal } from 'lucide-vue-next'
 import { createProject, updateProject, deleteProject, getAdminToken } from '../utils/api'
+import { parseOccurredDate } from '../utils/format'
 import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import PaperSelect from './PaperSelect.vue'
@@ -403,7 +404,7 @@ const isGitHubUrl = (url?: string) => {
                   {{ entry.title || '造物手记' }}
                 </span>
                 <span class="text-[11px] font-mono-archive text-[var(--ink-muted)] shrink-0 ml-2">
-                  {{ (entry.occurred_at || entry.created_at || '').slice(0, 10) }}
+                  {{ (entry.occurred_at || entry.created_at) ? parseOccurredDate(entry.occurred_at || entry.created_at).dateKey : '' }}
                 </span>
               </div>
               <p class="text-xs font-serif-editorial text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
@@ -438,9 +439,11 @@ const isGitHubUrl = (url?: string) => {
           </button>
         </div>
 
-        <div v-if="formError" class="p-2.5 rounded-xs bg-red-500/10 border border-red-500/20 text-red-600 text-xs font-mono-archive flex items-center gap-2">
-          <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
-          <span>{{ formError }}</span>
+        <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+          <div v-if="formError" class="w-full p-2.5 rounded-xs bg-red-500/10 border border-red-500/20 text-red-600 text-xs font-mono-archive flex items-center gap-2">
+            <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
+            <span>{{ formError }}</span>
+          </div>
         </div>
 
         <div class="space-y-3.5 text-xs font-mono-archive">
@@ -537,7 +540,7 @@ const isGitHubUrl = (url?: string) => {
             :disabled="isSubmitting"
             class="px-5 py-2 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs font-mono-archive text-xs cursor-pointer hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {{ isSubmitting ? '保存中...' : '保存造物' }}
+            <span class="min-w-[7em] text-center">{{ isSubmitting ? '保存中...' : '保存造物' }}</span>
           </button>
         </div>
 

@@ -531,8 +531,8 @@ watch(
                     </span>
                   </div>
                   <span
-                    v-if="isCurator"
-                    class="text-[11px] font-mono-archive text-[var(--accent-moss)] flex items-center gap-1"
+                    class="text-[11px] font-mono-archive text-[var(--accent-moss)] flex items-center gap-1 transition-opacity"
+                    :class="isCurator ? 'opacity-100' : 'opacity-0 pointer-events-none'"
                   >
                     <Check class="w-3 h-3" />
                     <span>本机凭证已就绪</span>
@@ -542,7 +542,7 @@ watch(
                 <!-- 若本机已持有有效会话，一键以主人身份直入或注销 -->
                 <div
                   v-if="isCurator"
-                  class="p-3.5 rounded-xs border border-[var(--accent-moss)]/35 bg-[var(--accent-moss)]/10 flex items-center justify-between gap-3 text-xs font-mono-archive"
+                  class="p-3.5 rounded-xs border border-[var(--accent-moss)]/35 bg-[var(--accent-moss)]/10 flex items-center justify-between gap-3 text-xs font-mono-archive min-h-[128px]"
                 >
                   <div class="flex items-center gap-2 text-[var(--accent-moss)]">
                     <ShieldCheck class="w-4 h-4 shrink-0" />
@@ -567,7 +567,7 @@ watch(
                 <!-- 未持有会话：唯一的接入方式是设备配对 -->
                 <div
                   v-else
-                  class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex items-start gap-3"
+                  class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex items-start gap-3 min-h-[128px]"
                 >
                   <ScanLine class="w-4 h-4 text-[var(--accent-warm)] shrink-0 mt-0.5" />
                   <div class="space-y-1">

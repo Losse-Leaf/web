@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import { X, MapPin, Compass, Check } from 'lucide-vue-next'
 import { createFootprint, updateFootprint, getAdminToken } from '../utils/api'
 import { audio } from '../utils/audio'
-import { getBeijingDateString, getBeijingISOString } from '../utils/format'
+import { getBeijingDateString, getBeijingISOString, parseOccurredDate } from '../utils/format'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import ImageUploader from './ImageUploader.vue'
@@ -77,8 +77,8 @@ watch(
         userManuallyChangedCity.value = true
         selectedCityCode.value = props.editingFootprint.city_code
         selectedCityName.value = props.editingFootprint.city_name
-        visitedAt.value = props.editingFootprint.visited_at ? props.editingFootprint.visited_at.slice(0, 10) : todayStr
-        departedAt.value = props.editingFootprint.departed_at ? props.editingFootprint.departed_at.slice(0, 10) : ''
+        visitedAt.value = props.editingFootprint.visited_at ? parseOccurredDate(props.editingFootprint.visited_at).dateKey : todayStr
+        departedAt.value = props.editingFootprint.departed_at ? parseOccurredDate(props.editingFootprint.departed_at).dateKey : ''
         title.value = props.editingFootprint.title || ''
         note.value = props.editingFootprint.note || ''
         attachmentIds.value = (props.editingFootprint.attachments || []).map((a) => a.id)
@@ -230,9 +230,11 @@ const handleSubmit = async () => {
         </button>
       </div>
 
-      <!-- 错误提示 -->
-      <div v-if="errorMsg" class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
-        {{ errorMsg }}
+      <!-- 错误提示：常驻固定高度槽，文案 v-if 切换，校验失败不下推表单 (UI 稳定性) -->
+      <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+        <div v-if="errorMsg" class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+          {{ errorMsg }}
+        </div>
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-5 font-mono-archive text-xs">
@@ -308,8 +310,10 @@ const handleSubmit = async () => {
             :disabled="isSubmitting"
             class="px-5 py-1.5 text-xs bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer font-serif-editorial inline-flex items-center gap-1.5"
           >
-            <Check class="w-3.5 h-3.5" />
-            <span>{{ isSubmitting ? '正在保存...' : (editingFootprint ? '保存足迹修订' : '点亮城市足迹') }}</span>
+            <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+              <Check class="w-3.5 h-3.5" />
+            </span>
+            <span class="min-w-[7em] text-center">{{ isSubmitting ? '正在保存...' : (editingFootprint ? '保存足迹修订' : '点亮城市足迹') }}</span>
           </button>
         </div>
       </form>

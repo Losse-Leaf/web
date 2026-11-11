@@ -279,6 +279,7 @@ const getKindLabel = (type: string) => {
 
           <button
             @click="handleClose"
+            aria-label="关闭"
             class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
           >
             <X class="w-5 h-5" />
@@ -286,39 +287,45 @@ const getKindLabel = (type: string) => {
         </div>
       </div>
 
-      <!-- 删除确认浮层 -->
-      <div
-        v-if="showDeleteConfirm"
-        class="mb-6 p-4 bg-red-50/70 border border-red-200 rounded-xs space-y-3 font-serif-editorial text-sm"
-      >
-        <div class="flex items-center gap-2 text-red-800 font-medium">
-          <AlertTriangle class="w-4 h-4 text-red-600" />
-          <span>确定删除这条记录？</span>
-        </div>
-        <p class="text-xs text-red-700 leading-relaxed font-mono-archive">
-          删除后将同时清理关联的照片与存储对象，该操作不可撤销。
-        </p>
-        <div class="flex items-center justify-end gap-3 pt-1">
-          <button
-            @click="showDeleteConfirm = false"
-            class="px-3 py-1 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
-          >
-            取消
-          </button>
-          <button
-            @click="handleDelete"
-            :disabled="isSubmitting"
-            class="px-3.5 py-1 text-xs font-mono-archive bg-red-600 text-white hover:bg-red-700 rounded-xs transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {{ isSubmitting ? '正在删除...' : '确认删除' }}
-          </button>
+      <!-- 删除确认浮层：外层零高度锚点常驻（不占文档流、不推动下方内容），
+           内层 absolute 覆盖在编辑/浏览内容之上，落实注释所述「浮层」语义 (UI 稳定性) -->
+      <div class="relative z-20">
+        <div
+          v-if="showDeleteConfirm"
+          class="absolute top-0 left-0 right-0 p-4 bg-red-50 border border-red-200 rounded-xs space-y-3 font-serif-editorial text-sm shadow-[0_12px_36px_rgba(0,0,0,0.18)]"
+        >
+          <div class="flex items-center gap-2 text-red-800 font-medium">
+            <AlertTriangle class="w-4 h-4 text-red-600" />
+            <span>确定删除这条记录？</span>
+          </div>
+          <p class="text-xs text-red-700 leading-relaxed font-mono-archive">
+            删除后将同时清理关联的照片与存储对象，该操作不可撤销。
+          </p>
+          <div class="flex items-center justify-end gap-3 pt-1">
+            <button
+              @click="showDeleteConfirm = false"
+              class="px-3 py-1 text-xs font-mono-archive text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+            >
+              取消
+            </button>
+            <button
+              @click="handleDelete"
+              :disabled="isSubmitting"
+              class="px-3.5 py-1 text-xs font-mono-archive bg-red-600 text-white hover:bg-red-700 rounded-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <span class="min-w-[7em] text-center">{{ isSubmitting ? '正在删除...' : '确认删除' }}</span>
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- 编辑模式 -->
       <form v-if="isEditing" @submit.prevent="handleSaveEdit" class="space-y-6">
-        <div v-if="errorMsg" class="p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
-          {{ errorMsg }}
+        <!-- 编辑错误：常驻固定高度槽，文案 v-if 切换，校验失败不下推表单 (UI 稳定性) -->
+        <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+          <div v-if="errorMsg" class="w-full p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
+            {{ errorMsg }}
+          </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -416,8 +423,10 @@ const getKindLabel = (type: string) => {
             :disabled="isSubmitting"
             class="px-5 py-2 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs transition-opacity cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
           >
-            <Check v-if="!isSubmitting" class="w-3.5 h-3.5" />
-            <span>{{ isSubmitting ? '保存中...' : '保存修改' }}</span>
+            <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+              <Check v-if="!isSubmitting" class="w-3.5 h-3.5" />
+            </span>
+            <span class="min-w-[7em] text-center">{{ isSubmitting ? '保存中...' : '保存修改' }}</span>
           </button>
         </div>
       </form>

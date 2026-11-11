@@ -152,7 +152,7 @@ onMounted(() => {
       <!-- 底部操作按钮 -->
       <div class="pt-2 flex items-center justify-between border-t border-[var(--border-subtle)] text-xs font-mono-archive">
         <span class="text-[11px] text-[var(--ink-muted)]">
-          {{ checkResult?.checked_at ? `上次检测: ${new Date(checkResult.checked_at).toLocaleTimeString()}` : '' }}
+          {{ checkResult?.checked_at ? `上次检测: ${new Date(checkResult.checked_at).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}` : '' }}
         </span>
         <div class="flex items-center gap-2">
           <button

@@ -119,6 +119,7 @@
     font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', 'Noto Serif CJK SC',
       'STSong', Georgia, serif;
     font-feature-settings: "kern", "liga", "dlig", "calt";
+    font-variant-numeric: tabular-nums;
   }
 
   /* 等宽排版字体 (Monospace Timestamp) */
@@ -177,6 +178,7 @@
     font-size: 0.6875rem;
     line-height: 1.5;
     letter-spacing: 0.025em;
+    font-variant-numeric: tabular-nums;
   }
 }
 

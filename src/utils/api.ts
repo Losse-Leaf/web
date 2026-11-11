@@ -78,6 +78,31 @@ if (typeof window !== 'undefined') {
     if (e.key === ADMIN_TOKEN_KEY || e.key === ADMIN_SESSION_KEY || e.key === null) {
       adminTokenRef.value = hasCookieSession() ? COOKIE_SESSION_MARKER : readStoredAdminToken()
     }
+    // WEB-7：跨标签页同步每页 ETag。entriesPageETags 是模块级内存对象，
+    // 别的标签页写入/清除该键后这里重新读回，否则仍持旧值命中 304、复用旧 pageCache。
+    // 仅在 ETag 键变化时触发；解析失败（catch）保持原对象，不影响已有 token 监听。
+    if (e.key === ENTRIES_ETAG_KEY) {
+      try {
+        const raw = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
+        const next: Record<number, string> = {}
+        if (raw.trim().startsWith('{')) {
+          const parsed = JSON.parse(raw)
+          if (parsed && typeof parsed === 'object') {
+            for (const [k, v] of Object.entries(parsed)) {
+              const page = Number(k)
+              if (Number.isFinite(page) && typeof v === 'string' && v) {
+                next[page] = v
+              }
+            }
+          }
+        } else if (raw) {
+          next[1] = raw
+        }
+        entriesPageETags = next
+      } catch {
+        // 解析失败：保持现有 entriesPageETags，不覆盖。
+      }
+    }
   })
 }
 
@@ -352,24 +377,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 // 1. Life Entries
 // MOB-P0-17：原先所有 fetchEntries 调用共用一个模块级 AbortController，
 // 归档页（按年分页）会连带 abort 掉首页时间流的请求，导致首页被清空。
-// 现在按「查询作用域」隔离控制器，不同作用域互不干扰。
-const entriesAbortControllers = new Map<string, AbortController>()
-
-function entriesScope(params?: {
-  type?: string
-  category?: string
-  year?: string
-}): string {
-  if (params?.year && params.year !== 'all') return `year:${params.year}`
-  if (params?.category && params.category !== 'all') return `category:${params.category}`
-  if (params?.type && params.type !== 'all') return `type:${params.type}`
-  return 'default'
-}
+// 现在由调用方（useArchive 的全量分页 / 单年补拉两条流程）各自持有
+// controller 传入 signal，fetchEntries 不再自行管理生命周期。
 
 const ENTRIES_ETAG_KEY = 'looseleaf_entries_etag'
 // WEB-7：缓存协商从「只有第 1 页」升级为「每页各存各的 ETag」。
 // 否则第 1 页命中 304 时，旧页（第 2 页以后）是否被跨设备修改完全无从得知。
-// 兼容旧数据：历史上该键存的是单个 ETag 字符串，这里自动迁移为第 1 页。
 let entriesPageETags: Record<number, string> = {}
 try {
   const raw = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
@@ -383,8 +396,6 @@ try {
         }
       }
     }
-  } else if (raw) {
-    entriesPageETags[1] = raw
   }
 } catch {}
 
@@ -411,10 +422,8 @@ export function resetEntriesETag(): void {
 export async function clearApiCache(): Promise<void> {
   resetEntriesETag()
   try {
-    localStorage.removeItem('looseleaf_cached_entries')
-    localStorage.removeItem('looseleaf_cached_transactions')
-    localStorage.removeItem('looseleaf_entries_cache')
-    localStorage.removeItem('looseleaf_transactions_cache')
+    localStorage.removeItem('looseleaf_cached_entries_v2')
+    localStorage.removeItem('looseleaf_cached_transactions_v2')
     localStorage.removeItem('looseleaf_curator_profile')
   } catch {}
 
@@ -442,18 +451,8 @@ export async function fetchEntries(params?: {
   /** WEB-7：跳过 If-None-Match，用于「304 但没有本地页缓存」时强制取回该页 */
   noCache?: boolean
 }): Promise<LifeEntry[] | null> {
-  // 竞态保护：同一作用域内的上一次未完成请求会被终止；不同作用域互不影响。
-  const scope = entriesScope(params)
-  let signal = params?.signal
-  if (!signal) {
-    const previous = entriesAbortControllers.get(scope)
-    if (previous) {
-      previous.abort()
-    }
-    const controller = new AbortController()
-    entriesAbortControllers.set(scope, controller)
-    signal = controller.signal
-  }
+  // 竞态保护由调用方负责：传入 signal 时随请求透传（AbortSignal.any 合并超时）。
+  const signal = params?.signal
 
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
@@ -503,6 +502,12 @@ export async function fetchEntries(params?: {
     }
 
     if (!res.ok) {
+      if (res.status === 401 && !url.includes('/auth/claim')) {
+        clearLocalCredential()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
+        }
+      }
       let msg = `HTTP error ${res.status}`
       try {
         const errJson = await res.json()
@@ -519,7 +524,10 @@ export async function fetchEntries(params?: {
 
     const json = await res.json()
     const data = (json && typeof json === 'object' && 'code' in json && 'data' in json) ? json.data : json
-    return data?.entries || []
+    if (!Array.isArray(data?.entries)) {
+      throw new Error('fetchEntries: 响应缺少 entries 数组')
+    }
+    return data.entries
   } catch (err: any) {
     if (err?.name === 'AbortError') {
       // MOB-P0-17：中断表示「本次结果作废」，必须返回 null（与 304 同义），
@@ -816,7 +824,6 @@ export async function uploadUnifiedFile(
     // MOB-P1-69：Cookie 会话模式下不发送令牌头（同源 XHR 会自动带上 Cookie）
     if (token && !isCookieSessionOnly(token)) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-      xhr.setRequestHeader('X-Admin-Key', token)
     }
     xhr.send(formData)
   })
@@ -872,7 +879,7 @@ export async function createTransaction(data: {
 }
 
 // 3.1 Wishes (心愿单，公开只读与联动)
-export async function fetchWishes(params?: { kind?: string; status?: string }): Promise<Wish[]> {
+export async function fetchWishes(params?: { kind?: string; status?: string }, signal?: AbortSignal): Promise<Wish[]> {
   const pageSize = 100
   let page = 1
   const all: Wish[] = []
@@ -882,8 +889,11 @@ export async function fetchWishes(params?: { kind?: string; status?: string }): 
     if (params?.status) query.set('status', params.status)
     query.set('page', String(page))
     query.set('page_size', String(pageSize))
-    const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes?${query.toString()}`)
-    const batch = Array.isArray(res) ? res : (res?.wishes || [])
+    const res = await request<Wish[] | { wishes?: Wish[] }>(`${API_BASE}/wishes?${query.toString()}`, { signal })
+    const batch = Array.isArray(res) ? res : res?.wishes
+    if (!Array.isArray(batch)) {
+      throw new Error('fetchWishes: 响应缺少 wishes 数组')
+    }
     all.push(...batch)
     if (batch.length < pageSize) break
     page++
@@ -987,10 +997,8 @@ export async function updateTransaction(
     /**
      * 显式声明「本次要取消分期」
      *
-     * 关键：单传 `is_installment: false` **不足以**表达「取消分期」——
-     * 后端的新契约是「不带 clear_installment 就保持原值」，
-     * 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传；
-     * 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
+     * 三态契约（四端统一）：单传 `is_installment: false` **不足以**表达「取消分期」——
+     * 不带 `clear_installment` 就保持原值；只有 `true` 才真的降级并清空账期字段。
      */
     clear_installment?: boolean
     /** 显式清空城市归属（跨端统一契约 A），优先级高于 city_code 字段 */

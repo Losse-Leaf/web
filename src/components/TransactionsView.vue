@@ -682,7 +682,10 @@ const saveEdit = async () => {
   const clearCity = !editCityCode.value && Boolean(editingTx.value.city_code)
 
   try {
-    const updated = await updateTransaction(editingTx.value.id, {
+    // 分期三态契约（四端统一）：取消分期 = is_installment:false + clear_installment:true；
+    // 与分期无关 = is_installment:false 且**不带** clear_installment（服务端保持原值）。
+    // 只有 true 才上 wire，false 与缺省同义，不发契约噪声。
+    const payload: Parameters<typeof updateTransaction>[1] = {
       title: editTitle.value.trim() || editCategory.value,
       amount: amountCents,
       type: editType.value,
@@ -693,12 +696,6 @@ const saveEdit = async () => {
       city_code: editCityCode.value || undefined,
       clear_city: clearCity || undefined,
       is_installment: wantInstallment,
-      // 关键：**显式声明**「本次要取消分期」。
-      // 后端的新契约是「is_installment=false 且不带 clear_installment → 保持原值」，
-      // 因为已发布的老客户端（Bool 不可选，必定发 false）压根不知道可以不传 ——
-      // 若把 false 直接当成「取消分期」，老用户编辑一次账目就会毁掉分期负债。
-      // 这里是 web 端**唯一**能真正取消分期的入口，所以必须带上这个信号。
-      clear_installment: cancelInstallment,
       installment_channel_code:
         editType.value === 'expense' && editIsInstallment.value
           ? editInstallmentChannel.value
@@ -719,7 +716,9 @@ const saveEdit = async () => {
         editType.value === 'expense' && editIsInstallment.value
           ? editRepaymentDay.value
           : undefined,
-    })
+    }
+    if (cancelInstallment) payload.clear_installment = true
+    const updated = await updateTransaction(editingTx.value.id, payload)
 
     const idx = transactionsList.value.findIndex((t) => t.id === updated.id)
     if (idx !== -1) {
@@ -1189,8 +1188,8 @@ const spectrumItems = computed(() => {
 
         <!-- 支出光谱细线条（内嵌于月度总览框底部） -->
         <div
-          v-if="summary && summary.total_expense > 0 && spectrumItems.length > 0"
-          class="p-5 sm:p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-archive)]/50 space-y-3.5"
+          class="p-5 sm:p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-archive)]/50 space-y-3.5 min-h-[160px] transition-opacity"
+          :class="summary && summary.total_expense > 0 && spectrumItems.length > 0 ? '' : 'opacity-0 pointer-events-none'"
         >
           <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)]">
             <span class="tracking-wider">支出类目分布</span>
@@ -1207,12 +1206,12 @@ const spectrumItems = computed(() => {
             ></div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-mono-archive">
+          <div class="flex items-center gap-x-5 overflow-x-auto whitespace-nowrap text-xs font-mono-archive min-h-[26px]">
             <button
               v-for="item in spectrumItems"
               :key="item.category"
               @click="toggleCategoryFilter(item.category)"
-              class="flex items-center gap-2 py-0.5 px-1.5 rounded-xs transition-colors cursor-pointer border"
+              class="flex items-center gap-2 py-0.5 px-1.5 rounded-xs transition-colors cursor-pointer border shrink-0"
               :class="selectedCategoryFilter === item.category
                 ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold'
                 : 'border-transparent text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]'"
@@ -1224,9 +1223,10 @@ const spectrumItems = computed(() => {
             </button>
 
             <button
-              v-if="selectedCategoryFilter"
               @click="selectedCategoryFilter = ''"
-              class="text-[11px] text-[var(--accent-warm)] hover-underline cursor-pointer ml-auto"
+              :disabled="!selectedCategoryFilter"
+              class="text-[11px] text-[var(--accent-warm)] hover-underline cursor-pointer ml-auto shrink-0 transition-opacity"
+              :class="selectedCategoryFilter ? '' : 'opacity-0 pointer-events-none'"
             >
               清空类目筛选（显示全部）
             </button>
@@ -1235,9 +1235,17 @@ const spectrumItems = computed(() => {
       </div>
 
       <!-- 记账列表 (按日汇聚) -->
+      <!-- 加载骨架：固定高度，避免加载态增删导致下方跳动 -->
+      <div v-if="isLoading" class="min-h-[320px] space-y-4 animate-pulse" aria-hidden="true">
+        <div class="h-3 w-28 rounded-xs bg-[var(--bg-subtle)]"></div>
+        <div class="h-10 rounded-xs bg-[var(--bg-subtle)]"></div>
+        <div class="h-10 rounded-xs bg-[var(--bg-subtle)]"></div>
+        <div class="h-10 rounded-xs bg-[var(--bg-subtle)]"></div>
+      </div>
+
       <div
-        v-if="dayGroups.length === 0"
-        class="py-14 px-6 rounded-xs border border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)]/15 text-center space-y-4"
+        v-else-if="dayGroups.length === 0"
+        class="min-h-[320px] px-6 rounded-xs border border-dashed border-[var(--border-subtle)] bg-[var(--bg-subtle)]/15 text-center flex flex-col items-center justify-center space-y-4"
       >
         <div class="w-10 h-10 rounded-full border border-[var(--border-subtle)] flex items-center justify-center mx-auto text-[var(--ink-muted)]">
           <Wallet class="w-4 h-4" />
@@ -1257,7 +1265,7 @@ const spectrumItems = computed(() => {
         </button>
       </div>
 
-      <div v-else class="space-y-8">
+      <div v-else class="space-y-8 min-h-[320px]">
         <section
           v-for="group in dayGroups"
           :key="group.dateStr"
@@ -1313,7 +1321,7 @@ const spectrumItems = computed(() => {
                   {{ tx.type === 'expense' ? '-' : '+' }}¥{{ formatMoney(tx.amount) }}
                 </span>
 
-                <div class="flex sm:hidden sm:group-hover:flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
+                <div class="flex items-center gap-1.5 text-xs text-[var(--ink-muted)] opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
                   <button
                     @click="startEdit(tx)"
                     class="p-1 hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
@@ -1463,6 +1471,9 @@ const spectrumItems = computed(() => {
     <!-- 模态框 A：录入新固定资产设备 -->
     <div
       v-if="isAddGearModalOpen"
+      role="dialog"
+      aria-modal="true"
+      aria-label="录入固定资产设备"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
       @click.self="isAddGearModalOpen = false"
     >
@@ -1476,7 +1487,7 @@ const spectrumItems = computed(() => {
               沉淀长伴身边的硬件器材，支持同步生成购置支出或分期账单
             </p>
           </div>
-          <button @click="isAddGearModalOpen = false" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+          <button @click="isAddGearModalOpen = false" aria-label="关闭" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -1565,13 +1576,16 @@ const spectrumItems = computed(() => {
               </label>
             </div>
 
-            <div v-if="newGearCreateTx" class="space-y-3 pt-1">
+            <div
+              class="space-y-3 pt-1 transition-opacity"
+              :class="newGearCreateTx ? '' : 'opacity-50 pointer-events-none'"
+            >
               <div class="flex items-center gap-2">
                 <input
                   id="newGearInstallmentCheck"
                   v-model="newGearIsInstallment"
                   type="checkbox"
-                  :disabled="creditChannels.length === 0"
+                  :disabled="!newGearCreateTx || creditChannels.length === 0"
                   class="rounded-xs cursor-pointer accent-[var(--ink-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
                 />
                 <label for="newGearInstallmentCheck" class="text-[var(--ink-secondary)] cursor-pointer select-none" :class="creditChannels.length === 0 ? 'opacity-40' : ''">
@@ -1579,16 +1593,23 @@ const spectrumItems = computed(() => {
                 </label>
               </div>
 
-              <p v-if="creditChannels.length === 0" class="text-[10px] text-[var(--ink-muted)]">
+              <p
+                class="min-h-[14px] text-[10px] text-[var(--ink-muted)] transition-opacity"
+                :class="creditChannels.length === 0 ? '' : 'opacity-0 pointer-events-none'"
+              >
                 请先在信贷渠道管理添加分期渠道
               </p>
 
-              <div v-if="newGearIsInstallment && creditChannels.length > 0" class="grid grid-cols-2 gap-3">
+              <div
+                class="grid grid-cols-2 gap-3 transition-opacity"
+                :class="newGearIsInstallment && creditChannels.length > 0 ? '' : 'opacity-50 pointer-events-none'"
+              >
                 <div>
                   <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
                   <PaperSelect
                     v-model="newGearInstallmentChannel"
                     size="sm"
+                    :disabled="!(newGearIsInstallment && creditChannels.length > 0)"
                     :options="creditChannels.map((c) => ({ value: c.code, label: `${c.name} (${c.repayment_day}日)` }))"
                   />
                 </div>
@@ -1597,6 +1618,7 @@ const spectrumItems = computed(() => {
                   <PaperSelect
                     v-model="newGearInstallmentMonths"
                     size="sm"
+                    :disabled="!(newGearIsInstallment && creditChannels.length > 0)"
                     :options="[3, 6, 12, 24].map((m) => ({ value: m, label: `${m} 期` }))"
                   />
                 </div>
@@ -1628,6 +1650,9 @@ const spectrumItems = computed(() => {
     <!-- 模态框 B：设备转售出二手回血 -->
     <div
       v-if="sellingGear"
+      role="dialog"
+      aria-modal="true"
+      aria-label="设备转售回血"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
       @click.self="sellingGear = null"
     >
@@ -1641,7 +1666,7 @@ const spectrumItems = computed(() => {
               原值 ¥{{ formatMoney(sellingGear.price_cents || 0) }} · 自动转为已售状态并记入「二手回血」收入
             </p>
           </div>
-          <button @click="sellingGear = null" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+          <button @click="sellingGear = null" aria-label="关闭" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -1704,6 +1729,9 @@ const spectrumItems = computed(() => {
     <!-- 模态框 C：修改账目 (支持完整分期参数与城市关联) -->
     <div
       v-if="editingTx"
+      role="dialog"
+      aria-modal="true"
+      aria-label="修改账目"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
       @click.self="handleEditClose"
     >
@@ -1712,7 +1740,7 @@ const spectrumItems = computed(() => {
           <h3 class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
             修改账目
           </h3>
-          <button @click="handleEditClose" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+          <button @click="handleEditClose" aria-label="关闭" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -1753,7 +1781,10 @@ const spectrumItems = computed(() => {
                 placeholder="0.00"
                 class="w-full px-3 py-1.5 text-sm border border-[var(--border-subtle)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
               />
-              <p v-if="editErrorMsg" class="mt-1 text-[11px] text-[var(--accent-vermilion)]">
+              <p
+                class="mt-1 min-h-[18px] truncate text-[11px] text-[var(--accent-vermilion)] transition-opacity"
+                :class="editErrorMsg ? '' : 'opacity-0 pointer-events-none'"
+              >
                 {{ editErrorMsg }}
               </p>
             </div>
@@ -1843,26 +1874,33 @@ const spectrumItems = computed(() => {
           </div>
 
           <!-- 分期付款参数校准 -->
-          <div v-if="editType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-3">
+          <div
+            class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-3 transition-opacity"
+            :class="editType === 'expense' ? '' : 'opacity-50 pointer-events-none'"
+          >
             <div class="flex items-center gap-2">
               <input
                 id="editTxInstallmentCheck"
                 v-model="editIsInstallment"
                 type="checkbox"
-                class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
+                :disabled="editType !== 'expense'"
+                class="rounded-xs cursor-pointer accent-[var(--ink-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <label for="editTxInstallmentCheck" class="text-[var(--ink-primary)] cursor-pointer select-none">
                 信贷分期账目 (校准总期数与剩余待还期数)
               </label>
             </div>
 
-            <div v-if="editIsInstallment" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            <div
+              class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 transition-opacity"
+              :class="editIsInstallment ? '' : 'opacity-50 pointer-events-none'"
+            >
               <div class="col-span-2">
                 <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
                 <PaperSelect
                   v-model="editInstallmentChannel"
                   size="sm"
-                  :disabled="creditChannels.length === 0"
+                  :disabled="!editIsInstallment || creditChannels.length === 0"
                   :options="
                     creditChannels.map((c) => ({ value: c.code, label: c.name }))
                   "
@@ -1870,7 +1908,10 @@ const spectrumItems = computed(() => {
                 <p class="mt-1 text-[10px] text-[var(--ink-muted)]">
                   还款日随渠道配置：每月 {{ editRepaymentDay }} 日
                 </p>
-                <p v-if="creditChannels.length === 0" class="mt-1 text-[10px] text-[var(--ink-muted)]">
+                <p
+                  class="mt-1 min-h-[14px] text-[10px] text-[var(--ink-muted)] transition-opacity"
+                  :class="creditChannels.length === 0 ? '' : 'opacity-0 pointer-events-none'"
+                >
                   渠道列表未加载，保存将保留原渠道与还款日
                 </p>
               </div>
@@ -1881,6 +1922,7 @@ const spectrumItems = computed(() => {
                   type="number"
                   min="1"
                   max="60"
+                  :disabled="!editIsInstallment"
                   class="w-full px-2 py-1 text-xs border border-[var(--border-subtle)] rounded-xs bg-transparent"
                 />
               </div>
@@ -1891,6 +1933,7 @@ const spectrumItems = computed(() => {
                   type="number"
                   min="0"
                   :max="editRemainMax"
+                  :disabled="!editIsInstallment"
                   class="w-full px-2 py-1 text-xs border border-[var(--border-subtle)] rounded-xs bg-transparent"
                 />
                 <p class="mt-1 text-[10px] text-[var(--ink-muted)]">

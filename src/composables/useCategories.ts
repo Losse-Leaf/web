@@ -38,6 +38,8 @@ const byScope = ref<Record<CategoryScope, string[]>>({
 })
 const hasLoaded = ref(false)
 const isLoadingCategories = ref(false)
+// WEB 第2批：全局版本戳，仅最新一次 loadCategories 可写回字典并复位 loading。
+let categoriesFetchSeq = 0
 
 // 全局分类管理弹窗状态，任意表单或视图可一键唤起并定位到对应 Tab
 const isCategoryManagerOpen = ref(false)
@@ -46,9 +48,11 @@ const activeManagerScope = ref<CategoryScope>('expense')
 export function useCategories() {
   const loadCategories = async (force = false) => {
     if (hasLoaded.value && !force) return
+    const seq = ++categoriesFetchSeq
     try {
       isLoadingCategories.value = true
       const res = await fetchCategories()
+      if (seq !== categoriesFetchSeq) return
       if (res && Array.isArray(res.items)) {
         categoryItems.value = res.items
       }
@@ -65,7 +69,9 @@ export function useCategories() {
     } catch (err) {
       console.warn('Failed to fetch custom categories, using defaults:', err)
     } finally {
-      isLoadingCategories.value = false
+      if (seq === categoriesFetchSeq) {
+        isLoadingCategories.value = false
+      }
     }
   }
 

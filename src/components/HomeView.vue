@@ -84,10 +84,10 @@ const displaySiteName = computed(() => {
   return props.config?.site_name?.split('·')?.[0]?.trim() || '散页'
 })
 
-// 刊物副标题（由后端配置驱动，若为旧版时光手账口号则升级为全维度副标）
+// 刊物副标题（由后端配置单一驱动 RC-40，缺省回落全维度副标）
 const displaySubtitle = computed(() => {
   const raw = props.config?.site_subtitle
-  if (!raw || raw.includes('时光手账')) {
+  if (!raw) {
     return '日常 · 资产 · 心愿 · 行迹 · 造物'
   }
   return raw

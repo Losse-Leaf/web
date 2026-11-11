@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken, deleteFootprint } from '../utils/api'
-import { formatMoney } from '../utils/format'
+import { formatMoney, parseOccurredDate } from '../utils/format'
 import { audio } from '../utils/audio'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { CityMemoryDrawerData, ProvinceMemoryDrawerData, Attachment } from '../types'
@@ -126,7 +126,7 @@ const handleBackToProvince = () => {
 
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return ''
-  return dateStr.slice(0, 10).replace(/-/g, '.')
+  return parseOccurredDate(dateStr).dateKey.replace(/-/g, '.')
 }
 
 const isProvinceMode = computed(() => {
@@ -214,6 +214,9 @@ const handleDeleteFootprint = async (fp: any) => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog"
+    aria-modal="true"
+    aria-label="城市回忆抽屉"
     class="fixed inset-0 z-50 flex justify-end bg-[var(--ink-primary)]/40 backdrop-blur-2xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >
@@ -270,6 +273,7 @@ const handleDeleteFootprint = async (fp: any) => {
 
         <button
           @click="emit('close')"
+          aria-label="关闭"
           class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 cursor-pointer transition-colors"
           title="关闭抽屉"
         >
@@ -278,16 +282,18 @@ const handleDeleteFootprint = async (fp: any) => {
       </div>
 
       <!-- 载入中与错误 -->
-      <div v-if="isLoading" class="text-xs font-mono-archive text-[var(--ink-muted)] py-16 text-center">
+      <div v-if="isLoading" class="min-h-[360px] flex items-center justify-center text-xs font-mono-archive text-[var(--ink-muted)]">
         正在展开{{ isProvinceMode ? '省份' : '城市' }}回忆抽屉...
       </div>
 
-      <div v-else-if="errorMsg" class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
-        {{ errorMsg }}
+      <div v-else-if="errorMsg" class="min-h-[360px] flex items-start">
+        <div class="w-full p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-300 text-xs font-mono-archive rounded-xs">
+          {{ errorMsg }}
+        </div>
       </div>
 
       <!-- 四大递进章节 (RC-93 省市两级四重聚合) -->
-      <div v-else-if="drawerData" class="space-y-8">
+      <div v-else-if="drawerData" class="space-y-8 min-h-[360px]">
         
         <!-- 第一章：履迹简志 (Visits Summary) -->
         <section class="space-y-3 p-4 bg-[var(--bg-subtle)]/40 border border-[var(--border-subtle)] rounded-xs font-mono-archive text-xs">

@@ -299,6 +299,24 @@ const anyModalOpen = computed(
     Boolean(confirmRequest.value) ||
     Boolean(selectedEntry.value)
 )
+// Cmd+K / 搜索入口：anyModalOpen 含 isSearchOpen 自身，单独列出「其它弹窗」状态，
+// 避免把搜索自己算进去导致永远打不开；已有别的弹窗时忽略开启，防止两层 z-50 叠加。
+const anyOtherModalOpen = computed(
+  () =>
+    isStorageBackupOpen.value ||
+    isNewEntryOpen.value ||
+    isStatsOpen.value ||
+    isPairingOpen.value ||
+    isUpdateCheckOpen.value ||
+    isSessionHintOpen.value ||
+    isCategoryManagerOpen.value ||
+    Boolean(confirmRequest.value) ||
+    Boolean(selectedEntry.value)
+)
+const handleOpenSearch = () => {
+  if (anyOtherModalOpen.value) return
+  isSearchOpen.value = true
+}
 const wishesRefreshKey = ref(0)
 const atlasRefreshKey = ref(0)
 const txRefreshKey = ref(0)
@@ -650,9 +668,6 @@ onMounted(async () => {
   }
   if (cfgRes.status === 'fulfilled' && cfgRes.value) {
     const cfg = cfgRes.value
-    if (cfg.site_name && cfg.site_name.includes('时光手账')) {
-      cfg.site_name = '散页 · 个人生活志'
-    }
     siteConfig.value = cfg
     document.title = cfg.site_name || '散页 · 个人生活志'
   }
@@ -784,7 +799,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       :config="siteConfig"
       @navigate="navigateTo"
       @openAdd="openNewEntry()"
-      @openSearch="isSearchOpen = true"
+      @openSearch="handleOpenSearch"
       @openStorageBackup="openStorageBackupModal"
       @openPairing="isPairingOpen = true"
       @openUpdateCheck="openUpdateCheckModal"

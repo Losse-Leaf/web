@@ -33,6 +33,8 @@ watch(query, (newQ) => {
   if (debounceTimer) clearTimeout(debounceTimer)
   const trimmed = newQ.trim()
   if (!trimmed) {
+    // 手动删空输入也作废旧请求，避免在途响应把上一条 query 的结果写回
+    activeSearchReqId++
     debouncedQuery.value = ''
     remoteEntries.value = []
     remoteFootprints.value = []
@@ -154,12 +156,15 @@ onUnmounted(() => {
 <template>
   <div
     v-if="isOpen"
+    role="dialog"
+    aria-modal="true"
+    aria-label="全站检索"
     class="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-20 px-3 sm:px-4 bg-black/45 backdrop-blur-xs transition-opacity duration-200"
     style="padding-top: max(1rem, env(safe-area-inset-top, 0px));"
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-2xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[88dvh] sm:max-h-[80vh] text-left animate-in fade-in zoom-in-95 duration-200 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]"
+      class="w-full max-w-2xl bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl overflow-hidden flex flex-col h-[min(88dvh,720px)] sm:h-[min(80dvh,720px)] max-h-[88dvh] sm:max-h-[80vh] text-left animate-in fade-in zoom-in-95 duration-200 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]"
     >
       <!-- 搜索输入栏 -->
       <div class="p-4 border-b border-[var(--border-subtle)] flex items-center gap-3">
@@ -196,7 +201,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 搜索结果列表区 -->
-      <div class="flex-grow overflow-y-auto p-4 space-y-5">
+      <div class="flex-grow min-h-0 overflow-y-auto p-4 space-y-5">
         <div v-if="!query" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)] space-y-2">
           <p>输入关键词开始检索生活档案</p>
           <p class="text-[11px] opacity-70">支持跨年份全库检索生活记录、山川足迹、心愿清单与造物项目</p>
@@ -229,7 +234,7 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <h3 class="font-serif-editorial text-base text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors">
+              <h3 class="font-serif-editorial text-base text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors truncate">
                 {{ item.title || '无题记事' }}
               </h3>
 
@@ -262,7 +267,7 @@ onUnmounted(() => {
               <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
                 <span>{{ fp.city_name }} · {{ fp.title || '旅程足迹' }}</span>
                 <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                  {{ (fp.visited_at || '').slice(0, 10) }}
+                  {{ fp.visited_at ? parseOccurredDate(fp.visited_at).dateKey : '' }}
                 </span>
               </div>
               <p v-if="fp.note" class="text-[11px] text-[var(--ink-secondary)] line-clamp-1 font-serif-editorial">
@@ -324,7 +329,7 @@ onUnmounted(() => {
       <!-- 底部快捷操作说明 -->
       <div class="px-4 py-2 border-t border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
         <span>已收录 {{ entries.length }} 条生活印记</span>
-        <span>ESC 关闭 / ↵ 打开</span>
+        <span>ESC 关闭</span>
       </div>
     </div>
   </div>

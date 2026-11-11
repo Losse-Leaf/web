@@ -45,6 +45,7 @@ const displaySiteName = computed(() => {
 const isAdmin = computed(() => Boolean(getAdminToken()))
 
 // 核心导航栏目（单轨统一；访客未登录时彻底不渲染私密资产管理 RC-53）
+// 注：登录/登出属身份态切换而非输入内容变化，此处保留既定语义不做常驻占位。
 const navItems = computed(() => {
   const items = [
     { key: 'home', label: '时间流' },
@@ -180,8 +181,7 @@ onUnmounted(() => {
           v-for="item in navItems"
           :key="item.key"
           @click="setView(item.key)"
-          class="relative text-sm tracking-wider transition-all duration-200 cursor-pointer py-1.5 px-2.5 lg:px-3 rounded-xs select-none"
-          :class="currentView === item.key 
+          class="relative text-sm tracking-wider transition-all duration-200 cursor-pointer py-1.5 px-2.5 lg:px-3 rounded-xs select-none"          :class="currentView === item.key 
             ? 'text-[var(--ink-primary)] font-medium bg-[var(--bg-subtle)]/75 shadow-2xs after:content-[\'\'] after:absolute after:bottom-0 after:left-2.5 after:right-2.5 after:h-[2px] after:bg-[var(--accent-warm)]' 
             : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--bg-subtle)]/40'"
         >
@@ -212,10 +212,10 @@ onUnmounted(() => {
           <span class="font-serif-editorial text-[13px]">记录</span>
         </button>
 
-        <!-- 主理人身份状态 -->
+        <!-- 主理人身份状态：常驻占位，登录/登出只切透明度，不推挤右侧工具区 -->
         <div
-          v-if="isAdmin"
-          class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-emerald-600/30 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-mono-archive text-[11px]"
+          class="flex items-center gap-1.5 text-xs py-1 px-2 rounded-xs border border-emerald-600/30 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-mono-archive text-[11px] transition-opacity"
+          :class="isAdmin ? 'opacity-100' : 'opacity-0 pointer-events-none'"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>主理人</span>
@@ -313,7 +313,7 @@ onUnmounted(() => {
     <!-- 移动端手账折页抽屉 -->
     <div
       v-if="mobileMenuOpen"
-      class="md:hidden border-b border-[var(--border-subtle)] bg-[var(--bg-archive)]/98 backdrop-blur-lg px-5 py-6 space-y-6 shadow-xl animate-in slide-in-from-top-2 duration-200"
+      class="md:hidden absolute top-full left-0 right-0 z-50 border-b border-[var(--border-subtle)] bg-[var(--bg-archive)] backdrop-blur-lg px-5 py-6 space-y-6 shadow-xl animate-in slide-in-from-top-2 duration-200"
     >
       <!-- 快捷新增与身份状态 -->
       <div class="space-y-2.5">
@@ -337,8 +337,7 @@ onUnmounted(() => {
             v-for="item in navItems"
             :key="item.key"
             @click="setView(item.key)"
-            class="text-left py-2.5 px-3 rounded-xs border transition-all flex items-center justify-between cursor-pointer"
-            :class="currentView === item.key 
+            class="text-left py-2.5 px-3 rounded-xs border transition-all flex items-center justify-between cursor-pointer"            :class="currentView === item.key 
               ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold shadow-2xs' 
               : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'"
           >

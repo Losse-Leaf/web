@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { fetchFootprintsAtlas, fetchFootprints, deleteFootprint, getAdminToken } from '../utils/api'
+import { parseOccurredDate } from '../utils/format'
 import { audio } from '../utils/audio'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { AtlasCitySummary, Footprint, LifeEntry } from '../types'
@@ -567,12 +568,13 @@ onMounted(() => {
 
     <!-- 错误提示条 -->
     <div
-      v-if="loadError"
-      class="p-4 border border-dashed border-rose-500/40 rounded-xs flex items-center justify-between gap-4 font-mono-archive text-xs"
+      class="min-h-[56px] p-4 border border-dashed border-rose-500/40 rounded-xs flex items-center justify-between gap-4 font-mono-archive text-xs transition-opacity"
+      :class="loadError ? '' : 'opacity-0 pointer-events-none'"
     >
       <span class="text-rose-600 dark:text-rose-400">{{ loadError }}</span>
       <button
         @click="loadAtlas"
+        :disabled="!loadError"
         class="px-3 py-1 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-primary)] cursor-pointer shrink-0"
       >
         重新加载
@@ -725,11 +727,11 @@ onMounted(() => {
               v-for="seal in filteredProvinceSeals"
               :key="seal.adcode"
               @click="seal.isLit ? handleLitProvinceSelect(seal) : handleUnlitProvinceClick(seal)"
-              class="relative rounded-xs p-4 text-left transition-all duration-200 flex flex-col justify-between cursor-pointer group overflow-hidden"
+              class="relative rounded-xs p-4 text-left transition-shadow duration-200 flex flex-col justify-between cursor-pointer group overflow-hidden"
               :class="[
                 seal.isLit
                   ? currentFocusedCity?.province === seal.name
-                    ? 'bg-[#FAF6EE] dark:bg-[#221F1C] border-2 border-[#b94a3b] shadow-[0_6px_20px_rgba(185,74,59,0.10)]'
+                    ? 'bg-[#FAF6EE] dark:bg-[#221F1C] border border-[#b94a3b] ring-2 ring-[#b94a3b] shadow-[0_6px_20px_rgba(185,74,59,0.10)]'
                     : 'bg-[#FAF7F0] dark:bg-[#1C1A18] border border-[#D5CDC0] dark:border-[#383430] hover:border-[#b94a3b]/70 shadow-xs'
                   : 'bg-[var(--bg-subtle)]/35 hover:bg-[var(--bg-subtle)]/70 border border-dashed border-[var(--border-subtle)] opacity-75 hover:opacity-100',
               ]"
@@ -875,16 +877,19 @@ onMounted(() => {
             </div>
 
             <!-- 同省已点亮城邑快捷切换排签 -->
-            <div v-if="focusedProvinceCities.length > 1" class="space-y-1.5">
+            <div
+              class="space-y-1.5 min-h-[64px] transition-opacity"
+              :class="focusedProvinceCities.length > 1 ? '' : 'opacity-0 pointer-events-none'"
+            >
               <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">
                 {{ currentFocusedCity.province }}已点亮城邑 ({{ focusedProvinceCities.length }})：
               </div>
-              <div class="flex flex-wrap items-center gap-1.5">
+              <div class="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap">
                 <button
                   v-for="pc in focusedProvinceCities"
                   :key="pc.code"
                   @click="focusedCityCode = pc.code"
-                  class="px-2.5 py-1 rounded-xs text-xs font-serif-editorial border transition-colors cursor-pointer"
+                  class="px-2.5 py-1 rounded-xs text-xs font-serif-editorial border transition-colors cursor-pointer shrink-0"
                   :class="
                     pc.code === currentFocusedCity.code
                       ? 'border-[#b94a3b] bg-[#b94a3b] text-[#FAF7F0] font-medium'
@@ -914,21 +919,21 @@ onMounted(() => {
                 <span class="font-mono-archive">{{ currentFocusedCity.firstVisitedAt || '早年行迹' }}</span>
               </div>
               <div
-                v-if="currentFocusedCity.latestVisitedAt && currentFocusedCity.latestVisitedAt !== currentFocusedCity.firstVisitedAt"
-                class="flex items-center justify-between"
+                class="flex items-center justify-between transition-opacity"
+                :class="currentFocusedCity.latestVisitedAt && currentFocusedCity.latestVisitedAt !== currentFocusedCity.firstVisitedAt ? '' : 'opacity-0 pointer-events-none'"
               >
                 <span class="text-[var(--ink-muted)]">最近踏足：</span>
-                <span class="font-mono-archive">{{ currentFocusedCity.latestVisitedAt }}</span>
+                <span class="font-mono-archive">{{ currentFocusedCity.latestVisitedAt || '—' }}</span>
               </div>
             </div>
 
             <!-- 旅途随笔手札引用 -->
             <div
-              v-if="currentFocusedCity.latestNote"
-              class="text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed bg-[var(--bg-archive)]/60 p-3 rounded-xs border-l-2 border-[#b94a3b]"
+              class="min-h-[76px] text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed bg-[var(--bg-archive)]/60 p-3 rounded-xs border-l-2 border-[#b94a3b] transition-opacity"
+              :class="currentFocusedCity.latestNote ? '' : 'opacity-0 pointer-events-none'"
             >
               <span class="text-[var(--ink-muted)] block text-[11px] font-serif-editorial mb-1">行旅随笔：</span>
-              “{{ currentFocusedCity.latestNote }}”
+              “{{ currentFocusedCity.latestNote || '—' }}”
             </div>
 
             <!-- 双联操作按钮：城卷抽屉 + 省卷总览 -->
@@ -1460,7 +1465,7 @@ onMounted(() => {
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                  {{ fp.visited_at ? fp.visited_at.slice(0, 10) : '' }}<template v-if="fp.departed_at && fp.departed_at.slice(0, 10) !== (fp.visited_at || '').slice(0, 10)"> ~ {{ fp.departed_at.slice(0, 10) }}</template>
+                  {{ fp.visited_at ? parseOccurredDate(fp.visited_at).dateKey : '' }}<template v-if="fp.departed_at && parseOccurredDate(fp.departed_at).dateKey !== (fp.visited_at ? parseOccurredDate(fp.visited_at).dateKey : '')"> ~ {{ parseOccurredDate(fp.departed_at).dateKey }}</template>
                 </span>
                 <template v-if="isAdmin">
                   <button

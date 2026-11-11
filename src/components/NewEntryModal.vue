@@ -23,7 +23,7 @@ import {
   getAdminToken,
 } from '../utils/api'
 import { useCategories } from '../composables/useCategories'
-import { getBeijingDateTimeString, getBeijingISOString } from '../utils/format'
+import { getBeijingDateTimeString, getBeijingISOString, parseOccurredDate } from '../utils/format'
 import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
@@ -304,8 +304,8 @@ const loadAvailableFootprints = async () => {
 }
 
 const formatFootprintOptionLabel = (fp: Footprint) => {
-  const startStr = (fp.visited_at || '').slice(0, 10)
-  const endStr = fp.departed_at ? fp.departed_at.slice(0, 10) : ''
+  const startStr = fp.visited_at ? parseOccurredDate(fp.visited_at).dateKey : ''
+  const endStr = fp.departed_at ? parseOccurredDate(fp.departed_at).dateKey : ''
   const datePart = endStr && endStr !== startStr ? `${startStr} ~ ${endStr}` : startStr
   const tripTitle = fp.title || (fp.note ? fp.note.slice(0, 16) : '旅程打卡')
   return `${fp.city_name} · ${tripTitle} (${datePart})`
@@ -559,6 +559,12 @@ const handleSubmit = async () => {
     const amtFloat = parseFloat(txAmount.value)
     if (isNaN(amtFloat) || amtFloat <= 0) {
       errorMsg.value = '请输入有效的金额'
+      return
+    }
+    // 金额以「分」为最小单位：拒绝 0.001 等多位小数与 1e5 科学计数法，
+    // 避免 parseFloat 静默接受后与后端按分落库口径分叉
+    if (!/^\d+(\.\d{1,2})?$/.test(txAmount.value.trim())) {
+      errorMsg.value = '金额最多保留两位小数'
       return
     }
     const amountInCents = Math.round(amtFloat * 100)
@@ -1001,7 +1007,7 @@ const handleSubmit = async () => {
                 :options="paymentMethods.map((m) => ({ value: m, label: m }))"
                 :disabled="isInstallment"
               />
-              <p v-if="isInstallment" class="mt-1 text-[10px] font-mono-archive text-[var(--ink-muted)]">
+              <p class="mt-1 text-[10px] font-mono-archive text-[var(--ink-muted)] transition-opacity" :class="isInstallment ? 'opacity-100' : 'opacity-0'">
                 分期账目由所选信贷渠道代扣，支付方式随分期渠道生效，不再单独记录
               </p>
             </div>
@@ -1026,14 +1032,14 @@ const handleSubmit = async () => {
           </div>
 
           <!-- 关联旅程足迹 (支持一次旅程归集多笔账单；与心愿关联互斥，仅支出可见) -->
-          <div v-if="txType === 'expense' && availableFootprints.length > 0" class="space-y-1.5">
+          <div class="space-y-1.5 transition-opacity" :class="txType === 'expense' && availableFootprints.length > 0 ? '' : 'opacity-50 pointer-events-none'">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               关联旅程足迹
             </label>
             <PaperSelect
               v-model="selectedFootprintId"
               @change="onFootprintSelected"
-              :disabled="!!selectedWishId"
+              :disabled="txType !== 'expense' || availableFootprints.length === 0 || !!selectedWishId"
               :options="[
                 { value: null, label: '-- 自动匹配同城近期旅程 / 不指定 --' },
                 ...availableFootprints.map((fp) => ({
@@ -1048,12 +1054,12 @@ const handleSubmit = async () => {
           </div>
 
           <!-- 联动心愿单 -->
-          <div v-if="txType === 'expense' && availableWishes.length > 0" class="space-y-1.5">
+          <div class="space-y-1.5 transition-opacity" :class="txType === 'expense' && availableWishes.length > 0 ? '' : 'opacity-50 pointer-events-none'">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联心愿清单 (自动达成归册)</label>
             <PaperSelect
               v-model="selectedWishId"
               @change="onWishSelected"
-              :disabled="!!selectedFootprintId"
+              :disabled="txType !== 'expense' || availableWishes.length === 0 || !!selectedFootprintId"
               :options="[
                 { value: null, label: '-- 不关联心愿 --' },
                 ...availableWishes.map((w) => ({
@@ -1068,13 +1074,13 @@ const handleSubmit = async () => {
           </div>
 
           <!-- 分期付款支持（渠道唯一事实源为后端渠道行；列表为空时禁用分期并对齐 Android 提示） -->
-          <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5">
+          <div class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5 transition-opacity" :class="txType === 'expense' ? '' : 'opacity-50 pointer-events-none'">
             <div class="flex items-center gap-2">
               <input
                 id="isInstallmentCheckbox"
                 v-model="isInstallment"
                 type="checkbox"
-                :disabled="creditChannels.length === 0"
+                :disabled="txType !== 'expense' || creditChannels.length === 0"
                 class="rounded-xs cursor-pointer accent-[var(--ink-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <label for="isInstallmentCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none" :class="creditChannels.length === 0 ? 'opacity-40' : ''">
@@ -1086,13 +1092,14 @@ const handleSubmit = async () => {
               请先在信贷渠道管理添加分期渠道
             </p>
 
-            <div v-if="isInstallment && creditChannels.length > 0" class="space-y-3 pt-1 text-xs font-mono-archive">
+            <div class="space-y-3 pt-1 text-xs font-mono-archive transition-opacity" :class="txType === 'expense' && isInstallment && creditChannels.length > 0 ? '' : 'opacity-50 pointer-events-none'">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
                   <PaperSelect
                     v-model="installmentChannel"
                     size="sm"
+                    :disabled="txType !== 'expense' || !isInstallment || creditChannels.length === 0"
                     :options="
                       creditChannels.map((ch) => ({
                         value: ch.code,
@@ -1109,6 +1116,7 @@ const handleSubmit = async () => {
                       :key="m"
                       type="button"
                       @click="installmentMonths = m"
+                      :disabled="txType !== 'expense' || !isInstallment || creditChannels.length === 0"
                       class="flex-1 py-1 text-xs border rounded-xs transition-colors cursor-pointer text-center"
                       :class="installmentMonths === m ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
                     >
@@ -1119,19 +1127,20 @@ const handleSubmit = async () => {
               </div>
 
               <div class="p-2 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[11px] text-[var(--ink-secondary)] flex items-center justify-between">
-                <span>每期月供测算（整除口径，末期含尾差）：<strong class="text-[var(--ink-primary)]">¥{{ calculatedMonthlyPay }}</strong> / 期</span>
+                <span>每期月供测算（整除口径，末期含尾差）：<strong class="text-[var(--ink-primary)] tabular-nums inline-block min-w-[6rem] text-right">¥{{ calculatedMonthlyPay }}</strong> / 期</span>
                 <span>绑定还款日：<strong>每月 {{ effectiveRepaymentDay }} 日</strong></span>
               </div>
             </div>
           </div>
 
           <!-- 同步收录至随身与桌面固定资产库 -->
-          <div v-if="txType === 'expense'" class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5">
+          <div class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5 transition-opacity" :class="txType === 'expense' ? '' : 'opacity-50 pointer-events-none'">
             <div class="flex items-center gap-2">
               <input
                 id="syncToGearCheckbox"
                 v-model="syncToGear"
                 type="checkbox"
+                :disabled="txType !== 'expense'"
                 class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
               />
               <label for="syncToGearCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none">
@@ -1139,7 +1148,7 @@ const handleSubmit = async () => {
               </label>
             </div>
 
-            <div v-if="syncToGear" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-mono-archive">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-mono-archive transition-opacity" :class="txType === 'expense' && syncToGear ? '' : 'opacity-50 pointer-events-none'">
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label class="block text-[var(--ink-muted)]">设备类别</label>
@@ -1154,6 +1163,7 @@ const handleSubmit = async () => {
                 <PaperSelect
                   v-model="gearCategory"
                   size="sm"
+                  :disabled="txType !== 'expense' || !syncToGear"
                   :options="gearCategories.map((c) => ({ value: c, label: c }))"
                 />
               </div>
@@ -1162,7 +1172,8 @@ const handleSubmit = async () => {
                 <input
                   v-model="gearSpec"
                   type="text"
-                  class="w-full px-2.5 py-1.5 text-xs bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
+                  :disabled="txType !== 'expense' || !syncToGear"
+                  class="w-full px-2.5 py-1.5 text-xs bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none disabled:opacity-60"
                 />
               </div>
             </div>
@@ -1535,8 +1546,10 @@ const handleSubmit = async () => {
         </template>
 
         <!-- 底部错误提示与操作按钮 -->
-        <div v-if="errorMsg" class="p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
-          {{ errorMsg }}
+        <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">
+          <div v-if="errorMsg" class="w-full p-3 bg-red-50 text-red-700 text-xs rounded-xs border border-red-200">
+            {{ errorMsg }}
+          </div>
         </div>
         <div class="pt-5 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
           <button
@@ -1552,8 +1565,10 @@ const handleSubmit = async () => {
             :disabled="isSubmitting"
             class="px-5 py-2 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs transition-opacity cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
           >
-            <Check v-if="!isSubmitting" class="w-3.5 h-3.5" />
-            <span>{{ isSubmitting ? '保存中...' : '记录到生活档案' }}</span>
+            <span class="w-3.5 h-3.5 inline-flex items-center justify-center shrink-0">
+              <Check v-if="!isSubmitting" class="w-3.5 h-3.5" />
+            </span>
+            <span class="min-w-[7em] text-center">{{ isSubmitting ? '保存中...' : '记录到生活档案' }}</span>
           </button>
         </div>
       </form>
