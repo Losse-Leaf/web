@@ -71,6 +71,7 @@ const userManuallyChangedCity = ref(false)
 const occurredAt = ref(getBeijingDateTimeString())
 const selectedProjectId = ref<number | null>(null)
 const selectedFootprintId = ref<number | null>(null)
+const isPrivate = ref(false)
 const attachmentIds = ref<number[]>([])
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 
@@ -492,6 +493,7 @@ const resetForm = () => {
     props.initialProjectId ||
     (selectedKind.value === 'project' && props.projects?.length ? props.projects[0].id : null)
   attachmentIds.value = []
+  isPrivate.value = false
   txAmount.value = ''
   txType.value = 'expense'
   txCategory.value = expenseCategories.value[0] || '餐饮'
@@ -670,6 +672,7 @@ const handleSubmit = async () => {
         budget: budgetCents,
         target_date: wishTargetDate.value || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
+        is_private: isPrivate.value,
       })
 
       if (createdWish.life_entry_id) {
@@ -715,6 +718,7 @@ const handleSubmit = async () => {
           description: projDescription.value.trim(),
           story: projStory.value.trim(),
           github_url: projGithubUrl.value.trim(),
+          is_private: isPrivate.value,
         })
 
         // 后端 CreateProject 已原子创建伴生手记；仅当用户同时上传了相册附件时，
@@ -731,6 +735,7 @@ const handleSubmit = async () => {
             occurred_at: occurredAt.value,
             project_id: createdProj.id,
             attachment_ids: attachmentIds.value,
+            is_private: isPrivate.value,
           })
         }
 
@@ -772,6 +777,7 @@ const handleSubmit = async () => {
           occurred_at: occurredAt.value,
           project_id: selectedProjectId.value,
           attachment_ids: attachmentIds.value,
+          is_private: isPrivate.value,
         })
         imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
@@ -822,6 +828,7 @@ const handleSubmit = async () => {
       footprint_id:
         selectedKind.value === 'travel' ? selectedFootprintId.value || undefined : undefined,
       attachment_ids: attachmentIds.value,
+      is_private: isPrivate.value,
     })
 
     imageUploaderRef.value?.markCommitted()
@@ -1537,6 +1544,31 @@ const handleSubmit = async () => {
             />
           </div>
         </template>
+
+        <div
+          v-if="selectedKind !== 'transaction'"
+          class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40"
+        >
+          <div>
+            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
+            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
+              开启后仅主理人登录可见，展厅公开时不会展示此条记录
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="isPrivate"
+            @click="isPrivate = !isPrivate"
+            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
+            :class="isPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
+          >
+            <span
+              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
+              :class="isPrivate ? 'translate-x-5' : 'translate-x-0'"
+            />
+          </button>
+        </div>
 
         <!-- 底部错误提示与操作按钮 -->
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">

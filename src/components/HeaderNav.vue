@@ -21,7 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'navigate', view: string): void
   (e: 'openAdd'): void
-  (e: 'openStorageBackup', tab?: 'backup' | 'storage'): void
+  (e: 'openStorageBackup', tab?: 'backup' | 'storage' | 'visibility'): void
   (e: 'openSearch'): void
   (e: 'openPairing'): void
   (e: 'openUpdateCheck'): void
@@ -43,18 +43,23 @@ const isAdmin = computed(() => Boolean(getAdminToken()))
 // 核心导航栏目（单轨统一；访客未登录时彻底不渲染私密资产管理 RC-53）
 // 注：登录/登出属身份态切换而非输入内容变化，此处保留既定语义不做常驻占位。
 const navItems = computed(() => {
-  const items = [
-    { key: 'home', label: '时间流' },
-  ]
   if (isAdmin.value) {
-    items.push({ key: 'transactions', label: '资产' })
+    return [
+      { key: 'home', label: '时间流' },
+      { key: 'transactions', label: '资产' },
+      { key: 'wishes', label: '心愿' },
+      { key: 'atlas', label: '足迹' },
+      { key: 'projects', label: '项目' },
+      { key: 'about', label: '主理人' },
+    ]
   }
-  items.push(
-    { key: 'wishes', label: '心愿' },
-    { key: 'atlas', label: '足迹' },
-    { key: 'projects', label: '项目' },
-    { key: 'about', label: '主理人' }
-  )
+  const pub = new Set(props.config?.public_modules || [])
+  const items: { key: string; label: string }[] = []
+  if (pub.has('entries')) items.push({ key: 'home', label: '时间流' })
+  if (pub.has('wishes')) items.push({ key: 'wishes', label: '心愿' })
+  if (pub.has('footprints')) items.push({ key: 'atlas', label: '足迹' })
+  if (pub.has('projects')) items.push({ key: 'projects', label: '项目' })
+  if (pub.has('profile')) items.push({ key: 'about', label: '主理人' })
   return items
 })
 
@@ -72,6 +77,11 @@ const toolOptions = computed(() => {
         key: 'storage-backup',
         label: '存储与备份',
         action: () => emit('openStorageBackup', 'backup'),
+      },
+      {
+        key: 'visibility',
+        label: '展厅公开设置',
+        action: () => emit('openStorageBackup', 'visibility'),
       },
       {
         key: 'update-check',

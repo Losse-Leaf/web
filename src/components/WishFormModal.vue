@@ -30,6 +30,7 @@ const budgetYuan = ref<string | number>('')
 const targetDate = ref('')
 /** 补档：许下日期（可回填为过去），默认今天 */
 const plantedAt = ref(getBeijingDateString())
+const isPrivate = ref(false)
 const attachments = ref<Attachment[]>([])
 const attachmentIds = ref<number[]>([])
 // 附件上传器引用：保存成功后 markCommitted，避免卸载时把已绑定参考图当孤儿清理
@@ -57,6 +58,7 @@ watch(
       plantedAt.value = w.planted_at ? parseOccurredDate(w.planted_at).dateKey : getBeijingDateString()
       attachments.value = w.attachments ? [...w.attachments] : []
       attachmentIds.value = attachments.value.map((a) => a.id)
+      isPrivate.value = Boolean(w.is_private)
     } else {
       kind.value = 'item'
       title.value = ''
@@ -69,6 +71,7 @@ watch(
       plantedAt.value = getBeijingDateString()
       attachments.value = []
       attachmentIds.value = []
+      isPrivate.value = false
     }
     errorMsg.value = ''
   },
@@ -138,6 +141,7 @@ const handleSubmit = async () => {
         // 用 web 传了图，再用 mac 改个字，图片就没了）。
         // 这里要真正清空图片时必须带上这个信号。
         clear_attachments: attachmentIds.value.length === 0,
+        is_private: isPrivate.value,
       })
       emit('saved', updated)
     } else {
@@ -152,6 +156,7 @@ const handleSubmit = async () => {
         target_date: targetDate.value || undefined,
         planted_at: plantedAt.value || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
+        is_private: isPrivate.value,
       })
       emit('saved', created)
     }
@@ -338,6 +343,28 @@ const handleSubmit = async () => {
             :initialAttachments="attachments"
             @update:attachments="attachmentIds = $event"
           />
+        </div>
+
+        <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
+          <div>
+            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
+            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
+              开启后仅主理人登录可见，展厅公开时不会展示此心愿
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="isPrivate"
+            @click="isPrivate = !isPrivate"
+            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
+            :class="isPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
+          >
+            <span
+              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
+              :class="isPrivate ? 'translate-x-5' : 'translate-x-0'"
+            />
+          </button>
         </div>
 
         <!-- 底部提交操作 -->

@@ -40,6 +40,7 @@ const visitedAt = ref(todayStr)
 const departedAt = ref('')
 const title = ref('')
 const note = ref('')
+const isPrivate = ref(false)
 const attachmentIds = ref<number[]>([])
 // 附件上传器引用：保存成功后 markCommitted，避免卸载时把已绑定附件当孤儿清理
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
@@ -78,11 +79,13 @@ watch(
         departedAt.value = props.editingFootprint.departed_at ? parseOccurredDate(props.editingFootprint.departed_at).dateKey : ''
         title.value = props.editingFootprint.title || ''
         note.value = props.editingFootprint.note || ''
+        isPrivate.value = Boolean(props.editingFootprint.is_private)
         attachmentIds.value = (props.editingFootprint.attachments || []).map((a) => a.id)
       } else {
         departedAt.value = ''
         title.value = ''
         note.value = ''
+        isPrivate.value = false
         attachmentIds.value = []
         if (props.initialCityCode && props.initialCityName) {
           userManuallyChangedCity.value = true
@@ -153,6 +156,7 @@ const handleSubmit = async () => {
         attachment_ids: attachmentIds.value,
         // 编辑时删光了照片必须显式声明解绑：单发空数组服务端按「保持原样」处理（契约 A）
         clear_attachments: attachmentIds.value.length === 0,
+        is_private: isPrivate.value,
       })
       // 附件已随本次保存绑定，标记后组件卸载不再当孤儿清理
       imageUploaderRef.value?.markCommitted()
@@ -167,6 +171,7 @@ const handleSubmit = async () => {
         title: title.value.trim() || undefined,
         note: note.value.trim() || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
+        is_private: isPrivate.value,
       })
       imageUploaderRef.value?.markCommitted()
       emit('saved', fp)
@@ -290,6 +295,28 @@ const handleSubmit = async () => {
           :initialAttachments="editingFootprint?.attachments"
           @update:attachments="(ids) => (attachmentIds = ids)"
         />
+
+        <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
+          <div>
+            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
+            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
+              开启后仅主理人登录可见，展厅公开时不会展示此条足迹
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="isPrivate"
+            @click="isPrivate = !isPrivate"
+            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
+            :class="isPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
+          >
+            <span
+              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
+              :class="isPrivate ? 'translate-x-5' : 'translate-x-0'"
+            />
+          </button>
+        </div>
 
         <!-- 底部提交操作 -->
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">

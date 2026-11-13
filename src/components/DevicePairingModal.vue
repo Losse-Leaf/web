@@ -568,6 +568,13 @@ onUnmounted(() => {
                     <span>改名</span>
                   </button>
                 </template>
+                <span
+                  v-if="dev.is_current"
+                  class="text-[11px] font-mono-archive px-1.5 py-0.2 rounded-xs bg-[var(--accent-moss)]/15 border border-[var(--accent-moss)]/30 text-[var(--accent-moss)]"
+                  title="当前正在使用的会话设备"
+                >
+                  当前设备
+                </span>
                 <span class="text-[11px] font-mono-archive uppercase px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] text-[var(--ink-muted)]">
                   {{ dev.platform }}
                 </span>

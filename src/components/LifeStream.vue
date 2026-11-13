@@ -395,6 +395,12 @@ const getGapDays = (index: number): number => {
             <span v-if="entry.city_name || entry.location" class="text-[var(--ink-secondary)]">
               · {{ entry.city_name || entry.location }}
             </span>
+            <span
+              v-if="entry.is_private"
+              class="px-1.5 py-0.2 rounded-xs border border-[var(--border-subtle)] text-[10px] font-mono-archive text-[var(--ink-muted)]"
+            >
+              私密
+            </span>
           </div>
 
           <!-- 多态内容排版 (Polymorphic Layouts) -->

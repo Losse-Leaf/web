@@ -624,6 +624,7 @@ export async function createLifeEntry(data: {
    * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
    */
   clear_attachments?: boolean
+  is_private?: boolean
 }): Promise<LifeEntry> {
   // 朋友圈式发布：标题为空时从正文首行派生（与后端同一套规则）
   const payload = {
@@ -662,6 +663,7 @@ export async function updateLifeEntry(
    * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
    */
   clear_attachments?: boolean
+  is_private?: boolean
   }
 ): Promise<LifeEntry> {
   const result = await request<LifeEntry>(`${API_BASE}/entries/${id}`, {
@@ -919,6 +921,7 @@ export async function createWish(data: {
    * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
    */
   clear_attachments?: boolean
+  is_private?: boolean
 }): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes`, {
     method: 'POST',
@@ -1029,6 +1032,7 @@ export async function createProject(data: {
   github_url?: string
   status?: string
   order?: number
+  is_private?: boolean
 }): Promise<Project> {
   return request<Project>(`${API_BASE}/projects`, {
     method: 'POST',
@@ -1047,6 +1051,7 @@ export async function updateProject(
     github_url?: string
     status?: string
     order?: number
+    is_private?: boolean
   }
 ): Promise<Project> {
   return request<Project>(`${API_BASE}/projects/${id}`, {
@@ -1121,6 +1126,13 @@ export async function updateTrustedDeviceName(
 // 7. Site Config (站点配置，全端动态驱动)
 export async function fetchSiteConfig(): Promise<SiteConfig> {
   return request<SiteConfig>(`${API_BASE}/config`)
+}
+
+export async function updateSiteConfig(data: Partial<SiteConfig>): Promise<SiteConfig> {
+  return request<SiteConfig>(`${API_BASE}/config`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
 }
 
 // 9. Curator Profile (主理人身份档案中枢，全端动态驱动)
@@ -1322,6 +1334,7 @@ export async function createFootprint(data: {
    * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
    */
   clear_attachments?: boolean
+  is_private?: boolean
 }): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints`, {
     method: 'POST',
@@ -1351,6 +1364,7 @@ export async function updateFootprint(
    * 编辑时若最终附件列表为空（用户删光了照片），必须带上这个信号。
    */
     clear_attachments: boolean
+    is_private: boolean
   }>
 ): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints/${id}`, {

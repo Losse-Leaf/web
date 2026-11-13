@@ -95,6 +95,7 @@ export interface LifeEntry {
   gear_id?: string
   footprint_id?: number
   attachments?: Attachment[]
+  is_private?: boolean
 
   // 记账投影支持
   amount?: number
@@ -175,6 +176,7 @@ export interface Project {
   github_url: string
   status: string
   order?: number
+  is_private?: boolean
 }
 
 export interface SiteConfig {
@@ -183,6 +185,7 @@ export interface SiteConfig {
   site_desc?: string
   curator_name?: string
   default_location?: string
+  public_modules?: string[]
 }
 
 export interface GearItem {
@@ -234,6 +237,7 @@ export interface TrustedDevice {
   paired_at: string
   last_active_at: string
   status: 'active' | 'revoked' | string
+  is_current?: boolean
 }
 
 export interface NetworkCandidate {
@@ -307,6 +311,7 @@ export interface Wish {
   footprint_id?: number
   gear_id?: string
   attachments?: Attachment[]
+  is_private?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -366,6 +371,7 @@ export interface Footprint {
   entries_count?: number
   total_spent?: number
   transaction_count?: number
+  is_private?: boolean
   created_at?: string
   updated_at?: string
 }

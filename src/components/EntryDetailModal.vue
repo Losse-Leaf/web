@@ -41,6 +41,7 @@ const editCityCode = ref('')
 const editCityName = ref('')
 const editOccurredAt = ref('')
 const editProjectId = ref<number | null>(null)
+const editIsPrivate = ref(false)
 const editAttachmentIds = ref<number[]>([])
 // 附件上传器引用：保存成功后调用 markCommitted()，避免组件卸载时把已绑定附件当孤儿清理
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
@@ -77,6 +78,7 @@ const startEdit = () => {
   editCityCode.value = props.entry.city_code || matched?.code || ''
   editCityName.value = props.entry.city_name || matched?.name || ''
   editProjectId.value = props.entry.project_id || null
+  editIsPrivate.value = Boolean(props.entry.is_private)
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
 
   // 统一经 parseOccurredDate 还原北京时间后再回填 (RC-134)
@@ -140,6 +142,7 @@ const handleSaveEdit = async () => {
       // 后端按「保持原值」处理 ⇒ 清空静默失效。对齐 TransactionsView 的判定。
       clear_city: cityCleared || undefined,
       project_id: editProjectId.value,
+      is_private: editIsPrivate.value,
       occurred_at: getBeijingISOString(editOccurredAt.value),
       attachment_ids: editAttachmentIds.value,
       // 编辑时删光了照片必须显式声明解绑：单发空数组服务端按「保持原样」处理，
@@ -406,6 +409,28 @@ const getKindLabel = (type: string) => {
               ...projects.map((p) => ({ value: p.id, label: p.title })),
             ]"
           />
+        </div>
+
+        <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
+          <div>
+            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
+            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
+              开启后仅主理人登录可见，展厅公开时不会展示此条记录
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="editIsPrivate"
+            @click="editIsPrivate = !editIsPrivate"
+            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
+            :class="editIsPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
+          >
+            <span
+              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
+              :class="editIsPrivate ? 'translate-x-5' : 'translate-x-0'"
+            />
+          </button>
         </div>
 
         <div class="pt-6 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">

@@ -71,6 +71,7 @@ const formStatus = ref('进行中')
 const formDescription = ref('')
 const formStory = ref('')
 const formGithubUrl = ref('')
+const formIsPrivate = ref(false)
 
 // 造物状态四端统一为中文四态(与后端 validProjectStatuses 白名单一致)。
 // normalize 兼容存量英文/历史表述的读取(后端已做一次性数据迁移,此处双保险)。
@@ -100,6 +101,7 @@ const openCreateModal = () => {
   formDescription.value = ''
   formStory.value = ''
   formGithubUrl.value = ''
+  formIsPrivate.value = false
   formError.value = null
   isModalOpen.value = true
 }
@@ -117,6 +119,7 @@ const openEditModal = (proj: Project) => {
   formDescription.value = proj.description || ''
   formStory.value = proj.story || ''
   formGithubUrl.value = proj.github_url || ''
+  formIsPrivate.value = Boolean(proj.is_private)
   formError.value = null
   isModalOpen.value = true
 }
@@ -143,6 +146,7 @@ const handleSave = async () => {
       description: formDescription.value.trim(),
       story: formStory.value.trim(),
       github_url: formGithubUrl.value.trim(),
+      is_private: formIsPrivate.value,
     }
 
     if (editingId.value) {
@@ -525,6 +529,28 @@ const isGitHubUrl = (url?: string) => {
               rows="3"
               class="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] font-serif-editorial text-sm resize-none"
             ></textarea>
+          </div>
+
+          <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
+            <div>
+              <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
+              <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
+                开启后仅主理人登录可见，展厅公开时不会展示此造物项目
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="formIsPrivate"
+              @click="formIsPrivate = !formIsPrivate"
+              class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
+              :class="formIsPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
+            >
+              <span
+                class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
+                :class="formIsPrivate ? 'translate-x-5' : 'translate-x-0'"
+              />
+            </button>
           </div>
         </div>
 

@@ -20,6 +20,7 @@ import {
   Trash2,
   FolderArchive,
   Server,
+  Globe,
 } from 'lucide-vue-next'
 import type { BackupItem, StorageStatus, StorageConfigPayload } from '../types'
 import { askConfirm } from '../composables/useConfirm'
@@ -38,13 +39,15 @@ import {
   migrateStorageMedia,
   clearApiCache,
   getAdminToken,
+  fetchSiteConfig,
+  updateSiteConfig,
 } from '../utils/api'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = withDefaults(
   defineProps<{
     isOpen: boolean
-    initialTab?: 'backup' | 'storage'
+    initialTab?: 'backup' | 'storage' | 'visibility'
   }>(),
   {
     initialTab: 'backup',
@@ -54,11 +57,56 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'restored'): void
+  (e: 'configUpdated', config: any): void
   (e: 'requestAuth', callback?: () => void): void
 }>()
 
-// 激活选项卡：'backup' (全量快照与灾备) | 'storage' (对象存储设置)
-const activeTab = ref<'backup' | 'storage'>(props.initialTab)
+// 激活选项卡：'backup' (全量快照与灾备) | 'storage' (对象存储设置) | 'visibility' (展厅公开设置)
+const activeTab = ref<'backup' | 'storage' | 'visibility'>(props.initialTab)
+
+const PUBLIC_MODULE_OPTIONS = [
+  { key: 'entries', label: '时间流（散页）', desc: '公开展示未标记私密的日常、游历与手记' },
+  { key: 'projects', label: '造物与项目', desc: '公开展示未标记私密的项目卡片与故事' },
+  { key: 'footprints', label: '山川足迹', desc: '公开展示未标记私密的行迹与城市/省份抽屉（不含消费金额）' },
+  { key: 'wishes', label: '心愿单', desc: '公开展示未标记私密的心愿状态（不含实际花费与关联账目）' },
+  { key: 'profile', label: '主理人档案', desc: '公开展示主理人简介、信条与随行装备清单（不含装备价格）' },
+  { key: 'almanac', label: '年度生活年鉴', desc: '公开展示年度回顾画卷（不含私密记录与财务收支）' },
+]
+
+const publicModules = ref<string[]>([])
+const isSavingVisibility = ref(false)
+
+const loadVisibilityConfig = async () => {
+  try {
+    const cfg = await fetchSiteConfig()
+    publicModules.value = Array.isArray(cfg?.public_modules) ? [...cfg.public_modules] : []
+  } catch (err) {
+    console.error('Failed to load site visibility config:', err)
+  }
+}
+
+const togglePublicModule = (key: string) => {
+  if (publicModules.value.includes(key)) {
+    publicModules.value = publicModules.value.filter((k) => k !== key)
+  } else {
+    publicModules.value = [...publicModules.value, key]
+  }
+}
+
+const handleSaveVisibility = async () => {
+  if (isSavingVisibility.value) return
+  isSavingVisibility.value = true
+  try {
+    const updated = await updateSiteConfig({ public_modules: publicModules.value })
+    publicModules.value = Array.isArray(updated?.public_modules) ? [...updated.public_modules] : []
+    emit('configUpdated', updated)
+    showAlertMsg('success', publicModules.value.length === 0 ? '已保存：当前为全站私有模式' : `已保存：已开放 ${publicModules.value.length} 个展厅板块`)
+  } catch (err: any) {
+    showAlertMsg('error', err?.message || '保存展厅公开设置失败')
+  } finally {
+    isSavingVisibility.value = false
+  }
+}
 
 watch(
   () => props.initialTab,
@@ -639,6 +687,25 @@ onMounted(() => {
             :class="localStorageStatus?.configured ? 'bg-emerald-500' : 'bg-[var(--ink-muted)]/40'"
           ></span>
         </button>
+
+        <button
+          @click="activeTab = 'visibility'; loadVisibilityConfig()"
+          class="px-3.5 py-2 rounded-xs border transition-all cursor-pointer flex items-center gap-2 shrink-0 font-serif-editorial"
+          :class="
+            activeTab === 'visibility'
+              ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-xs'
+              : 'border-transparent text-[var(--ink-secondary)] hover:border-[var(--border-subtle)] hover:bg-[var(--bg-subtle)]'
+          "
+        >
+          <Globe class="w-3.5 h-3.5" />
+          <span>展厅公开</span>
+          <span
+            class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive"
+            :class="activeTab === 'visibility' ? 'bg-white/20 text-white' : 'bg-[var(--bg-subtle)] text-[var(--ink-muted)]'"
+          >
+            {{ publicModules.length }}/6
+          </span>
+        </button>
       </div>
 
       <!-- 操作反馈提示条：常驻固定高度槽，无消息时 opacity-0 但保留高度，
@@ -1171,6 +1238,63 @@ onMounted(() => {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- 选项卡 3：展厅公开设置 -->
+      <div v-else-if="activeTab === 'visibility'" class="space-y-4">
+        <div class="p-4 border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 rounded-xs space-y-2">
+          <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+            默认全站私有 · 按模块可选开放
+          </div>
+          <p class="text-xs text-[var(--ink-secondary)] leading-relaxed">
+            未勾选任何板块时，未配对访客无法访问任何档案内容；即便某个板块对外开放，单条标记为「仅自己可见（私密）」的记录仍对访客完全不可见。记账、资产、信贷渠道、设备管理与分类字典永远仅限主理人可见。
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <label
+            v-for="mod in PUBLIC_MODULE_OPTIONS"
+            :key="mod.key"
+            class="flex items-start gap-3 p-3 border border-[var(--border-subtle)] rounded-xs hover:border-[var(--ink-primary)]/40 cursor-pointer transition-colors"
+            :class="publicModules.includes(mod.key) ? 'bg-[var(--accent-moss)]/5 border-[var(--accent-moss)]/40' : 'bg-[var(--bg-archive)]'"
+          >
+            <input
+              type="checkbox"
+              :checked="publicModules.includes(mod.key)"
+              @change="togglePublicModule(mod.key)"
+              class="mt-0.5 accent-[var(--accent-moss)] cursor-pointer"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
+                {{ mod.label }}
+              </div>
+              <div class="text-xs text-[var(--ink-muted)] mt-0.5">
+                {{ mod.desc }}
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            @click="publicModules = []"
+            :disabled="isSavingVisibility"
+            class="px-3 py-1.5 border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] rounded-xs text-xs font-serif-editorial cursor-pointer disabled:opacity-50"
+          >
+            全部设为私有
+          </button>
+          <button
+            type="button"
+            @click="handleSaveVisibility"
+            :disabled="isSavingVisibility"
+            class="px-4 py-1.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 rounded-xs text-xs font-serif-editorial font-medium transition-opacity cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+          >
+            <Save v-if="!isSavingVisibility" class="w-3.5 h-3.5" />
+            <Loader2 v-else class="w-3.5 h-3.5 animate-spin" />
+            <span>保存公开设置</span>
+          </button>
         </div>
       </div>
 

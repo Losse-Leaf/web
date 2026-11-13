@@ -75,6 +75,52 @@ const mobileNavItems = [
 ]
 const { theme, toggleTheme } = useTheme()
 const siteConfig = ref<SiteConfig | null>(null)
+
+const VIEW_TO_PUBLIC_MODULE: Record<string, string> = {
+  home: 'entries',
+  life: 'entries',
+  projects: 'projects',
+  wishes: 'wishes',
+  wishlist: 'wishes',
+  atlas: 'footprints',
+  footprints: 'footprints',
+  about: 'profile',
+}
+
+const PUBLIC_MODULE_TO_VIEW: Record<string, string> = {
+  entries: 'home',
+  projects: 'projects',
+  wishes: 'wishes',
+  footprints: 'atlas',
+  profile: 'about',
+}
+
+const isViewVisible = (view: string): boolean => {
+  if (getAdminToken()) return true
+  const mod = VIEW_TO_PUBLIC_MODULE[view]
+  if (!mod) return false
+  if (!siteConfig.value) return view === 'home'
+  return (siteConfig.value.public_modules ?? []).includes(mod)
+}
+
+const firstPublicView = (): string => {
+  const mods = siteConfig.value?.public_modules ?? []
+  for (const mod of ['entries', 'projects', 'wishes', 'footprints', 'profile']) {
+    if (mods.includes(mod)) {
+      return PUBLIC_MODULE_TO_VIEW[mod] || 'home'
+    }
+  }
+  return 'home'
+}
+
+const isSiteFullyPrivateForVisitor = computed(() => {
+  return !getAdminToken() && Boolean(siteConfig.value) && (siteConfig.value?.public_modules?.length ?? 0) === 0
+})
+
+const visibleMobileNavItems = computed(() => {
+  if (getAdminToken()) return mobileNavItems
+  return mobileNavItems.filter((item) => isViewVisible(item.key))
+})
 const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile())
 
 // 欢迎扉页 / 档案馆的流转状态 (RC-25, RC-59)
@@ -215,7 +261,7 @@ const handleOpenAddWithCity = (city: { code: string; name: string }) => {
 }
 
 const isStorageBackupOpen = ref(false)
-const storageBackupInitialTab = ref<'backup' | 'storage'>('backup')
+const storageBackupInitialTab = ref<'backup' | 'storage' | 'visibility'>('backup')
 const isSearchOpen = ref(false)
 
 const isPairingOpen = ref(false)
@@ -313,8 +359,15 @@ const handleCategoryChange = (cat: ArchiveCategory) => {
 
 const navigateTo = (view: string) => {
   if (['transactions', 'assets'].includes(view) && !getAdminToken()) {
-    currentView.value = 'home'
-    window.location.hash = 'home'
+    const target = firstPublicView()
+    currentView.value = target
+    window.location.hash = target
+    return
+  }
+  if (!isViewVisible(view)) {
+    const target = firstPublicView()
+    currentView.value = target
+    window.location.hash = target
     return
   }
   currentView.value = view
@@ -339,7 +392,7 @@ const closeEntryDetail = () => {
   }
 }
 
-const openStorageBackupModal = (tab: 'backup' | 'storage' = 'backup') => {
+const openStorageBackupModal = (tab: 'backup' | 'storage' | 'visibility' = 'backup') => {
   if (!getAdminToken()) {
     handleRequestAuth(() => openStorageBackupModal(tab))
     return
@@ -470,11 +523,16 @@ const refreshData = async (): Promise<void> => {
   const run = (async () => {
     wishesRefreshKey.value++
     atlasRefreshKey.value++
-    const tasks: Promise<unknown>[] = [
-      loadRemoteEntries(),
-      loadProfileShared(),
-    ]
-    if (Boolean(getAdminToken())) {
+    const isAdmin = Boolean(getAdminToken())
+    const pubMods = siteConfig.value?.public_modules ?? []
+    const tasks: Promise<unknown>[] = []
+    if (isAdmin || !siteConfig.value || pubMods.includes('entries')) {
+      tasks.push(loadRemoteEntries())
+    }
+    if (isAdmin || !siteConfig.value || pubMods.includes('profile')) {
+      tasks.push(loadProfileShared())
+    }
+    if (isAdmin) {
       tasks.push(loadRemoteTransactions())
     }
     await Promise.allSettled(tasks)
@@ -518,19 +576,28 @@ const handleHashChange = async () => {
   }
 
   if (!hash || hash === 'home' || hash === 'life') {
-    currentView.value = 'home'
+    const target = isViewVisible('home') ? 'home' : firstPublicView()
+    currentView.value = target
     selectedEntry.value = null
   } else if (
     ['transactions', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
   ) {
     if (['transactions', 'assets'].includes(hash) && !getAdminToken()) {
-      currentView.value = 'home'
-      window.location.hash = 'home'
+      const target = firstPublicView()
+      currentView.value = target
+      window.location.hash = target
       selectedEntry.value = null
       return
     }
     const normalizedHash =
       hash === 'wishlist' ? 'wishes' : hash === 'footprints' ? 'atlas' : hash
+    if (!isViewVisible(normalizedHash)) {
+      const target = firstPublicView()
+      currentView.value = target
+      window.location.hash = target
+      selectedEntry.value = null
+      return
+    }
     currentView.value = normalizedHash
     selectedEntry.value = null
   }
@@ -678,6 +745,15 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     document.title = newName
   }
 })
+
+watch(() => siteConfig.value?.public_modules, () => {
+  if (!getAdminToken() && !isViewVisible(currentView.value)) {
+    const target = firstPublicView()
+    if (target !== currentView.value) {
+      currentView.value = target
+    }
+  }
+})
 </script>
 
 <template>
@@ -717,10 +793,33 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     <!-- 主视图区 -->
     <!-- MOB-P1-107：为移动端底部标签栏留出空间 -->
     <main class="flex-grow pb-16 md:pb-0">
-      
+      <div
+        v-if="isSiteFullyPrivateForVisitor"
+        class="max-w-xl mx-auto px-6 py-24 text-center space-y-5"
+      >
+        <div class="text-[11px] font-mono-archive tracking-[0.25em] uppercase text-[var(--ink-faint)]">
+          Private Archive
+        </div>
+        <h2 class="text-2xl font-serif-archive text-[var(--ink-primary)]">
+          当前展厅已设为仅主理人可见
+        </h2>
+        <p class="text-sm text-[var(--ink-muted)] leading-relaxed">
+          主理人暂未对外开放任何公开板块。如果你是档案主理人，请登录以浏览与管理全部内容。
+        </p>
+        <div class="pt-2">
+          <button
+            type="button"
+            @click="handleRequestAuth(() => refreshData())"
+            class="px-5 py-2.5 rounded-sm bg-[var(--ink-primary)] text-[var(--bg-archive)] text-xs font-mono-archive tracking-widest uppercase hover:opacity-90 transition-opacity"
+          >
+            主理人登录
+          </button>
+        </div>
+      </div>
+
       <!-- 1. HOME 视图：克制开篇封面 + 最近一年生活刻度热力图 + 近况生活流 -->
       <HomeView
-        v-if="currentView === 'home'"
+        v-else-if="currentView === 'home'"
         :entries="filteredEntriesByCategory"
         :allEntries="allTimelineEntries"
         :currentCategory="currentCategory"
@@ -817,13 +916,16 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       桌面端（md 及以上）仍走顶部导航，不显示此栏。
     -->
     <nav
-      v-if="!anyModalOpen"
+      v-if="!anyModalOpen && visibleMobileNavItems.length > 0"
       class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--bg-archive)]/96 backdrop-blur-md border-t border-[var(--border-subtle)] pb-[env(safe-area-inset-bottom)]"
       aria-label="主导航"
     >
-      <div class="grid grid-cols-5">
+      <div
+        class="grid"
+        :style="{ gridTemplateColumns: `repeat(${visibleMobileNavItems.length}, minmax(0, 1fr))` }"
+      >
         <button
-          v-for="item in mobileNavItems"
+          v-for="item in visibleMobileNavItems"
           :key="item.key"
           type="button"
           @click="navigateTo(item.key)"
@@ -853,6 +955,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       :initialTab="storageBackupInitialTab"
       @close="isStorageBackupOpen = false"
       @restored="handleRestored"
+      @configUpdated="siteConfig = $event"
       @requestAuth="handleRequestAuth"
     />
 
