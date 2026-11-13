@@ -24,7 +24,6 @@ import {
 } from '../utils/api'
 import { useCategories } from '../composables/useCategories'
 import { getBeijingDateTimeString, getBeijingISOString, parseOccurredDate } from '../utils/format'
-import { audio } from '../utils/audio'
 import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
@@ -32,7 +31,6 @@ export type EntryKind = 'life' | 'travel' | 'project' | 'wish' | 'transaction'
 
 const props = defineProps<{
   isOpen: boolean
-  storageConfigured: boolean
   projects?: Project[]
   initialKind?: EntryKind | string
   initialProjectId?: number | null
@@ -632,7 +630,6 @@ const handleSubmit = async () => {
             : undefined,
       })
 
-      audio.playShutter()
       emit('transactionCreated', createdTx)
       forceClose()
     } catch (err: any) {
@@ -682,7 +679,6 @@ const handleSubmit = async () => {
         } catch {}
       }
 
-      audio.playShutter()
       // 参考图已随心愿落库绑定，标记后上传器卸载不再回收这些文件
       imageUploaderRef.value?.markCommitted()
       clearSavedDraft()
@@ -738,7 +734,6 @@ const handleSubmit = async () => {
           })
         }
 
-        audio.playShutter()
         imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
         emit('projectCreated', createdProj)
@@ -778,7 +773,6 @@ const handleSubmit = async () => {
           project_id: selectedProjectId.value,
           attachment_ids: attachmentIds.value,
         })
-        audio.playShutter()
         imageUploaderRef.value?.markCommitted()
         clearSavedDraft()
         emit('entryCreated', createdEntry)
@@ -830,7 +824,6 @@ const handleSubmit = async () => {
       attachment_ids: attachmentIds.value,
     })
 
-    audio.playShutter()
     imageUploaderRef.value?.markCommitted()
     clearSavedDraft()
     emit('entryCreated', created)
@@ -1245,7 +1238,6 @@ const handleSubmit = async () => {
 
             <ImageUploader
               ref="imageUploaderRef"
-              :storageConfigured="storageConfigured"
               @update:attachments="attachmentIds = $event"
             />
 
@@ -1340,7 +1332,6 @@ const handleSubmit = async () => {
 
             <ImageUploader
               ref="imageUploaderRef"
-              :storageConfigured="storageConfigured"
               @update:attachments="attachmentIds = $event"
             />
           </div>
@@ -1433,7 +1424,6 @@ const handleSubmit = async () => {
 
           <ImageUploader
             ref="imageUploaderRef"
-            :storageConfigured="storageConfigured"
             @update:attachments="attachmentIds = $event"
           />
         </template>
@@ -1512,7 +1502,6 @@ const handleSubmit = async () => {
           <!-- 照片上传组件 -->
           <ImageUploader
             ref="imageUploaderRef"
-            :storageConfigured="storageConfigured"
             @update:attachments="attachmentIds = $event"
           />
 

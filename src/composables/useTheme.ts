@@ -1,5 +1,4 @@
 import { ref, onMounted } from 'vue'
-import { audio } from '../utils/audio'
 
 export type ArchiveTheme = 'paper' | 'darkroom'
 
@@ -35,7 +34,6 @@ export function useTheme() {
   }
 
   const toggleTheme = () => {
-    audio.playTink()
     const next: ArchiveTheme = currentTheme.value === 'paper' ? 'darkroom' : 'paper'
     applyTheme(next)
     return next

@@ -1,5 +1,4 @@
 /// <reference types="vite/client" />
-/// <reference types="vite-plugin-pwa/vue" />
 
 /**
  * 由 vite.config.ts 的 define 从 package.json 注入。

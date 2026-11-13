@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ChevronDown, Check } from 'lucide-vue-next'
-import { audio } from '../utils/audio'
 
 export interface PaperSelectOption {
   value: string | number | null
@@ -89,14 +88,12 @@ const toggleDropdown = async () => {
   if (props.disabled) return
   isOpen.value = !isOpen.value
   if (isOpen.value) {
-    audio.playTink()
     await nextTick()
     updatePosition()
   }
 }
 
 const selectOption = (opt: PaperSelectOption) => {
-  audio.playTink()
   emit('update:modelValue', opt.value)
   emit('change', opt.value)
   isOpen.value = false

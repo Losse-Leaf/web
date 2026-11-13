@@ -44,7 +44,6 @@ import CityPicker from './CityPicker.vue'
 const CreditChannelsModal = defineAsyncComponent(() => import('./CreditChannelsModal.vue'))
 
 const props = defineProps<{
-  transactions?: Transaction[]
   profile?: CuratorProfile | null
   refreshKey?: number
 }>()

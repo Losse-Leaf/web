@@ -2,7 +2,6 @@
 import { ref, watch } from 'vue'
 import { X, MapPin, Compass, Check } from 'lucide-vue-next'
 import { createFootprint, updateFootprint, getAdminToken } from '../utils/api'
-import { audio } from '../utils/audio'
 import { getBeijingDateString, getBeijingISOString, parseOccurredDate } from '../utils/format'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -18,13 +17,11 @@ import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 const props = withDefaults(
   defineProps<{
     isOpen: boolean
-    storageConfigured?: boolean
     initialCityCode?: string
     initialCityName?: string
     editingFootprint?: Footprint | null
   }>(),
   {
-    storageConfigured: true,
     editingFootprint: null,
   }
 )
@@ -157,7 +154,6 @@ const handleSubmit = async () => {
         // 编辑时删光了照片必须显式声明解绑：单发空数组服务端按「保持原样」处理（契约 A）
         clear_attachments: attachmentIds.value.length === 0,
       })
-      audio.playShutter()
       // 附件已随本次保存绑定，标记后组件卸载不再当孤儿清理
       imageUploaderRef.value?.markCommitted()
       emit('saved', fp)
@@ -172,7 +168,6 @@ const handleSubmit = async () => {
         note: note.value.trim() || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
       })
-      audio.playShutter()
       imageUploaderRef.value?.markCommitted()
       emit('saved', fp)
       emit('close')
@@ -292,7 +287,6 @@ const handleSubmit = async () => {
         <!-- 旅途影像上传 -->
         <ImageUploader
           ref="imageUploaderRef"
-          :storageConfigured="storageConfigured"
           :initialAttachments="editingFootprint?.attachments"
           @update:attachments="(ids) => (attachmentIds = ids)"
         />

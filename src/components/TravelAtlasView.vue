@@ -14,7 +14,6 @@ import {
 } from 'lucide-vue-next'
 import { fetchFootprintsAtlas, fetchFootprints, deleteFootprint, getAdminToken } from '../utils/api'
 import { parseOccurredDate } from '../utils/format'
-import { audio } from '../utils/audio'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { AtlasCitySummary, Footprint, LifeEntry } from '../types'
 import { CHINA_CITIES, type CityOption } from '../utils/cities'
@@ -32,11 +31,9 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    storageConfigured?: boolean
     refreshKey?: number
   }>(),
   {
-    storageConfigured: true,
     refreshKey: 0,
   }
 )
@@ -102,7 +99,6 @@ const handleDeleteFootprint = async (fp: Footprint) => {
 
   try {
     await deleteFootprint(fp.id)
-    audio.playTink()
     await loadAtlas()
     emit('footprintSaved')
   } catch (err: any) {
@@ -402,7 +398,6 @@ const filteredProvinceSeals = computed<ProvinceSealItem[]>(() => {
 
 // 点击百宝格中的已钤印省份：聚焦该省首座城市，二次点击或点印章直接打开省卷抽屉
 const handleLitProvinceSelect = (seal: ProvinceSealItem) => {
-  audio.playTink()
   if (seal.visitedCities.length > 0) {
     focusedCityCode.value = seal.visitedCities[0].code
   }
@@ -480,7 +475,6 @@ const timelineGroupedTickets = computed(() => {
 
 // 打开城市回忆抽屉
 const openCityDrawer = (cityCode: string, cityName: string) => {
-  audio.playPaperFlip()
   selectedCityCode.value = cityCode
   selectedCityName.value = cityName
   selectedProvinceAdcode.value = ''
@@ -490,7 +484,6 @@ const openCityDrawer = (cityCode: string, cityName: string) => {
 
 // 打开省份回忆抽屉
 const openProvinceDrawer = (adcode: string, provName: string) => {
-  audio.playPaperFlip()
   selectedProvinceAdcode.value = adcode
   selectedProvinceName.value = provName
   selectedCityCode.value = ''
@@ -1519,7 +1512,6 @@ onMounted(() => {
     <AddFootprintModal
       v-if="isAddModalOpen"
       :isOpen="isAddModalOpen"
-      :storageConfigured="storageConfigured"
       :initialCityCode="addModalInitialCityCode"
       :initialCityName="addModalInitialCityName"
       :editingFootprint="editingFootprint"

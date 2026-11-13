@@ -9,7 +9,6 @@ import {
   Sparkles,
 } from 'lucide-vue-next'
 import { checkSystemUpdate } from '../utils/api'
-import { audio } from '../utils/audio'
 import type { UpdateCheckResult } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
@@ -29,7 +28,6 @@ const appVersion = __APP_VERSION__
 const runUpdateCheck = async (force = false) => {
   checking.value = true
   checkError.value = ''
-  audio.playTink()
   try {
     const res = await checkSystemUpdate(force)
     checkResult.value = res

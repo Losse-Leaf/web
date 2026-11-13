@@ -4,11 +4,10 @@ import {
   createCategoryOption,
   updateCategoryOption,
   deleteCategoryOption,
-  resetCategoryOptions,
 } from '../utils/api'
 import type { CategoryOption, CategoryScope } from '../types'
 
-export const DEFAULT_CATEGORIES_BY_SCOPE: Record<CategoryScope, string[]> = {
+const DEFAULT_CATEGORIES_BY_SCOPE: Record<CategoryScope, string[]> = {
   expense: ['餐饮', '交通', '购物', '数码器材', '娱乐', '学习', '住房', '医疗', '旅行度假', '其他'],
   income: ['工资收入', '二手回血', '稿酬设计', '投资理财', '礼金红包', '退款报销', '其他收入'],
   gear: ['数码器材', '影像与暗房', '工作台与算力', '手冲咖啡工坊', '夜骑巡航', '纸笔与日常', '生活好物'],
@@ -119,11 +118,6 @@ export function useCategories() {
     await loadCategories(true)
   }
 
-  const restoreDefaults = async (scope?: CategoryScope) => {
-    await resetCategoryOptions(scope)
-    await loadCategories(true)
-  }
-
   return {
     categoryItems,
     byScope,
@@ -142,6 +136,5 @@ export function useCategories() {
     addCategory,
     renameCategory,
     removeCategory,
-    restoreDefaults,
   }
 }

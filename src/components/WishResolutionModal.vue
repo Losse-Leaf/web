@@ -2,7 +2,6 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { X, Sparkles, Check, ShieldCheck } from 'lucide-vue-next'
 import { resolveWish, fetchCreditChannels, getAdminToken } from '../utils/api'
-import { audio } from '../utils/audio'
 import { getBeijingDateString, getBeijingISOString, parseOccurredDate } from '../utils/format'
 import type { Wish, CreditChannel } from '../types'
 import PaperSelect from './PaperSelect.vue'
@@ -193,7 +192,6 @@ const handleSubmit = async () => {
       repayment_day: isInstallment.value ? selectedChannelRepaymentDay.value : undefined,
     })
 
-    audio.playShutter()
     emit('resolved', resolved)
     emit('close')
   } catch (err: any) {

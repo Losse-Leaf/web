@@ -11,7 +11,6 @@ import {
 } from 'lucide-vue-next'
 import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken, deleteFootprint } from '../utils/api'
 import { formatMoney, parseOccurredDate } from '../utils/format'
-import { audio } from '../utils/audio'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { CityMemoryDrawerData, ProvinceMemoryDrawerData, Attachment } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
@@ -197,7 +196,6 @@ const handleDeleteFootprint = async (fp: any) => {
 
   try {
     await deleteFootprint(fp.id)
-    audio.playTink()
     if (drawerData.value && 'footprints' in drawerData.value && Array.isArray(drawerData.value.footprints)) {
       drawerData.value.footprints = drawerData.value.footprints.filter((f: any) => f.id !== fp.id)
     }

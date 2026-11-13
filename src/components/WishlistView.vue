@@ -19,7 +19,6 @@ const WishFormModal = defineAsyncComponent(() => import('./WishFormModal.vue'))
 const WishResolutionModal = defineAsyncComponent(() => import('./WishResolutionModal.vue'))
 
 const props = defineProps<{
-  storageConfigured?: boolean
   refreshKey?: number
 }>()
 
@@ -503,7 +502,6 @@ onMounted(() => {
       v-if="isFormOpen"
       :isOpen="isFormOpen"
       :editingWish="editingWish"
-      :storageConfigured="storageConfigured"
       @close="isFormOpen = false"
       @saved="handleWishSaved"
       @requestAuth="(cb) => emit('requestAuth', cb)"

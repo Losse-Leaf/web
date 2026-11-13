@@ -12,7 +12,6 @@ import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 const props = defineProps<{
   isOpen: boolean
   editingWish?: Wish | null
-  storageConfigured?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -337,7 +336,6 @@ const handleSubmit = async () => {
           <ImageUploader
             ref="imageUploaderRef"
             :initialAttachments="attachments"
-            :storageConfigured="storageConfigured ?? true"
             @update:attachments="attachmentIds = $event"
           />
         </div>

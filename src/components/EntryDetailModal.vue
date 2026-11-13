@@ -15,7 +15,6 @@ import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 
 const props = defineProps<{
   entry: LifeEntry | null
-  storageConfigured: boolean
   projects?: Project[]
 }>()
 
@@ -364,7 +363,6 @@ const getKindLabel = (type: string) => {
         <ImageUploader
           ref="imageUploaderRef"
           :initialAttachments="entry.attachments"
-          :storageConfigured="storageConfigured"
           @update:attachments="editAttachmentIds = $event"
         />
 

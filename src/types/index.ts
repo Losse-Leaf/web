@@ -165,15 +165,6 @@ export interface StorageConfigPayload {
   presign_expire_seconds?: number
 }
 
-export interface GlobalStats {
-  total_entries: number
-  total_photos: number
-  total_projects: number
-  month_expense: number
-  current_year: number
-  current_month: number
-}
-
 export interface Project {
   id: number
   title: string
@@ -283,23 +274,6 @@ export interface ClaimResult {
   paired_at?: string
   device_token: string
   initialized: boolean
-}
-
-export interface PairConfirmPayload {
-  ticket: string
-  device_name: string
-  platform: 'ios' | 'macos' | 'android' | 'web' | string
-  device_model?: string
-}
-
-export interface PairConfirmResult {
-  device_id: string
-  device_name: string
-  platform: string
-  paired_at: string
-  device_token: string
-  initialized?: boolean
-  hub_url?: string
 }
 
 export interface PairStatusResult {

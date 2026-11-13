@@ -456,7 +456,7 @@ function projectAlbers(lon: number, lat: number): [number, number] {
 /**
  * 根据设备 GPS 经纬度匹配距离最近的地级市
  */
-export function findNearestCityByCoords(lat: number, lng: number): CityOption | null {
+function findNearestCityByCoords(lat: number, lng: number): CityOption | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
   const [px, py] = projectAlbers(lng, lat)
   let nearest: CityOption | null = null
@@ -495,7 +495,7 @@ export function saveLastUsedCity(city: { code: string; name: string }): void {
 /**
  * 读取上次使用的城市 (Tier 3)
  */
-export function getLastUsedCity(): CityOption | null {
+function getLastUsedCity(): CityOption | null {
   try {
     const raw = localStorage.getItem(LAST_CITY_STORAGE_KEY)
     if (!raw) return null
@@ -520,7 +520,7 @@ export function getLastUsedCity(): CityOption | null {
  * （原先写成 `looseleaf_curator_profile_v1`，全仓无任何写入者，该回退层恒为 null）；
  * 存储结构是 `{ cached_at, data: profile }` 信封，字段在 data 里。
  */
-export function getCuratorResidentCity(): CityOption | null {
+function getCuratorResidentCity(): CityOption | null {
   try {
     const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
     if (!raw) return null

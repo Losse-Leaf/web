@@ -5,7 +5,6 @@ import type {
   TransactionSummary,
   StorageStatus,
   StorageConfigPayload,
-  GlobalStats,
   Project,
   TrustedDevice,
   PairingTicketResult,
@@ -14,8 +13,6 @@ import type {
   SystemStatus,
   ClaimPayload,
   ClaimResult,
-  PairConfirmPayload,
-  PairConfirmResult,
   PairStatusResult,
   UnifiedUploadResult,
   Wish,
@@ -130,12 +127,12 @@ export function getAdminToken(): string {
 }
 
 /** 该「令牌」是否只是 Cookie 会话占位符（不可作为凭据发送） */
-export function isCookieSessionOnly(token: string): boolean {
+function isCookieSessionOnly(token: string): boolean {
   return token === COOKIE_SESSION_MARKER
 }
 
 /** 兼容路径：服务端未下发 Cookie 时才落盘明文令牌 */
-export function setAdminToken(token: string): void {
+function setAdminToken(token: string): void {
   const clean = token.trim()
   if (!clean || isCookieSessionOnly(clean)) return
   try {
@@ -184,7 +181,7 @@ export function removeAdminToken(): void {
  * 而 removeAdminToken() 会连带 POST /auth/logout 把 HttpOnly Cookie 打死，
  * 于是一次只读接口的偶发 401 就把用户静默踢出主人态。
  */
-export function clearLocalCredential(): void {
+function clearLocalCredential(): void {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
   } catch {}
@@ -237,7 +234,7 @@ async function probeSessionCookie(): Promise<SessionProbe> {
  * 优先使用服务端下发的 HttpOnly Cookie（令牌 JS 读不到 ⇒ 一次 XSS 也偷不走）；
  * 若服务端仍是旧版（不下发 Cookie），自动回落到旧的明文令牌路径，保证不兼容中断。
  */
-export async function establishSession(token: string): Promise<void> {
+async function establishSession(token: string): Promise<void> {
   const clean = token.trim()
   if (!clean || isCookieSessionOnly(clean)) return
   const probe = await probeSessionCookie()
@@ -596,7 +593,7 @@ export async function searchGlobalArchive(
  * 关键：这条规则必须与**后端、mac 端一致**，
  * 否则同一条记录在不同端标题会不一样，搜索与索引也对不上。
  */
-export function deriveTitleFromContent(content: string, maxLength = 40): string {
+function deriveTitleFromContent(content: string, maxLength = 40): string {
   if (!content) return ''
   const firstLine = content.split('\n')[0] ?? ''
   const trimmed = firstLine.trim()
@@ -1065,12 +1062,7 @@ export async function deleteProject(id: number): Promise<boolean> {
   return true
 }
 
-// 5. Global Stats
-export async function fetchGlobalStats(): Promise<GlobalStats> {
-  return request<GlobalStats>(`${API_BASE}/stats`)
-}
-
-// 6. Device Pairing & Trusted Devices (设备免密配对与管理)
+// 5. Device Pairing & Trusted Devices (设备免密配对与管理)
 export async function initPairingTicket(params?: {
   hub_url?: string
   device_hint?: string
@@ -1082,18 +1074,6 @@ export async function initPairingTicket(params?: {
       device_hint: params?.device_hint,
     }),
   })
-}
-
-export async function confirmPairingTicket(data: PairConfirmPayload): Promise<PairConfirmResult> {
-  const res = await request<PairConfirmResult>(`${API_BASE}/auth/pair/confirm`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  if (res.device_token) {
-    // MOB-P1-69：优先建立 HttpOnly Cookie 会话
-    await establishSession(res.device_token)
-  }
-  return res
 }
 
 export async function pollPairingTicketStatus(ticket: string): Promise<PairStatusResult> {
@@ -1143,13 +1123,6 @@ export async function fetchSiteConfig(): Promise<SiteConfig> {
   return request<SiteConfig>(`${API_BASE}/config`)
 }
 
-export async function updateSiteConfig(data: Partial<SiteConfig>): Promise<SiteConfig> {
-  return request<SiteConfig>(`${API_BASE}/config`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-}
-
 // 9. Curator Profile (主理人身份档案中枢，全端动态驱动)
 export async function fetchCuratorProfile(): Promise<CuratorProfile | null> {
   try {
@@ -1173,7 +1146,7 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
 }
 
 // 11. 浏览器设备名识别与首台设备认领 (Device Claim)
-export function detectBrowserDeviceName(): string {
+function detectBrowserDeviceName(): string {
   if (typeof navigator === 'undefined') return 'Web Browser'
   const ua = navigator.userAgent || ''
   let browser = 'Browser'
@@ -1510,13 +1483,6 @@ export async function deleteCategoryOption(id: number): Promise<boolean> {
     method: 'DELETE',
   })
   return true
-}
-
-export async function resetCategoryOptions(scope?: CategoryScope): Promise<CategoriesResponse> {
-  return request<CategoriesResponse>(`${API_BASE}/categories/reset`, {
-    method: 'POST',
-    body: JSON.stringify({ scope: scope || '' }),
-  })
 }
 
 // 17. 全量 ZIP 备份与灾难恢复 (System Backup & Disaster Recovery)

@@ -2,7 +2,6 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Search, X, Calendar, ArrowRight, MapPin, Sparkles, FolderGit2, Loader2 } from 'lucide-vue-next'
 import type { LifeEntry, Footprint, Wish, Project } from '../types'
-import { audio } from '../utils/audio'
 import { searchGlobalArchive } from '../utils/api'
 import { filterEntriesBySearch } from '../composables/useArchive'
 import { parseOccurredDate, formatMoney } from '../utils/format'
@@ -138,7 +137,6 @@ watch(activeIndex, () => {
 })
 
 const handleSelect = (result: FlatResult) => {
-  audio.playPaperFlip()
   if (result.kind === 'entry') {
     emit('selectEntry', result.item)
   } else if (result.kind === 'footprint') {

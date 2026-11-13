@@ -21,9 +21,8 @@ import {
   FolderArchive,
   Server,
 } from 'lucide-vue-next'
-import type { LifeEntry, Transaction, Project, BackupItem, StorageStatus, StorageConfigPayload } from '../types'
+import type { BackupItem, StorageStatus, StorageConfigPayload } from '../types'
 import { askConfirm } from '../composables/useConfirm'
-import { audio } from '../utils/audio'
 import PaperSelect, { type PaperSelectOption } from './PaperSelect.vue'
 import {
   fetchBackupList,
@@ -46,10 +45,6 @@ const props = withDefaults(
   defineProps<{
     isOpen: boolean
     initialTab?: 'backup' | 'storage'
-    entries: LifeEntry[]
-    transactions: Transaction[]
-    projects: Project[]
-    storageStatus?: StorageStatus | null
   }>(),
   {
     initialTab: 'backup',
@@ -74,7 +69,7 @@ watch(
 
 // 2. 灾备状态与列表
 const backups = ref<BackupItem[]>([])
-const localStorageStatus = ref<StorageStatus | null>(props.storageStatus || null)
+const localStorageStatus = ref<StorageStatus | null>(null)
 const isLoadingList = ref(false)
 const loadError = ref('')
 const isCreatingBackup = ref(false)
@@ -180,10 +175,8 @@ const loadData = async () => {
 const handleCreateBackup = async () => {
   if (isCreatingBackup.value) return
   isCreatingBackup.value = true
-  audio.playTink()
   try {
     const item = await createBackupNow()
-    audio.playPaperFlip()
     showAlertMsg('success', `全量备份「${item.filename}」已生成并归档 (${formatBytes(item.size)})`)
     await loadData()
   } catch (err: any) {
@@ -197,10 +190,8 @@ const handleCreateBackup = async () => {
 const handleDownload = async (filename: string) => {
   if (downloadingFilename.value) return
   downloadingFilename.value = filename
-  audio.playTink()
   try {
     await downloadBackup(filename)
-    audio.playPaperFlip()
   } catch (err: any) {
     showAlertMsg('error', err?.message || '下载备份失败')
   } finally {
@@ -221,12 +212,10 @@ const handleDeleteBackup = async (filename: string) => {
   if (!confirmed) return
 
   isDeleting.value = filename
-  audio.playTink()
   try {
     const remaining = await deleteBackup(filename)
     backups.value = remaining
     showAlertMsg('success', `快照「${filename}」已成功移除`)
-    audio.playPaperFlip()
   } catch (err: any) {
     showAlertMsg('error', err?.message || '删除快照失败')
   } finally {
@@ -248,11 +237,9 @@ const handleRestoreFromList = async (item: BackupItem) => {
 
   isRestoring.value = true
   restoringTarget.value = item.filename
-  audio.playTink()
   try {
     const res = await restoreBackupByFilename(item.filename)
     await clearApiCache()
-    audio.playPaperFlip()
     showAlertMsg('success', res.message || '系统已成功恢复至指定快照')
     setTimeout(() => {
       emit('restored')
@@ -277,7 +264,6 @@ const onFileSelected = (e: Event) => {
       return
     }
     selectedFile.value = file
-    audio.playTink()
   }
 }
 
@@ -291,7 +277,6 @@ const onFileDrop = (e: DragEvent) => {
       return
     }
     selectedFile.value = file
-    audio.playTink()
   }
 }
 
@@ -315,13 +300,11 @@ const handleRestoreUpload = async () => {
   isRestoring.value = true
   restoringTarget.value = 'upload'
   uploadProgress.value = 0
-  audio.playTink()
   try {
     const res = await restoreBackupByFile(selectedFile.value, (percent) => {
       uploadProgress.value = percent
     })
     await clearApiCache()
-    audio.playPaperFlip()
     showAlertMsg('success', res.message || '已成功恢复上传的备份文件')
     clearSelectedFile()
     setTimeout(() => {
@@ -350,13 +333,11 @@ const handleMigrateStorageMedia = async () => {
   if (isMigratingMedia.value) return
   isMigratingMedia.value = true
   mediaSyncResult.value = null
-  audio.playTink()
   try {
     const res = await migrateStorageMedia()
     mediaSyncResult.value = res
     const summaryText = `已上传 ${res.uploaded_to_r2 ?? 0} 项至云端，已拉取 ${res.downloaded_to_local ?? 0} 项至本地`
     showAlertMsg('success', summaryText)
-    audio.playPaperFlip()
     try {
       localStorageStatus.value = await fetchStorageStatus()
     } catch {}
@@ -477,13 +458,11 @@ const handleTestStorage = async () => {
       message: `${res.message || '握手测试成功，读写校验正常'}${latencyInfo}`,
       latency_ms: res.latency_ms,
     }
-    audio.playTink()
   } catch (err: any) {
     storageTestResult.value = {
       success: false,
       message: err?.message || '连接测试失败，请检查 Endpoint、凭据及存储桶名称',
     }
-    audio.playTink()
   } finally {
     isTestingStorage.value = false
   }
@@ -537,10 +516,8 @@ const handleSaveStorage = async () => {
     storageForm.value.secret_access_key = ''
     storageTestResult.value = { success: true, message: '配置已保存并生效，对象存储已成功热重载挂载' }
     showAlertMsg('success', '对象存储配置已保存并生效')
-    audio.playPaperFlip()
   } catch (err: any) {
     showAlertMsg('error', err?.message || '保存配置失败')
-    audio.playTink()
   } finally {
     isSavingStorage.value = false
   }
@@ -563,10 +540,8 @@ const handleResetStorage = async () => {
     storageForm.value.secret_access_key = ''
     storageTestResult.value = null
     showAlertMsg('success', '已恢复为本地磁盘存储模式')
-    audio.playTink()
   } catch (err: any) {
     showAlertMsg('error', err?.message || '重置失败')
-    audio.playTink()
   } finally {
     isResettingStorage.value = false
   }

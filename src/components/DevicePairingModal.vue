@@ -23,7 +23,6 @@ import {
   updateTrustedDeviceName,
   fetchPairQRCode,
 } from '../utils/api'
-import { audio } from '../utils/audio'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import { parseOccurredDate } from '../utils/format'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
@@ -66,7 +65,6 @@ const startCountdown = (sec: number) => {
 }
 
 const onPairingDetected = async () => {
-  audio.playShutter()
   pairingSuccess.value = true
   stopPairingPolling()
   if (countdownTimer) {
@@ -129,7 +127,6 @@ const stopPairingPolling = () => {
 let ticketSeq = 0
 
 const generateTicket = async () => {
-  audio.playTink()
   const seq = ++ticketSeq
   isLoadingTicket.value = true
   ticketError.value = ''
@@ -159,7 +156,6 @@ const generateTicket = async () => {
 
 const handleSelectCandidate = async (candUrl: string) => {
   if (!currentTicket.value || selectedCandidateUrl.value === candUrl) return
-  audio.playTink()
   selectedCandidateUrl.value = candUrl
   isSwitchingNode.value = true
   try {
@@ -201,7 +197,6 @@ const loadDevices = () => {
 }
 
 const handleRevoke = async (id: number) => {
-  audio.playTink()
   const ok = await askConfirm({
     title: '解绑设备',
     message: '确定解绑并吊销该设备的免密信任？解绑后该设备需重新扫码配对。',
@@ -229,7 +224,6 @@ const getDeviceKey = (dev: TrustedDevice): string | number => {
 }
 
 const startRenameDevice = (dev: TrustedDevice) => {
-  audio.playTink()
   editingDeviceKey.value = getDeviceKey(dev)
   editingDeviceName.value = dev.name || ''
 }
@@ -247,7 +241,6 @@ const saveRenameDevice = async (dev: TrustedDevice) => {
     const targetId = dev.device_id || dev.id
     const updated = await updateTrustedDeviceName(targetId, cleanName)
     dev.name = updated?.name || cleanName
-    audio.playTink()
     editingDeviceKey.value = null
     editingDeviceName.value = ''
   } catch (err) {
@@ -259,7 +252,6 @@ const saveRenameDevice = async (dev: TrustedDevice) => {
 
 const copyPayload = async () => {
   if (!currentTicket.value) return
-  audio.playTink()
   try {
     await navigator.clipboard.writeText(currentTicket.value.qr_payload)
     copied.value = true

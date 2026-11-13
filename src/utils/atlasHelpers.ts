@@ -160,7 +160,7 @@ export const PROVINCE_EPITHET_MAP: Record<string, string> = {
 export const ALL_PROVINCES_ORDERED: string[] = REGION_GROUPS.flatMap((g) => g.provinces)
 
 // 城市古雅风物别称与文化笺注 (为票根与印谱提供人文底蕴)
-export const CITY_EPITHETS: Record<string, string> = {
+const CITY_EPITHETS: Record<string, string> = {
   '511800': '雨城 · 川藏茶马古道门户',
   '510100': '锦官城 · 蓉城慢调天府',
   '330100': '钱塘 · 临安水驿西子湖',

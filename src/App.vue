@@ -5,11 +5,8 @@ import HomeView from './components/HomeView.vue'
 import FooterArchive from './components/FooterArchive.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
-import FloatingActionButton from './components/FloatingActionButton.vue'
-import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue'
 
 // 异步按需分包加载非首屏重型视图与管理模态框，彻底消除 >500kB 单包警告并加速首屏 (FE-23)
-const ArchiveView = defineAsyncComponent(() => import('./components/ArchiveView.vue'))
 const ProjectsView = defineAsyncComponent(() => import('./components/ProjectsView.vue'))
 const WishlistView = defineAsyncComponent(() => import('./components/WishlistView.vue'))
 const TravelAtlasView = defineAsyncComponent(() => import('./components/TravelAtlasView.vue'))
@@ -18,7 +15,6 @@ const TransactionsView = defineAsyncComponent(() => import('./components/Transac
 const NewEntryModal = defineAsyncComponent(() => import('./components/NewEntryModal.vue'))
 const EntryDetailModal = defineAsyncComponent(() => import('./components/EntryDetailModal.vue'))
 const StorageBackupModal = defineAsyncComponent(() => import('./components/StorageBackupModal.vue'))
-const StatsModal = defineAsyncComponent(() => import('./components/StatsModal.vue'))
 const SearchModal = defineAsyncComponent(() => import('./components/SearchModal.vue'))
 const DevicePairingModal = defineAsyncComponent(() => import('./components/DevicePairingModal.vue'))
 const UpdateCheckModal = defineAsyncComponent(() => import('./components/UpdateCheckModal.vue'))
@@ -34,19 +30,16 @@ import type {
   LifeEntry,
   Project,
   ArchiveCategory,
-  StorageStatus,
-  GlobalStats,
   Transaction,
   SiteConfig,
   CuratorProfile,
   SystemStatus,
 } from './types'
-import { BookOpen, Heart, MapPin, Compass, User } from 'lucide-vue-next'
+import { BookOpen, Heart, MapPin, Compass, User, Plus } from 'lucide-vue-next'
 import { entryMatchesCategory } from './types'
 import { parseOccurredDate, getBeijingYear } from './utils/format'
 import {
   fetchEntryById,
-  fetchGlobalStats,
   fetchProjects,
   fetchSiteConfig,
   fetchCuratorProfile,
@@ -223,63 +216,12 @@ const handleOpenAddWithCity = (city: { code: string; name: string }) => {
 
 const isStorageBackupOpen = ref(false)
 const storageBackupInitialTab = ref<'backup' | 'storage'>('backup')
-const isStatsOpen = ref(false)
 const isSearchOpen = ref(false)
-
-// MOB-P1-101：离线感知（此前完全没有 navigator.onLine 的使用，
-// 断网时用户只看到「旧数据」，却不知道已经离线）
-const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
-
-const handleOnline = () => { isOnline.value = true }
-const handleOffline = () => { isOnline.value = false }
-
-const setupOnlineListeners = () => {
-  if (typeof window === 'undefined') return
-  window.addEventListener('online', handleOnline)
-  window.addEventListener('offline', handleOffline)
-}
 
 const isPairingOpen = ref(false)
 const isUpdateCheckOpen = ref(false)
 
 const isSessionHintOpen = ref(false)
-
-// MOB-P2-84：PWA 安装引导
-// Android Chrome 会触发 beforeinstallprompt（可主动弹出安装 CTA）；
-// iOS Safari 永远不会触发，只能提示用户「分享 → 添加到主屏幕」。
-const deferredInstallPrompt = ref<any>(null)
-const isIOS = typeof navigator !== 'undefined' &&
-  /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream
-const showInstallTip = ref(false)
-
-const handleBeforeInstallPrompt = (e: any) => {
-  e.preventDefault()
-  deferredInstallPrompt.value = e
-  showInstallTip.value = true
-}
-
-const handleAppInstalled = () => {
-  deferredInstallPrompt.value = null
-  showInstallTip.value = false
-}
-
-const setupInstallPrompt = () => {
-  if (typeof window === 'undefined') return
-  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-  window.addEventListener('appinstalled', handleAppInstalled)
-}
-
-const promptInstall = async () => {
-  const p = deferredInstallPrompt.value
-  if (!p) return
-  deferredInstallPrompt.value = null
-  showInstallTip.value = false
-  try {
-    await p.prompt()
-  } catch {
-    // 用户拒绝或环境不支持，忽略
-  }
-}
 
 // MOB-P1-93：是否处于「某个弹窗打开」状态（用于隐藏悬浮按钮与移动端底栏）
 // z-[1150] 的移动端底栏会盖在任何漏计的弹窗上：分类管理弹窗（useCategories
@@ -291,7 +233,6 @@ const anyModalOpen = computed(
     isSearchOpen.value ||
     isStorageBackupOpen.value ||
     isNewEntryOpen.value ||
-    isStatsOpen.value ||
     isPairingOpen.value ||
     isUpdateCheckOpen.value ||
     isSessionHintOpen.value ||
@@ -305,7 +246,6 @@ const anyOtherModalOpen = computed(
   () =>
     isStorageBackupOpen.value ||
     isNewEntryOpen.value ||
-    isStatsOpen.value ||
     isPairingOpen.value ||
     isUpdateCheckOpen.value ||
     isSessionHintOpen.value ||
@@ -320,7 +260,6 @@ const handleOpenSearch = () => {
 const wishesRefreshKey = ref(0)
 const atlasRefreshKey = ref(0)
 const txRefreshKey = ref(0)
-const archiveRefreshKey = ref(0)
 
 // 母密钥已移除：未授信的浏览器无法就地自证身份，
 // 唯一接入方式是由已配对设备签发配对二维码，这里只做引导。
@@ -344,11 +283,6 @@ const openUpdateCheckModal = () => {
   if (!getAdminToken()) return
   isUpdateCheckOpen.value = true
 }
-
-const storageStatus = ref<StorageStatus | null>(null)
-const globalStats = ref<GlobalStats | null>(null)
-
-const storageConfigured = computed(() => Boolean(storageStatus.value?.configured))
 
 // 融合生活印记与记账的完整时间流
 const allTimelineEntries = computed(() => {
@@ -405,15 +339,6 @@ const closeEntryDetail = () => {
   }
 }
 
-const openStatsModal = async () => {
-  isStatsOpen.value = true
-  try {
-    globalStats.value = await fetchGlobalStats()
-  } catch (err) {
-    console.error('Failed to fetch global stats:', err)
-  }
-}
-
 const openStorageBackupModal = (tab: 'backup' | 'storage' = 'backup') => {
   if (!getAdminToken()) {
     handleRequestAuth(() => openStorageBackupModal(tab))
@@ -431,11 +356,9 @@ const handleEntryCreated = (newEntry: LifeEntry) => {
   addEntry(newEntry)
   wishesRefreshKey.value++
   atlasRefreshKey.value++
-  archiveRefreshKey.value++
   if (
     currentView.value !== 'home' &&
     currentView.value !== 'life' &&
-    currentView.value !== 'archive' &&
     currentView.value !== 'projects' &&
     currentView.value !== 'wishes' &&
     currentView.value !== 'wishlist' &&
@@ -452,7 +375,6 @@ const handleEntryUpdated = (updated: LifeEntry) => {
   selectedEntry.value = updated
   wishesRefreshKey.value++
   atlasRefreshKey.value++
-  archiveRefreshKey.value++
 }
 
 const handleEntryDeleted = (id: number) => {
@@ -465,7 +387,6 @@ const handleEntryDeleted = (id: number) => {
   }
   wishesRefreshKey.value++
   atlasRefreshKey.value++
-  archiveRefreshKey.value++
 }
 
 const handleTxCreated = async (tx: Transaction) => {
@@ -517,27 +438,23 @@ const projectEntryYears = (projectId?: number): string[] => {
 
 const handleProjectCreated = (newProj: Project) => {
   projects.value = [newProj, ...projects.value]
-  archiveRefreshKey.value++
   void refreshEntriesForYear(projectEntryYears(newProj.id))
 }
 
 const handleProjectUpdated = (updated: Project) => {
   projects.value = projects.value.map((p) => (p.id === updated.id ? updated : p))
-  archiveRefreshKey.value++
   void refreshEntriesForYear(projectEntryYears(updated.id))
 }
 
 const handleProjectDeleted = (id: number) => {
   const years = projectEntryYears(id)
   projects.value = projects.value.filter((p) => p.id !== id)
-  archiveRefreshKey.value++
   // 关键：造物的伴生散页会随项目一并软删除，否则时间流里会留下
   // 一条再也点不回项目的孤儿记录。只回源相关年份即可。
   void refreshEntriesForYear(years)
 }
 
-// WEB-5：欢迎页首屏不再拉 stats / storage / transactions：
-// - stats 只在打开统计弹窗时拉（openStatsModal）；
+// WEB-5：欢迎页首屏不再拉 storage / transactions：
 // - storage 只在打开灾备弹窗时由 StorageBackupModal 自己拉；
 // - transactions 是主理人接口，访客会 401，进档案后登录时再补。
 let refreshDataInFlight: Promise<void> | null = null
@@ -553,7 +470,6 @@ const refreshData = async (): Promise<void> => {
   const run = (async () => {
     wishesRefreshKey.value++
     atlasRefreshKey.value++
-    archiveRefreshKey.value++
     const tasks: Promise<unknown>[] = [
       loadRemoteEntries(),
       loadProfileShared(),
@@ -605,7 +521,7 @@ const handleHashChange = async () => {
     currentView.value = 'home'
     selectedEntry.value = null
   } else if (
-    ['transactions', 'archive', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
+    ['transactions', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
   ) {
     if (['transactions', 'assets'].includes(hash) && !getAdminToken()) {
       currentView.value = 'home'
@@ -632,8 +548,6 @@ const handleAuthExpired = () => {
 // 首屏要等四段串行网络；现在 session 探针、分类、全量散页、项目、config、
 // profile、system 同时发出，transactions 只在确认是主理人后才发（访客不 401）。
 onMounted(async () => {
-  setupOnlineListeners()
-  setupInstallPrompt()
   window.addEventListener('looseleaf-auth-expired', handleAuthExpired)
 
   const sessionTask = refreshSessionState()
@@ -693,10 +607,6 @@ const handleProfileUpdatedEvent = ((e: CustomEvent) => {
 onUnmounted(() => {
   window.removeEventListener('looseleaf-auth-expired', handleAuthExpired)
   window.removeEventListener('looseleaf-profile-updated', handleProfileUpdatedEvent)
-  window.removeEventListener('online', handleOnline)
-  window.removeEventListener('offline', handleOffline)
-  window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-  window.removeEventListener('appinstalled', handleAppInstalled)
   window.removeEventListener('hashchange', handleHashChange)
 })
 
@@ -771,9 +681,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
 </script>
 
 <template>
-  <!-- P0-5：PWA 新版本提示（全局，不阻塞欢迎扉页与档案本体） -->
-  <PwaUpdatePrompt />
-
   <!-- 1. 独立全屏大屏页面：欢迎扉页 / 迎宾与登入门户 (类似全屏登录页架构，点击后方才进入真正网站) -->
   <WelcomePortal
     v-if="!hasEnteredArchive"
@@ -804,8 +711,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @openPairing="isPairingOpen = true"
       @openUpdateCheck="openUpdateCheckModal"
       @toggleTheme="toggleTheme"
-      @openStats="openStatsModal"
-      @openLogin="() => handleRequestAuth()"
       @logout="handleLogout"
     />
 
@@ -830,7 +735,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <!-- 2. TRANSACTIONS 视图：独立资产管理模块 (RG-11, RC-53) -->
       <TransactionsView
         v-else-if="currentView === 'transactions'"
-        :transactions="transactionsList"
         :refreshKey="txRefreshKey"
         :profile="curatorProfile"
         @openAdd="openNewEntry('transaction')"
@@ -839,15 +743,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
         @gearChanged="handleGearChanged"
       />
 
-      <!-- 3. ARCHIVE 视图：按年/按月索引 (RG-12) -->
-      <ArchiveView
-        v-else-if="currentView === 'archive'"
-        :entries="entries"
-        :refreshKey="archiveRefreshKey"
-        @selectEntry="openEntryDetail"
-      />
-
-      <!-- 4. PROJECTS 视图：作为人生经历的一章 (造物) -->
+      <!-- 3. PROJECTS 视图：作为人生经历的一章 (造物) -->
       <ProjectsView
         v-else-if="currentView === 'projects'"
         :projects="projects"
@@ -863,7 +759,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <!-- 4. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
       <WishlistView
         v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
-        :storageConfigured="storageConfigured"
         :refreshKey="wishesRefreshKey"
         @wishResolved="refreshData"
         @requestAuth="handleRequestAuth"
@@ -872,7 +767,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       <!-- 5. ATLAS 视图：山川行迹印谱百宝格与典藏票根 (FE-12, FE-13, RC-98) -->
       <TravelAtlasView
         v-else-if="currentView === 'atlas' || currentView === 'footprints'"
-        :storageConfigured="storageConfigured"
         :refreshKey="atlasRefreshKey"
         @selectEntry="openEntryDetail"
         @footprintSaved="loadRemoteEntries"
@@ -900,46 +794,21 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     />
 
     <!-- 全局快捷新增浮动操作按钮 (桌面端 + 移动端右下角) -->
-    <!-- MOB-P2-84：安装到主屏幕的引导 -->
-    <div
-      v-if="showInstallTip"
-      class="fixed bottom-20 inset-x-3 z-[1200] mx-auto max-w-sm bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-2xl px-4 py-3 flex items-center gap-3"
-    >
-      <div class="flex-1 min-w-0">
-        <p class="text-xs text-[var(--ink-primary)] font-serif-editorial mb-1">把散页放到主屏幕</p>
-        <p v-if="!isIOS" class="text-[11px] text-[var(--ink-muted)] font-mono-archive">随时打开，像本地手记一样离线可用</p>
-        <p v-else class="text-[11px] text-[var(--ink-muted)] font-mono-archive">点击 Safari 分享按钮 → 添加到主屏幕</p>
-      </div>
-      <button
-        v-if="!isIOS"
-        type="button"
-        @click="promptInstall"
-        class="px-3 py-1.5 text-xs bg-[var(--accent-warm)] text-white rounded-xs cursor-pointer shrink-0"
-      >
-        安装
-      </button>
-      <button
-        type="button"
-        @click="showInstallTip = false"
-        class="px-2 py-1.5 text-xs text-[var(--ink-muted)] cursor-pointer shrink-0"
-      >
-        稍后
-      </button>
-    </div>
-
-    <!-- MOB-P1-101：离线横幅 -->
-    <div
-      v-if="!isOnline"
-      class="fixed top-0 inset-x-0 z-[1200] bg-[var(--accent-warm)] text-white text-xs px-4 py-1.5 flex items-center justify-center gap-2"
-    >
-      <span>当前离线 · 记录会先保存在本机，联网后自动同步</span>
-    </div>
-
-    <!-- MOB-P1-93：任一弹窗打开时隐藏悬浮按钮 ——
-         iOS 的 vh/dvh 不随软键盘收缩，FAB 会一直压在弹窗底部输入框上 -->
-    <!-- MOB-P1-107：FAB 上移，避开移动端底部标签栏 -->
     <div class="md:hidden h-0" />
-    <FloatingActionButton v-if="!anyModalOpen" @click="openNewEntry()" />
+    <aside
+      v-if="!anyModalOpen"
+      aria-label="快捷操作"
+      class="fixed z-40"
+      style="bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)); right: calc(1.5rem + env(safe-area-inset-right, 0px));"
+    >
+      <button
+        @click="openNewEntry()"
+        class="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-[var(--ink-primary)] text-[var(--bg-archive)] shadow-[0_6px_24px_rgba(0,0,0,0.18)] hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center cursor-pointer group"
+        aria-label="新增生活记录"
+      >
+        <Plus class="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
+      </button>
+    </aside>
 
     <!--
       MOB-P1-107：移动端底部标签栏。
@@ -982,10 +851,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       v-if="isStorageBackupOpen"
       :isOpen="isStorageBackupOpen"
       :initialTab="storageBackupInitialTab"
-      :entries="entries"
-      :transactions="transactionsList"
-      :projects="projects"
-      :storageStatus="storageStatus"
       @close="isStorageBackupOpen = false"
       @restored="handleRestored"
       @requestAuth="handleRequestAuth"
@@ -995,7 +860,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     <NewEntryModal
       v-if="isNewEntryOpen"
       :isOpen="isNewEntryOpen"
-      :storageConfigured="storageConfigured"
       :projects="projects"
       :initialKind="newEntryInitialKind"
       :initialProjectId="newEntryInitialProjectId"
@@ -1013,7 +877,6 @@ watch(() => siteConfig.value?.site_name, (newName) => {
     <EntryDetailModal
       v-if="Boolean(selectedEntry)"
       :entry="selectedEntry"
-      :storageConfigured="storageConfigured"
       :projects="projects"
       @close="closeEntryDetail"
       @updated="handleEntryUpdated"
@@ -1021,15 +884,7 @@ watch(() => siteConfig.value?.site_name, (newName) => {
       @requestAuth="handleRequestAuth"
     />
 
-    <!-- 5. 统计指标 弹窗 -->
-    <StatsModal
-      v-if="isStatsOpen"
-      :isOpen="isStatsOpen"
-      :stats="globalStats"
-      @close="isStatsOpen = false"
-    />
-
-    <!-- 6. 设备免密配对与受信任设备管理 弹窗 -->
+    <!-- 5. 设备免密配对与受信任设备管理 弹窗 -->
     <DevicePairingModal
       v-if="isPairingOpen"
       :isOpen="isPairingOpen"

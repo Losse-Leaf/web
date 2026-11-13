@@ -2,11 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeStream from './LifeStream.vue'
-// MOB-P2-77：足迹宫格只在有足迹数据时才渲染，
-// 而它静态 import 的城市字典（375 城 / 34KB）会把字典拖进首屏 chunk。
-// 这里改为异步组件，让字典随该组件按需加载。
-import { defineAsyncComponent } from 'vue'
-const MiniAtlasWidget = defineAsyncComponent(() => import('./MiniAtlasWidget.vue'))
 import { fetchOnThisDayEntries } from '../utils/api'
 import { getBeijingDotDate, getBeijingYear, parseOccurredDate } from '../utils/format'
 
@@ -180,13 +175,6 @@ const headerLocation = computed(() => {
           </p>
         </div>
       </div>
-    </section>
-
-    <!-- 迷你山河印谱概览 (Mini Atlas Widget RC-130) -->
-    <section class="mt-6">
-      <MiniAtlasWidget
-        @navigateAtlas="emit('navigate', 'atlas')"
-      />
     </section>
 
     <!-- 核心主角：纵向生活时间线 (Timeline / Life Stream) -->

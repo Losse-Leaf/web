@@ -16,7 +16,6 @@ import {
   ScanLine,
   AlertCircle,
 } from 'lucide-vue-next'
-import { audio } from '../utils/audio'
 import { getBeijingDotDate, getBeijingYear } from '../utils/format'
 import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
 import {
@@ -89,12 +88,10 @@ const handleClaimSubmit = async () => {
     return
   }
 
-  audio.playTink()
   isClaiming.value = true
   claimError.value = ''
   try {
     await claimDevice({ code })
-    audio.playShutter()
     claimSuccess.value = true
     status.value.initialized = true
     isCurator.value = true
@@ -109,21 +106,18 @@ const handleClaimSubmit = async () => {
 
 // 认领成功后进入展厅
 const handleClaimEnter = () => {
-  audio.playPaperFlip()
   emit('enter')
 }
 
 // 阶段二（已初始化）：1. 访客通道直接进入
 const handleEnterAsGuest = () => {
   if (isBootstrapOnlyStage.value) return
-  audio.playPaperFlip()
   markEnteredArchive()
   emit('enter')
 }
 
 // 退出主人身份
 const handleLogout = async () => {
-  audio.playTink()
   removeAdminToken()
   clearEnteredArchive()
   isCurator.value = false

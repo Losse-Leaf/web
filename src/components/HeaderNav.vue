@@ -8,10 +8,7 @@ import {
   Search,
   Moon,
   Sun,
-  Volume2,
-  VolumeX,
 } from 'lucide-vue-next'
-import { audio } from '../utils/audio'
 import { getAdminToken } from '../utils/api'
 import type { SiteConfig } from '../types'
 
@@ -24,7 +21,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'navigate', view: string): void
   (e: 'openAdd'): void
-  (e: 'openStats'): void
   (e: 'openStorageBackup', tab?: 'backup' | 'storage'): void
   (e: 'openSearch'): void
   (e: 'openPairing'): void
@@ -62,28 +58,9 @@ const navItems = computed(() => {
   return items
 })
 
-const isSoundEnabled = ref(audio.soundEnabled)
-const toggleSoundEffect = () => {
-  isSoundEnabled.value = audio.toggleSound()
-  if (isSoundEnabled.value) {
-    audio.playTink()
-  }
-}
-
-// 辅助工具与设置（纯净无赘述；设备配对、数据备份、存储设置、检查更新与更新公告仅管理端可见）
+// 辅助工具与设置（纯净无赘述；设备配对、数据备份、存储设置、检查更新仅管理端可见）
 const toolOptions = computed(() => {
-  const opts: { key: string; label: string; action: () => void }[] = [
-    {
-      key: 'stats',
-      label: '生活统计',
-      action: () => emit('openStats'),
-    },
-    {
-      key: 'sound',
-      label: isSoundEnabled.value ? '机械音效：开启' : '机械音效：静音',
-      action: () => toggleSoundEffect(),
-    },
-  ]
+  const opts: { key: string; label: string; action: () => void }[] = []
   if (isAdmin.value) {
     opts.push(
       {
@@ -112,21 +89,18 @@ const toolOptions = computed(() => {
 })
 
 const setView = (view: string) => {
-  audio.playTink()
   emit('navigate', view)
   mobileMenuOpen.value = false
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const handleToolClick = (opt: { action: () => void }) => {
-  audio.playTink()
   opt.action()
   isDropdownOpen.value = false
   mobileMenuOpen.value = false
 }
 
 const handleOpenAdd = () => {
-  audio.playTink()
   emit('openAdd')
   mobileMenuOpen.value = false
 }
@@ -142,7 +116,6 @@ const handleDocumentClick = (e: MouseEvent) => {
 const handleGlobalKeyDown = (e: KeyboardEvent) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
-    audio.playTink()
     emit('openSearch')
   }
 }
@@ -221,8 +194,8 @@ onUnmounted(() => {
           <span>主理人</span>
         </div>
 
-        <!-- 设置/工具 ⌄ 二级轻量浮层 (数据备份 / 生活统计 / 存储设置) -->
-        <div class="relative" ref="dropdownRef">
+        <!-- 设置/工具 ⌄ 二级轻量浮层 (仅管理员：设备配对 / 存储与备份 / 检查更新 / 退出) -->
+        <div v-if="toolOptions.length > 0" class="relative" ref="dropdownRef">
           <button
             @click.stop="isDropdownOpen = !isDropdownOpen"
             class="flex items-center gap-1 text-xs tracking-wider transition-colors cursor-pointer py-1 px-2 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
@@ -253,16 +226,6 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-
-        <!-- 机械拟物音效开关 -->
-        <button
-          @click="toggleSoundEffect"
-          class="p-1 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] cursor-pointer transition-colors"
-          :title="isSoundEnabled ? '静音机械拟物音效' : '开启机械拟物音效'"
-        >
-          <Volume2 v-if="isSoundEnabled" class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-          <VolumeX v-else class="w-3.5 h-3.5 opacity-40" />
-        </button>
 
         <!-- 纸张 / 暗房模式切换 -->
         <button
@@ -348,7 +311,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 工具选项 -->
-      <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+      <div v-if="toolOptions.length > 0" class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
         <span class="text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] block">
           档案馆系统与设置
         </span>

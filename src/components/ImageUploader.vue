@@ -2,14 +2,12 @@
 import { ref, reactive, onUnmounted } from 'vue'
 import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
-import { audio } from '../utils/audio'
 import { showAlert } from '../composables/useConfirm'
 import { compressClientImage } from '../utils/imageCompressor'
 import type { Attachment } from '../types'
 
 const props = defineProps<{
   initialAttachments?: Attachment[]
-  storageConfigured: boolean
 }>()
 
 const emit = defineEmits<{
@@ -140,7 +138,6 @@ const startUpload = async (item: UploadItem) => {
     }
     item.status = 'completed'
     item.progress = 100
-    audio.playShutter()
     notifyChange()
   } catch (err: any) {
     if (controller.signal.aborted) {

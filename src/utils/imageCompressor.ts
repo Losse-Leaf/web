@@ -13,8 +13,8 @@
  *    避免 12MP 原图（≈48MB）在堆里完整展开。
  */
 
-export const MAX_EDGE = 2048
-export const JPEG_QUALITY = 0.82
+const MAX_EDGE = 2048
+const JPEG_QUALITY = 0.82
 /** 小于该体积且尺寸达标的小图直接透传，避免无意义的二次编码 */
 const PASSTHROUGH_SIZE = 200 * 1024
 
