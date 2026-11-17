@@ -12,6 +12,7 @@ import type { LifeEntry, Project } from '../types'
 import { parseOccurredDate, renderEditorialContent, getBeijingISOString } from '../utils/format'
 import { showAlert } from '../composables/useConfirm'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   entry: LifeEntry | null
@@ -234,6 +235,8 @@ const getKindLabel = (type: string) => {
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => !!props.entry)
+  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
+  useEscapeClose(() => Boolean(props.entry), () => emit('close'))
 </script>
 
 <template>

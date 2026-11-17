@@ -1,25 +1,91 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, defineAsyncComponent, h } from 'vue'
 import HeaderNav from './components/HeaderNav.vue'
 import HomeView from './components/HomeView.vue'
 import FooterArchive from './components/FooterArchive.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 
+// ── MOB-OPT-P0: ChunkLoadError 自动重试 + loading/error 兜底 ──────────
+// 弱网下 dynamic import 可能 ChunkLoadError；自动重试 2 次后仍失败则提供刷新按钮。
+// Vite 也会在全局 preload 失败时派发 vite:preloadError，这里一并拦截。
+window.addEventListener('vite:preloadError', (e: Event) => {
+  // 阻止浏览器控制台 unhandled rejection，让 defineAsyncComponent 的 onError 接管
+  e.preventDefault()
+})
+
+function retryImport<T>(loader: () => Promise<T>, retries = 2, delay = 1000): () => Promise<T> {
+  return () =>
+    loader().catch((err) => {
+      if (retries <= 0) throw err
+      return new Promise<T>((resolve) =>
+        setTimeout(
+          () => resolve(retryImport(loader, retries - 1, delay * 1.5)()),
+          delay,
+        ),
+      )
+    })
+}
+
+// 轻量加载占位：居中脉冲点
+const AsyncLoadingFallback = {
+  name: 'AsyncLoadingFallback',
+  render() {
+    return h('div', { class: 'flex items-center justify-center py-24', 'aria-label': '加载中' }, [
+      h('span', {
+        class: 'inline-block w-2 h-2 rounded-full bg-[var(--ink-muted)] animate-pulse',
+      }),
+    ])
+  },
+}
+// 加载失败占位：提供重试按钮
+const AsyncErrorFallback = {
+  name: 'AsyncErrorFallback',
+  render() {
+    return h(
+      'div',
+      { class: 'flex flex-col items-center justify-center py-24 gap-4 text-center' },
+      [
+        h('p', { class: 'text-sm text-[var(--ink-muted)]' }, '加载失败，请检查网络'),
+        h(
+          'button',
+          {
+            class:
+              'px-4 py-2 text-xs font-mono-archive tracking-wider border border-[var(--border-divider)] rounded-sm hover:bg-[var(--bg-subtle)] transition-colors',
+            onClick: () => window.location.reload(),
+          },
+          '刷新重试',
+        ),
+      ],
+    )
+  },
+}
+
+function lazyComponent(loader: () => Promise<any>) {
+  return defineAsyncComponent({
+    loader: retryImport(loader),
+    loadingComponent: AsyncLoadingFallback,
+    errorComponent: AsyncErrorFallback,
+    delay: 120,       // 120ms 后才显示 loading（避免闪烁）
+    timeout: 15_000,  // 15 秒超时
+  })
+}
+
 // 异步按需分包加载非首屏重型视图与管理模态框，彻底消除 >500kB 单包警告并加速首屏 (FE-23)
-const ProjectsView = defineAsyncComponent(() => import('./components/ProjectsView.vue'))
-const WishlistView = defineAsyncComponent(() => import('./components/WishlistView.vue'))
-const TravelAtlasView = defineAsyncComponent(() => import('./components/TravelAtlasView.vue'))
-const AboutView = defineAsyncComponent(() => import('./components/AboutView.vue'))
-const TransactionsView = defineAsyncComponent(() => import('./components/TransactionsView.vue'))
-const NewEntryModal = defineAsyncComponent(() => import('./components/NewEntryModal.vue'))
-const EntryDetailModal = defineAsyncComponent(() => import('./components/EntryDetailModal.vue'))
-const StorageBackupModal = defineAsyncComponent(() => import('./components/StorageBackupModal.vue'))
-const SearchModal = defineAsyncComponent(() => import('./components/SearchModal.vue'))
-const DevicePairingModal = defineAsyncComponent(() => import('./components/DevicePairingModal.vue'))
-const UpdateCheckModal = defineAsyncComponent(() => import('./components/UpdateCheckModal.vue'))
-const CategoryManagerModal = defineAsyncComponent(() => import('./components/CategoryManagerModal.vue'))
-const SessionExpiredModal = defineAsyncComponent(() => import('./components/SessionExpiredModal.vue'))
+// MOB-OPT-P0: 统一用 lazyComponent 包装，自带重试 / loading / error 兜底
+const ProjectsView = lazyComponent(() => import('./components/ProjectsView.vue'))
+const WishlistView = lazyComponent(() => import('./components/WishlistView.vue'))
+const TravelAtlasView = lazyComponent(() => import('./components/TravelAtlasView.vue'))
+const AboutView = lazyComponent(() => import('./components/AboutView.vue'))
+const TransactionsView = lazyComponent(() => import('./components/TransactionsView.vue'))
+const NewEntryModal = lazyComponent(() => import('./components/NewEntryModal.vue'))
+const EntryDetailModal = lazyComponent(() => import('./components/EntryDetailModal.vue'))
+const StorageBackupModal = lazyComponent(() => import('./components/StorageBackupModal.vue'))
+const SearchModal = lazyComponent(() => import('./components/SearchModal.vue'))
+const DevicePairingModal = lazyComponent(() => import('./components/DevicePairingModal.vue'))
+const UpdateCheckModal = lazyComponent(() => import('./components/UpdateCheckModal.vue'))
+const CategoryManagerModal = lazyComponent(() => import('./components/CategoryManagerModal.vue'))
+const SessionExpiredModal = lazyComponent(() => import('./components/SessionExpiredModal.vue'))
 import { getAdminToken, removeAdminToken, refreshSessionState } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
@@ -224,7 +290,8 @@ const {
 } = useTransactions()
 
 // 造物项目列表 (真实空态，由后端驱动 RC-38)
-const projects = ref<Project[]>([])
+// MOB-OPT-P1: shallowRef 避免递归代理项目列表
+const projects = shallowRef<Project[]>([])
 
 // 模态框显隐控制
 const selectedEntry = ref<LifeEntry | null>(null)
@@ -770,7 +837,7 @@ watch(() => siteConfig.value?.public_modules, () => {
   <!-- 2. 真正的网站展厅本体：点击进入之后才加载并呈现 -->
   <div
     v-else
-    class="min-h-screen bg-[var(--bg-archive)] text-[var(--ink-primary)] flex flex-col justify-between selection:bg-[var(--accent-warm)]/15 selection:text-[var(--accent-warm)] transition-colors duration-300"
+    class="min-h-screen bg-[var(--bg-archive)] text-[var(--ink-primary)] flex flex-col justify-between selection:bg-[var(--accent-warm)]/15 selection:text-[var(--accent-warm)]"
   >
     <!-- 原生 SVG 纸张微噪点覆盖层（哑光相纸与实体书质感） -->
     <div class="paper-grain-overlay" aria-hidden="true" />
@@ -851,7 +918,7 @@ watch(() => siteConfig.value?.public_modules, () => {
         @projectUpdated="handleProjectUpdated"
         @projectDeleted="handleProjectDeleted"
         @selectEntry="openEntryDetail"
-        @openAddProjectEntry="(projId) => openNewEntry('project', projId)"
+        @openAddProjectEntry="(projId: number) => openNewEntry('project', projId)"
         @requestAuth="handleRequestAuth"
       />
 
@@ -918,7 +985,7 @@ watch(() => siteConfig.value?.public_modules, () => {
     <nav
       v-if="!anyModalOpen && visibleMobileNavItems.length > 0"
       class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--bg-archive)]/96 backdrop-blur-md border-t border-[var(--border-subtle)] pb-[env(safe-area-inset-bottom)]"
-      aria-label="主导航"
+      aria-label="移动端主导航"
     >
       <div
         class="grid"

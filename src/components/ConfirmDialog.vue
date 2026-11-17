@@ -1,13 +1,21 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { X, AlertTriangle } from 'lucide-vue-next'
 import { useConfirm } from '../composables/useConfirm'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 // 全站确认 / 提示弹窗（单一实例，在 App.vue 根部挂载一次）
 const { confirmRequest, respond } = useConfirm()
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => !!confirmRequest.value)
+
+  // MOB-OPT-P1 (a11y)：焦点陷阱 + Escape 关闭
+  const dialogRef = ref<HTMLElement | null>(null)
+  useFocusTrap(dialogRef, () => !!confirmRequest.value, {
+    onEscape: () => respond(false),
+  })
 </script>
 
 <template>
@@ -18,6 +26,7 @@ const { confirmRequest, respond } = useConfirm()
       @click.self="respond(false)"
     >
       <div
+        ref="dialogRef"
         class="w-full max-w-sm bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl rounded-xs p-5 sm:p-6 text-left"
         role="alertdialog"
         aria-modal="true"

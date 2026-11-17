@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import type { Transaction, LifeEntry } from '../types'
 import { fetchTransactions } from '../utils/api'
 
@@ -18,7 +18,8 @@ function getInitialTransactions(): Transaction[] {
   return []
 }
 
-const transactions = ref<Transaction[]>(getInitialTransactions())
+// MOB-OPT-P1: shallowRef 避免递归代理记账流水每条记录的每个字段
+const transactions = shallowRef<Transaction[]>(getInitialTransactions())
 
 // 节流写入本地存储并附带时间戳 (FE-06)
 let saveTxTimer: number | null = null

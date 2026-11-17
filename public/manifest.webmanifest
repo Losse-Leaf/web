@@ -1,0 +1,24 @@
+{
+  "name": "散页 · 个人生活志",
+  "short_name": "散页",
+  "description": "日常、资产、心愿、行迹与造物，记录真实可感的生活。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f8f5",
+  "theme_color": "#f9f8f5",
+  "icons": [
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "lang": "zh-CN",
+  "orientation": "any",
+  "categories": ["lifestyle", "productivity"]
+}

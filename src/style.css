@@ -61,11 +61,15 @@
     overflow-x: hidden;
     line-height: 1.7;
     letter-spacing: -0.01em;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    /* MOB-OPT-P0: 主题切换过渡只在切换时临时生效，这里不再常驻 transition，
+       避免每次重绘都检查 body 是否在过渡中 */
     /* MOB-P1-92：横屏时带刘海的 iPhone 左右各有约 44px 安全区，
        不避让的话页面内容会压到圆角/刘海下被遮挡。 */
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
+    /* MOB-OPT-P1: 阻止 iOS Safari 原生 pull-to-refresh / 弹性过滚，
+       防止在弹窗/抽屉里滑动时意外触发浏览器橡皮筋 */
+    overscroll-behavior: none;
   }
 
   /* MOB-P1-99：全工程此前 focus-visible 为 0 处，
@@ -129,6 +133,20 @@
       'Sarasa Mono SC', 'Noto Sans Mono CJK SC', monospace;
     letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* MOB-OPT-P2: 时间流卡片跳过视口外布局与绘制（约 180px 预估高度） */
+  .timeline-card-lazy {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 180px;
+  }
+
+  /* MOB-OPT-P2: 图片加载前灰色骨架（配合 width/height 或 aspect-ratio 使用）*/
+  .img-skeleton {
+    background: var(--bg-subtle);
+  }
+  .img-skeleton img {
+    background: var(--bg-subtle);
   }
 
   /* 模块化排版阶梯 (Modular Editorial Type Scale) */
@@ -309,6 +327,15 @@ html.dark .book-spine-crease::after {
   background: rgba(24, 23, 22, 0.3);
 }
 
+/* MOB-OPT-P2: 视图切换淡入淡出（给 main 子元素用 CSS animation 应用） */
+@keyframes looseleaf-view-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.view-enter-anim {
+  animation: looseleaf-view-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* 链接下划线微动效 */
 .hover-underline {
   position: relative;
@@ -329,6 +356,20 @@ html.dark .book-spine-crease::after {
 .hover-underline:hover::after {
   transform: scaleX(1);
   transform-origin: bottom left;
+}
+
+/* MOB-OPT-P0: 主题切换时临时给 body 加上过渡（由 useTheme 管理添加/移除），
+   平时不常驻 transition 避免持续的重绘检查开销 */
+body.theme-transitioning {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* MOB-OPT-P1：触屏设备隐藏噪点覆盖层。
+   手机小屏几乎感知不到噪点纹理，白省一个全屏合成层和 SVG filter 重栅格化。 */
+@media (pointer: coarse) {
+  .paper-grain-overlay {
+    display: none;
+  }
 }
 
 /* 纯原生 SVG 纸张微噪点覆盖层，赋予屏幕哑光相纸与实体书质感，0 外部网络依赖 */
@@ -383,6 +424,8 @@ html.dark .book-spine-crease::after {
   pointer-events: none;
   z-index: 1;
   opacity: 0.038;
+  /* MOB-OPT: 提升到独立 GPU 合成层，避免与主内容共享光栅化 */
+  will-change: transform;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 

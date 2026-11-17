@@ -8,6 +8,7 @@ import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import ImageUploader from './ImageUploader.vue'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   isOpen: boolean
@@ -178,6 +179,8 @@ const handleSubmit = async () => {
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => props.isOpen)
+  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
+  useEscapeClose(() => props.isOpen, () => emit('close'))
 
   // 提交中禁止用户侧关闭（背景/X/取消）：关闭会卸载弹窗并触发 ImageUploader
   // 的 cleanupUploads，把在途 PUT 正在绑定的参考图当孤儿回收 ⇒ 图片死链。

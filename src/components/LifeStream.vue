@@ -360,7 +360,7 @@ const getGapDays = (index: number): number => {
 
         <article
           @click="emit('selectEntry', entry)"
-          class="relative group cursor-pointer transition-all"
+          class="relative group cursor-pointer transition-all timeline-card-lazy"
         >
           <!-- 纵向主轨锚点圆点 (Timeline Node) -->
           <div
@@ -540,7 +540,7 @@ const getGapDays = (index: number): number => {
             <!-- 胶片装裱暗房底片框 (支持单图宽幅 / 双图并列 / 多图画廊拼版) -->
             <div
               v-if="getEntryImages(entry).length > 0"
-              class="film-frame bg-[var(--bg-subtle)]/70 p-2 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl group/img space-y-2.5"
+              class="film-frame bg-[var(--bg-subtle)]/70 p-2 sm:p-3 rounded-xs border border-[var(--border-subtle)] max-w-2xl group/img space-y-2.5 img-skeleton"
             >
               <!-- 单图宽幅：带哑光内框留白与画幅自适应 -->
               <div
@@ -548,13 +548,15 @@ const getGapDays = (index: number): number => {
                 class="relative w-full overflow-hidden rounded-xs bg-[var(--bg-archive)] cursor-zoom-in border border-[var(--border-subtle)]/70 p-1.5 sm:p-2"
                 @click.stop="openLightbox(entry, getEntryImages(entry)[0].originalUrl)"
               >
-                <img
+                <!-- MOB-OPT-P0: 首条记录的封面图是 LCP 候选，给予最高优先级，不延迟加载 -->
+              <img
                   :src="getEntryImages(entry)[0].url"
                   :alt="entry.title"
                   :width="getEntryImages(entry)[0].width"
                   :height="getEntryImages(entry)[0].height"
                   class="w-full h-auto max-h-[580px] object-contain sm:object-cover rounded-xs editorial-image group-hover/img:scale-[1.008] transition-transform duration-500 mx-auto"
-                  loading="lazy"
+                  :loading="index === 0 ? 'eager' : 'lazy'"
+                  :fetchpriority="index === 0 ? 'high' : undefined"
                  decoding="async">
                 <div class="absolute bottom-3 right-3 px-2 py-0.5 bg-black/60 backdrop-blur-xs text-white text-[11px] font-mono-archive rounded-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-xs">
                   <Maximize2 class="w-3 h-3" />

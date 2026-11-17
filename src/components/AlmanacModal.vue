@@ -10,6 +10,7 @@ import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
 import { formatMoney, getBeijingYear, parseOccurredDate } from '../utils/format'
 import type { AnnualAlmanacSummary } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   isOpen: boolean
@@ -85,6 +86,8 @@ const formatDate = (dateStr?: string) => {
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => props.isOpen)
+  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
+  useEscapeClose(() => props.isOpen, () => emit('close'))
 </script>
 
 <template>

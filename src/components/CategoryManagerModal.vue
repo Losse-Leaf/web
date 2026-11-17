@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { X, Plus, Trash2, Check } from 'lucide-vue-next'
 import { useCategories, CATEGORY_SCOPE_META } from '../composables/useCategories'
+import { useEscapeClose } from '../composables/useEscapeClose'
 import type { CategoryOption, CategoryScope } from '../types'
 
 const {
@@ -13,6 +14,9 @@ const {
   addCategory,
   removeCategory,
 } = useCategories()
+
+// MOB-OPT-P2 (a11y): Escape 键关闭弹窗
+useEscapeClose(() => isCategoryManagerOpen.value, closeCategoryManager)
 
 const newCategoryName = ref('')
 const isSubmitting = ref(false)

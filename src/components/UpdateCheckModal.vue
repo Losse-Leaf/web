@@ -11,6 +11,7 @@ import {
 import { checkSystemUpdate } from '../utils/api'
 import type { UpdateCheckResult } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   isOpen: boolean
@@ -44,6 +45,8 @@ onMounted(() => {
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => props.isOpen)
+  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
+  useEscapeClose(() => props.isOpen, () => emit('close'))
 </script>
 
 <template>

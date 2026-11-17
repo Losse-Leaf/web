@@ -35,6 +35,18 @@ export function useTheme() {
 
   const toggleTheme = () => {
     const next: ArchiveTheme = currentTheme.value === 'paper' ? 'darkroom' : 'paper'
+    // MOB-OPT-P0: 只在主题切换时临时开启 body 过渡，
+    // 过渡结束自动移除，平时不占重绘开销
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('theme-transitioning')
+      const cleanup = () => {
+        document.body.classList.remove('theme-transitioning')
+        document.body.removeEventListener('transitionend', cleanup)
+      }
+      document.body.addEventListener('transitionend', cleanup, { once: true })
+      // 安全兜底：400ms 后强制移除（以防 transitionend 不触发）
+      setTimeout(cleanup, 400)
+    }
     applyTheme(next)
     return next
   }

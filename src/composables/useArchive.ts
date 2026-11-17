@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { shallowRef, ref } from 'vue'
 import type { LifeEntry, ArchiveCategory } from '../types'
 import { entryMatchesCategory } from '../types'
 import { fetchEntries, resetEntriesETag } from '../utils/api'
@@ -25,7 +25,9 @@ function getInitialEntries(): LifeEntry[] {
   return []
 }
 
-const entries = ref<LifeEntry[]>(getInitialEntries())
+// MOB-OPT-P1: shallowRef 避免 Vue 递归代理数百条记录的每个字段。
+// 更新时整体替换 .value = newArray 触发响应。
+const entries = shallowRef<LifeEntry[]>(getInitialEntries())
 const currentCategory = ref<ArchiveCategory>('all')
 
 function persistEntries(list: LifeEntry[]) {
