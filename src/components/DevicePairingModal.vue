@@ -361,6 +361,16 @@ onUnmounted(() => {
 
       <!-- 板块 1：散页纸墨风二维码与配对链接 -->
       <div v-if="activeTab === 'pair'" class="space-y-6">
+        <!-- Vesper Auth 跨端一键接入引导横幅 -->
+        <div
+          class="p-3.5 bg-[var(--bg-subtle)]/80 border border-[var(--border-subtle)] rounded-xs flex items-start gap-2.5 text-xs font-serif-editorial text-[var(--ink-secondary)] leading-relaxed"
+        >
+          <ShieldCheck class="w-4 h-4 text-[var(--accent-warm)] shrink-0 mt-0.5" />
+          <span>
+            macOS 与 Android 客户端可直接点击客户端内的 Vesper Auth 一键接入按钮完成绑定，或使用下方临时二维码在局域网配对。
+          </span>
+        </div>
+
         <!-- 配对成功横幅 -->
         <div
           v-if="pairingSuccess"

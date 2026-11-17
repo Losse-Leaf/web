@@ -114,7 +114,12 @@ import {
   clearApiCache,
 } from './utils/api'
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
-import { markEnteredArchive, clearEnteredArchive, hasEnteredArchiveSession } from './utils/auth'
+import {
+  markEnteredArchive,
+  clearEnteredArchive,
+  hasEnteredArchiveSession,
+  redirectToOIDCLogin,
+} from './utils/auth'
 
 // 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32, RC-47, RG-09)
 const syncProfileCache = (profile: CuratorProfile) => {
@@ -242,6 +247,9 @@ const applySystemStatus = (status: SystemStatus) => {
     clearEnteredArchive()
     hasEnteredArchive.value = false
   } else if (!suppressAutoEnter && (Boolean(getAdminToken()) || hasEnteredArchiveSession())) {
+    if (Boolean(getAdminToken())) {
+      markEnteredArchive()
+    }
     hasEnteredArchive.value = true
   }
 }
@@ -703,6 +711,10 @@ onMounted(async () => {
   // 路由不能等整批数据：只要会话角色确定就立刻应用初始 hash 并挂上监听，
   // 否则首屏网络慢时刷新 /#atlas 会一直停在首页，前进/后退也失灵。
   const isSessionAdmin = await sessionTask
+  if (isSessionAdmin && systemStatus.value?.initialized !== false) {
+    markEnteredArchive()
+    hasEnteredArchive.value = true
+  }
   await handleHashChange()
   window.addEventListener('hashchange', handleHashChange)
 
@@ -720,9 +732,9 @@ onMounted(async () => {
     document.title = cfg.site_name || '散页 · 个人生活志'
   }
 
-  // Cookie 会话有效但 localStorage 标记缺失时，applySystemStatus 可能来不及把
-  // 主人送进档案馆；以会话探针的权威结果补一次。
+  // Cookie 会话有效但 localStorage 标记缺失时，以会话探针的权威结果标记进馆并进入主理人模式。
   if (isSessionAdmin && systemStatus.value?.initialized !== false) {
+    markEnteredArchive()
     hasEnteredArchive.value = true
   }
 
@@ -876,10 +888,10 @@ watch(() => siteConfig.value?.public_modules, () => {
         <div class="pt-2">
           <button
             type="button"
-            @click="handleRequestAuth(() => refreshData())"
-            class="px-5 py-2.5 rounded-sm bg-[var(--ink-primary)] text-[var(--bg-archive)] text-xs font-mono-archive tracking-widest uppercase hover:opacity-90 transition-opacity"
+            @click="systemStatus?.oidc_enabled ? redirectToOIDCLogin() : handleRequestAuth(() => refreshData())"
+            class="min-h-[44px] px-5 py-2.5 rounded-sm bg-[var(--ink-primary)] text-[var(--bg-archive)] text-xs font-mono-archive tracking-widest uppercase hover:opacity-90 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
           >
-            主理人登录
+            {{ systemStatus?.oidc_enabled ? '通过 Vesper Auth 通行证进入' : '主理人登录' }}
           </button>
         </div>
       </div>
@@ -1074,10 +1086,11 @@ watch(() => siteConfig.value?.public_modules, () => {
     <!-- 10. 全站统一确认 / 提示弹窗 (原生 confirm/alert 收口 FE-21) -->
     <ConfirmDialog />
 
-    <!-- 11. 主理人权限引导弹窗（无母密钥后，未授信浏览器只能通过设备配对接入） -->
+    <!-- 11. 主理人权限引导弹窗（支持 Vesper Auth 单点登录与局域网设备配对） -->
     <SessionExpiredModal
       v-if="isSessionHintOpen"
       :isOpen="isSessionHintOpen"
+      :systemStatus="systemStatus"
       @close="isSessionHintOpen = false"
     />
 

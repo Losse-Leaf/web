@@ -17,7 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-vue-next'
 import { getBeijingDotDate, getBeijingYear } from '../utils/format'
-import { markEnteredArchive, clearEnteredArchive } from '../utils/auth'
+import { markEnteredArchive, clearEnteredArchive, redirectToOIDCLogin } from '../utils/auth'
 import {
   claimDevice,
   getAdminToken,
@@ -45,39 +45,35 @@ const status = ref<SystemStatus>({
   initialized: true,
   site_name: '散页',
   curator_name: '',
+  oidc_enabled: false,
+  oidc_provider_name: 'Vesper Auth',
 })
 
-// 主理人凭证状态
-const isCurator = ref(Boolean(getAdminToken()))
+const isOIDCEnabled = computed(() => Boolean(status.value.oidc_enabled))
+
+// 主理人凭证状态（响应式跟随 getAdminToken 与 /auth/session 探针结果）
+const isCurator = computed(() => Boolean(getAdminToken()))
 
 // 阶段判定 (RC-59 / RC-60)：
-// 当 status.initialized === false 时，无条件清空失效的本地残留 Token 并独占渲染阶段一「首次认领码输入页」
-// 认领成功后（claimSuccess）驻留阶段一的成功页，直到用户点「翻开扉页」主动进馆 ——
-// 期间系统状态刷新为 initialized=true 也不得把扉页翻到阶段二（与 App.vue
-// handleBootstrapped 只预取数据、不自动进馆的口径一致）。
+// 当 status.initialized === false 时，独占渲染阶段一「首次创刊向导」
 const isBootstrapOnlyStage = computed(() => claimSuccess.value || !status.value.initialized)
 
-// 阶段一：一次性认领码认领首台设备
-// 认领码由服务在启动时打印到标准输出（systemd 用 journalctl -u loose-leaf 查看），
-// 15 分钟内有效；过期或连续输错 5 次作废，需重启服务获取新码。
+// 阶段一（纯局域网兜底模式）：一次性认领码认领首台设备
 const claimCode = ref('')
 const isClaiming = ref(false)
 const claimError = ref('')
 const claimSuccess = ref(false)
-
-const checkCuratorAuth = () => {
-  isCurator.value = Boolean(getAdminToken())
-}
 
 const applySystemStatus = (s: SystemStatus) => {
   status.value = s
   if (!s.initialized) {
     removeAdminToken()
     clearEnteredArchive()
-    isCurator.value = false
-  } else {
-    checkCuratorAuth()
   }
+}
+
+const handleOIDCLogin = () => {
+  redirectToOIDCLogin('/')
 }
 
 // 提交认领码：POST /api/v1/auth/claim，成功后当前浏览器成为首台受信任设备
@@ -94,7 +90,6 @@ const handleClaimSubmit = async () => {
     await claimDevice({ code })
     claimSuccess.value = true
     status.value.initialized = true
-    isCurator.value = true
     markEnteredArchive()
     emit('bootstrapped')
   } catch (err: any) {
@@ -120,34 +115,52 @@ const handleEnterAsGuest = () => {
 const handleLogout = async () => {
   removeAdminToken()
   clearEnteredArchive()
-  isCurator.value = false
   // 与页脚登出保持一致：清掉 API 快照与 Workbox 运行时缓存。
   await clearApiCache()
-  // 单例 composable（entries / transactions / profile）不会因为清缓存而自动归零；
-  // 不刷新的话，随后以访客身份进入仍能在时间流里看到主人账目。整页重载最干净。
   window.location.reload()
 }
 
 const todayDisplay = computed(() => getBeijingDotDate())
 
-// 阶段一：首次认领流程说明
-const bootstrapGuides = [
-  {
-    num: '01',
-    title: '查看服务启动日志',
-    desc: '首次运行会在标准输出打印 8 位认领码（systemd 部署用 journalctl -u loose-leaf 查看）。',
-  },
-  {
-    num: '02',
-    title: '输入认领码认领首台设备',
-    desc: '认领码 15 分钟内有效；过期或连续输错 5 次会作废，重启服务即可获取新码。',
-  },
-  {
-    num: '03',
-    title: '建议再配对一台设备作为备份',
-    desc: '认领成功后可随时在「设备管理」为手机或桌面端签发配对二维码。',
-  },
-]
+// 阶段一：首次创刊流程说明（按 OIDC 单点登录 / 局域网认领码自适应切换）
+const bootstrapGuides = computed(() => {
+  if (isOIDCEnabled.value) {
+    return [
+      {
+        num: '01',
+        title: '验证 Vesper Auth 通行证',
+        desc: '通过统一身份认证中心完成 Passkey 或主理人凭证核验，无需翻找服务器启动日志。',
+      },
+      {
+        num: '02',
+        title: '自动完成创刊与会话签发',
+        desc: '主理人白名单核验通过后，自动激活私人档案馆并为本浏览器签发 HttpOnly 会话凭证。',
+      },
+      {
+        num: '03',
+        title: '跨端设备一键接入',
+        desc: 'macOS 桌面端与 Android 随行端同样支持通过 Vesper Auth 通行证一键绑定。',
+      },
+    ]
+  }
+  return [
+    {
+      num: '01',
+      title: '查看服务启动日志',
+      desc: '首次运行会在标准输出打印 8 位认领码（systemd 部署用 journalctl -u loose-leaf 查看）。',
+    },
+    {
+      num: '02',
+      title: '输入认领码认领首台设备',
+      desc: '认领码 15 分钟内有效；过期或连续输错 5 次会作废，重启服务即可获取新码。',
+    },
+    {
+      num: '03',
+      title: '建议再配对一台设备作为备份',
+      desc: '认领成功后可随时在「设备管理」为手机或桌面端签发配对二维码。',
+    },
+  ]
+})
 
 // 阶段二：档案馆三大篇章概览
 const archiveChapters = [
@@ -261,12 +274,17 @@ watch(
             </div>
 
             <blockquote class="p-5 sm:p-6 rounded-xs bg-[var(--bg-subtle)]/50 border-l-2 border-[var(--accent-warm)] text-[var(--ink-secondary)] font-serif-editorial text-base sm:text-lg italic leading-relaxed">
-              “此档案馆尚处素胚状态。请查看服务启动日志中的认领码完成首次认领，随后开启日常记录与公开展览。”
+              <template v-if="isOIDCEnabled">
+                “此档案馆尚处素胚状态。请通过 Vesper Auth 通行证完成主理人身份核验，一键激活创刊并开启日常记录。”
+              </template>
+              <template v-else>
+                “此档案馆尚处素胚状态。请查看服务启动日志中的认领码完成首次认领，随后开启日常记录与公开展览。”
+              </template>
             </blockquote>
 
             <div class="space-y-3 pt-1">
               <div class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                首次认领流程说明
+                {{ isOIDCEnabled ? '创刊激活流程说明' : '首次认领流程说明' }}
               </div>
               <div class="space-y-2.5">
                 <div
@@ -298,7 +316,7 @@ watch(
             </div>
           </div>
 
-          <!-- 右页：唯一首次认领码输入页 -->
+          <!-- 右页：首次创刊激活卡片（Vesper Auth SSO 或纯局域网认领码兜底） -->
           <div class="lg:col-span-6">
             <div class="p-6 sm:p-8 rounded-xs border border-[var(--accent-warm)]/60 bg-[var(--bg-subtle)]/40 shadow-xl space-y-6 text-left min-h-[430px] flex flex-col justify-between">
               <!-- 页眉 -->
@@ -306,11 +324,11 @@ watch(
                 <div class="flex items-center gap-2.5">
                   <PenTool class="w-4 h-4 text-[var(--accent-warm)]" />
                   <span class="font-serif-editorial text-lg sm:text-xl font-medium text-[var(--ink-primary)]">
-                    首次认领 · 筑造私人档案馆
+                    {{ isOIDCEnabled ? '首次创刊 · 通行证一键激活' : '首次认领 · 筑造私人档案馆' }}
                   </span>
                 </div>
                 <span class="px-2 py-0.5 rounded-xs bg-[var(--accent-warm)]/15 text-[var(--accent-warm)] text-[11px] font-mono-archive tracking-widest">
-                  CLAIM
+                  {{ isOIDCEnabled ? 'SSO' : 'CLAIM' }}
                 </span>
               </div>
 
@@ -330,14 +348,49 @@ watch(
 
                 <button
                   @click="handleClaimEnter"
-                  class="w-full py-3 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-sm"
+                  class="w-full min-h-[44px] py-3 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
                 >
                   <span>翻开扉页 · 进入展厅</span>
                   <ArrowRight class="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <!-- 认领码输入 -->
+              <!-- OIDC 统一单点登录一键创刊激活 -->
+              <div v-else-if="isOIDCEnabled" class="space-y-6 flex-1 flex flex-col justify-between">
+                <div class="space-y-4">
+                  <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
+                    本档案馆已接入统一身份认证中心。主理人首次通过通行证核验后，系统将在同一事务内自动激活创刊，并为当前浏览器签发受保护的会话凭证。
+                  </p>
+
+                  <div class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)]/65 space-y-2">
+                    <div class="text-xs font-serif-editorial font-medium text-[var(--ink-primary)] flex items-center gap-2">
+                      <ShieldCheck class="w-3.5 h-3.5 text-[var(--accent-moss)] shrink-0" />
+                      <span>单一主理人白名单准入</span>
+                    </div>
+                    <p class="text-[11px] font-serif-editorial text-[var(--ink-muted)] leading-relaxed">
+                      仅允许预先授权的主理人通行证账号完成创刊与管理；若已在同一浏览器的其他同域服务登录 Vesper Auth，将直接无感进入主理人模式。
+                    </p>
+                  </div>
+                </div>
+
+                <div class="space-y-4 font-mono-archive text-xs">
+                  <button
+                    type="button"
+                    @click="handleOIDCLogin"
+                    class="w-full min-h-[48px] py-3.5 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
+                  >
+                    <KeyRound class="w-3.5 h-3.5" />
+                    <span>通过 Vesper Auth 通行证进入</span>
+                    <ArrowRight class="w-3.5 h-3.5" />
+                  </button>
+
+                  <p class="text-[11px] font-mono-archive text-[var(--ink-muted)] leading-relaxed border-t border-[var(--border-subtle)]/60 pt-3">
+                    认证协议：OAuth 2.0 / OpenID Connect + PKCE (S256) · 会话由 HttpOnly Cookie 承载。
+                  </p>
+                </div>
+              </div>
+
+              <!-- 局域网离线部署兜底：认领码输入 -->
               <div v-else class="space-y-5 flex-1">
                 <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
                   请输入服务启动时打印的 8 位认领码（格式 XXXX-XXXX），认领当前浏览器为首台受信任设备。
@@ -515,13 +568,13 @@ watch(
                 </span>
               </div>
 
-              <!-- 下半区：主人通道 · 会话直入 / 设备配对 -->
+              <!-- 下半区：主人通道 · 通行证直入 / 设备配对 -->
               <div class="p-6 sm:p-8 pt-7 bg-[var(--bg-archive)]/55 space-y-4">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <KeyRound class="w-4 h-4 text-[var(--accent-warm)]" />
                     <span class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
-                      主人通道 · 设备配对钤印
+                      {{ isOIDCEnabled ? '主人通道 · 通行证钤印' : '主人通道 · 设备配对钤印' }}
                     </span>
                   </div>
                   <span
@@ -558,7 +611,26 @@ watch(
                   </div>
                 </div>
 
-                <!-- 未持有会话：唯一的接入方式是设备配对 -->
+                <!-- 未持有会话且启用了 OIDC：通过 Vesper Auth 通行证一键进入 -->
+                <div
+                  v-else-if="isOIDCEnabled"
+                  class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col justify-between gap-3.5 min-h-[128px]"
+                >
+                  <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
+                    通过 Vesper Auth 统一通行证核验主理人身份，自动签发本浏览器受信任会话并进入管理模式。
+                  </p>
+                  <button
+                    type="button"
+                    @click="handleOIDCLogin"
+                    class="w-full min-h-[44px] py-2.5 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
+                  >
+                    <KeyRound class="w-3.5 h-3.5" />
+                    <span>通过 Vesper Auth 通行证进入</span>
+                    <ArrowRight class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <!-- 纯局域网离线部署兜底：设备配对指引 -->
                 <div
                   v-else
                   class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex items-start gap-3 min-h-[128px]"
@@ -569,7 +641,7 @@ watch(
                       请在一台已配对的设备上打开「设置 → 设备配对」，生成新的配对二维码或链接，再用本浏览器扫码或粘贴接入。
                     </p>
                     <p class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                      若所有设备均已丢失，请删除服务器数据文件用认领码重新开始。
+                      若所有设备均已丢失，请使用服务端自救参数重开首次认领入口。
                     </p>
                   </div>
                 </div>

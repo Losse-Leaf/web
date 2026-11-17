@@ -262,6 +262,8 @@ export interface SystemStatus {
   initialized: boolean
   site_name: string
   curator_name?: string
+  oidc_enabled?: boolean
+  oidc_provider_name?: string
 }
 
 export interface ClaimPayload {
