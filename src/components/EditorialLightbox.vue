@@ -2,6 +2,7 @@
 import { ref, watch, onBeforeUnmount } from 'vue'
 import { X, Camera, MapPin, Calendar } from 'lucide-vue-next'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   isOpen: boolean
@@ -86,22 +87,14 @@ const onTouchEnd = () => {
   swipeY.value = 0
 }
 
-const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen) {
-    emit('close')
-  }
-}
-
 useBodyScrollLock(() => props.isOpen)
+useEscapeClose(() => props.isOpen, () => emit('close'))
 
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      window.addEventListener('keydown', handleKeydown)
       reset()
-    } else {
-      window.removeEventListener('keydown', handleKeydown)
     }
     // 捏合缩放/放大平移需要 preventDefault，touchmove 监听必须 non-passive：
     // Vue 的 .passive 修饰符会让 preventDefault 变成 no-op（浏览器忽略并告警），
@@ -116,7 +109,6 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown)
   imageStageRef.value?.removeEventListener('touchmove', onTouchMove)
 })
 </script>

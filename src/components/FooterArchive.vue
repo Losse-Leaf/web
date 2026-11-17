@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import { ArrowUpRight } from 'lucide-vue-next'
 import { getBeijingYear } from '../utils/format'
+import { getSiteBrandName } from '../utils/profile'
 import type { SiteConfig, CuratorProfile } from '../types'
 
-defineProps<{
+const props = defineProps<{
   config?: SiteConfig | null
   profile?: CuratorProfile | null
 }>()
@@ -15,6 +16,7 @@ const emit = defineEmits<{
 
 // 版权年份按北京时间基准 (RC-134)
 const currentYear = computed(() => getBeijingYear())
+const brandName = computed(() => getSiteBrandName(props.config))
 </script>
 
 <template>
@@ -28,7 +30,7 @@ const currentYear = computed(() => getBeijingYear())
         <div class="space-y-1">
           <div class="flex items-center gap-2.5">
             <span class="text-[var(--ink-primary)] font-semibold tracking-wider font-serif-editorial text-sm">
-              《{{ config?.site_name?.split('·')?.[0]?.trim() || '散页' }}》
+              《{{ brandName }}》
             </span>
             <span class="text-[11px] tracking-[0.18em] uppercase text-[var(--ink-muted)] border border-[var(--border-subtle)] px-1.5 py-0.2 rounded-xs">
               COLOPHON · 版本底款

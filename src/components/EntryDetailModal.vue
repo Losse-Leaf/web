@@ -6,10 +6,16 @@ import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import CityPicker from './CityPicker.vue'
 import EditorialLightbox from './EditorialLightbox.vue'
+import PrivacyToggle from './PrivacyToggle.vue'
 import { matchCityFromLocation, saveLastUsedCity } from '../utils/cities'
 import { updateLifeEntry, deleteLifeEntry, getAdminToken } from '../utils/api'
 import type { LifeEntry, Project } from '../types'
-import { parseOccurredDate, renderEditorialContent, getBeijingISOString } from '../utils/format'
+import {
+  parseOccurredDate,
+  renderEditorialContent,
+  getBeijingISOString,
+  getAttachmentThumbUrl,
+} from '../utils/format'
 import { showAlert } from '../composables/useConfirm'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
@@ -23,7 +29,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'updated', entry: LifeEntry): void
   (e: 'deleted', id: number): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
@@ -62,7 +68,7 @@ const handleEditCitySelect = (city: { code: string; name: string }) => {
 const startEdit = () => {
   if (!props.entry) return
   if (!isAdmin.value) {
-    emit('requestAuth', () => startEdit())
+    emit('requestAuth')
     return
   }
   isEditing.value = true
@@ -112,7 +118,7 @@ const handleSaveEdit = async () => {
   }
 
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleSaveEdit())
+    emit('requestAuth')
     return
   }
 
@@ -158,10 +164,6 @@ const handleSaveEdit = async () => {
     isEditing.value = false
     errorMsg.value = null
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => handleSaveEdit())
-      return
-    }
     errorMsg.value = err.message || '更新失败'
   } finally {
     isSubmitting.value = false
@@ -171,7 +173,7 @@ const handleSaveEdit = async () => {
 const handleDelete = async () => {
   if (!props.entry) return
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleDelete())
+    emit('requestAuth')
     return
   }
   try {
@@ -180,10 +182,6 @@ const handleDelete = async () => {
     emit('deleted', props.entry.id)
     emit('close')
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => handleDelete())
-      return
-    }
     await showAlert({ title: '删除失败', message: err.message || '删除失败', danger: true })
   } finally {
     isSubmitting.value = false
@@ -196,7 +194,7 @@ const displayImages = computed(() => {
   if (props.entry.attachments && props.entry.attachments.length > 0) {
     // 列表/接触印相用缩略图；灯箱必须换回原图，否则放大后只有 480px。
     return props.entry.attachments
-      .map((a) => ({ thumb: a.thumbnail_url || a.url, original: a.url || a.thumbnail_url }))
+      .map((a) => ({ thumb: getAttachmentThumbUrl(a), original: a.url || a.thumbnail_url }))
       .filter((a) => Boolean(a.thumb))
   }
   return []
@@ -235,8 +233,8 @@ const getKindLabel = (type: string) => {
 
   // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
   useBodyScrollLock(() => !!props.entry)
-  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-  useEscapeClose(() => Boolean(props.entry), () => emit('close'))
+  // MOB-OPT-P2 (a11y): LIFO Escape 键关闭弹窗（复用 handleClose 防在途保存卸载清理附件）
+  useEscapeClose(() => Boolean(props.entry), handleClose)
 </script>
 
 <template>
@@ -414,27 +412,7 @@ const getKindLabel = (type: string) => {
           />
         </div>
 
-        <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
-          <div>
-            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
-            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
-              开启后仅主理人登录可见，展厅公开时不会展示此条记录
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="editIsPrivate"
-            @click="editIsPrivate = !editIsPrivate"
-            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
-            :class="editIsPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
-          >
-            <span
-              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
-              :class="editIsPrivate ? 'translate-x-5' : 'translate-x-0'"
-            />
-          </button>
-        </div>
+        <PrivacyToggle v-model="editIsPrivate" />
 
         <div class="pt-6 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
           <button

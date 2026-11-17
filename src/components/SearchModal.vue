@@ -6,6 +6,7 @@ import { searchGlobalArchive } from '../utils/api'
 import { filterEntriesBySearch } from '../composables/useArchive'
 import { parseOccurredDate, formatMoney } from '../utils/format'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   isOpen: boolean
@@ -178,10 +179,6 @@ watch(
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (!props.isOpen) return
-  if (e.key === 'Escape') {
-    emit('close')
-    return
-  }
   const count = flatResults.value.length
   if (count === 0) return
   if (e.key === 'ArrowDown') {
@@ -210,8 +207,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
 
-// MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
 useBodyScrollLock(() => props.isOpen)
+useEscapeClose(() => props.isOpen, () => emit('close'))
 </script>
 
 <template>

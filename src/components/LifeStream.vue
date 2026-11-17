@@ -4,26 +4,22 @@ import type { LifeEntry, ArchiveCategory } from '../types'
 import { getEntryCategory, entryMatchesCategory } from '../types'
 import { ArrowUpRight, Maximize2 } from 'lucide-vue-next'
 import EditorialLightbox from './EditorialLightbox.vue'
-import { formatMoney, parseOccurredDate, renderEditorialContent } from '../utils/format'
+import { formatMoney, parseOccurredDate, renderEditorialContent, getAttachmentThumbUrl } from '../utils/format'
 import { getAdminToken } from '../utils/api'
 
 const props = defineProps<{
   entries: LifeEntry[]
-  limit?: number
-  showFilters?: boolean
-  dateFilter?: string
   currentCategory?: ArchiveCategory
 }>()
 
 const emit = defineEmits<{
-  (e: 'clearDateFilter'): void
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'openAdd'): void
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
-const activeCategory = ref<ArchiveCategory>(props.currentCategory || 'all')
+const activeCategory = computed<ArchiveCategory>(() => props.currentCategory || 'all')
 
 // 暗房灯箱状态
 const isLightboxOpen = ref(false)
@@ -35,28 +31,18 @@ const lightboxPayload = ref({
   date: '',
 })
 
-// 列表里显示用**缩略图**（几十 KB），点开灯箱时才用原图。
-// 关键：原图动辄 1.5MB，从对象存储拉一次要 4 秒；滚动列表时每张新卡片都在拉原图，
-// 网络与解码把主线程打满，表现为「滑动卡」「点开转圈」。
-const thumbnailUrlOf = (att: { url: string; thumbnail_url?: string }): string =>
-  att.thumbnail_url || att.url
-
 const getEntryFirstImage = (entry: LifeEntry): string => {
   if (entry.attachments && entry.attachments.length > 0 && entry.attachments[0].url) {
-    return thumbnailUrlOf(entry.attachments[0])
+    return getAttachmentThumbUrl(entry.attachments[0])
   }
   return ''
 }
 
-// 灯箱才需要原图：列表卡片一律用 thumbnail_url（见上）。
+// 灯箱才需要原图：列表卡片一律用缩略图。
 const getEntryFirstOriginalImage = (entry: LifeEntry): string => {
   return entry.attachments?.[0]?.url || ''
 }
 
-// MOB-P1-67：附件列表记忆化 ——
-// 模板里每条记录会调用 getEntryImages 3~5 次，每次都 filter 出新数组。
-// WEB-9：同时保留原图地址与固有尺寸，列表用缩略图、灯箱用原图，
-// width/height 交给浏览器预留画幅，减少图片加载后的 CLS。
 type EntryImage = {
   id: number
   url: string
@@ -75,7 +61,7 @@ const getEntryImages = (entry: LifeEntry): EntryImage[] => {
           .filter((a) => Boolean(a.url))
           .map((a) => ({
             id: a.id,
-            url: thumbnailUrlOf(a),
+            url: getAttachmentThumbUrl(a),
             originalUrl: a.url,
             width: a.width,
             height: a.height,
@@ -120,7 +106,7 @@ const loadMoreEntries = () => {
 
 // 切换分类 / 数据源变化后重置窗口
 watch(
-  () => [props.currentCategory, props.entries, props.dateFilter] as const,
+  () => [props.currentCategory, props.entries] as const,
   () => {
     visibleCount.value = INITIAL_WINDOW
   }
@@ -149,16 +135,7 @@ const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   isLightboxOpen.value = true
 }
 
-watch(
-  () => props.currentCategory,
-  (newCat) => {
-    if (newCat) {
-      activeCategory.value = newCat
-    }
-  }
-)
-
-// 视图过滤分类 (4 大纯化形态 + 主理人可见账目投影)
+// 视图过滤分类 (4 大纯化形态 + 器物 + 主理人可见账目投影)
 const categoryFilters = computed<{ key: ArchiveCategory; label: string }[]>(() => {
   const base: { key: ArchiveCategory; label: string }[] = [
     { key: 'all', label: '全部记录' },
@@ -175,29 +152,13 @@ const categoryFilters = computed<{ key: ArchiveCategory; label: string }[]>(() =
 })
 
 const filteredEntries = computed(() => {
-  let list = props.entries
-
-  // 1. 日期筛选 (RC-48)
-  if (props.dateFilter) {
-    const target = props.dateFilter.replace(/-/g, '.').trim()
-    list = list.filter((e) => parseOccurredDate(e.occurred_at).dotDate === target)
+  if (activeCategory.value === 'all') {
+    return props.entries
   }
-
-  // 2. 类别筛选
-  if (activeCategory.value !== 'all') {
-    list = list.filter((e) => entryMatchesCategory(e, activeCategory.value))
-  }
-
-  // 3. 数量限制
-  if (props.limit && props.limit > 0 && !props.dateFilter && activeCategory.value === 'all') {
-    return list.slice(0, props.limit)
-  }
-
-  return list
+  return props.entries.filter((e) => entryMatchesCategory(e, activeCategory.value))
 })
 
 const handleCategoryClick = (cat: ArchiveCategory) => {
-  activeCategory.value = cat
   emit('changeCategory', cat)
 }
 
@@ -246,7 +207,6 @@ const getGapDays = (index: number): number => {
   <div class="w-full text-left">
     <!-- 单行视角分类筛选与条目计数栏 -->
     <div
-      v-if="showFilters"
       class="flex flex-wrap items-center justify-between gap-4 mb-10 text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)] pb-4"
     >
       <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -268,23 +228,6 @@ const getGapDays = (index: number): number => {
       <span class="text-[11px] text-[var(--ink-muted)] shrink-0">
         共 {{ filteredEntries.length }} 条记录
       </span>
-    </div>
-
-    <!-- 日期筛选提醒 -->
-    <div
-      v-if="dateFilter"
-      class="mb-10 pb-4 border-b border-[var(--border-subtle)] flex items-center justify-between text-xs font-mono-archive"
-    >
-      <div class="flex items-center gap-2">
-        <span class="text-[var(--accent-warm)] font-medium">聚焦日期：{{ dateFilter }}</span>
-        <span class="text-[var(--ink-muted)]">（共 {{ filteredEntries.length }} 条生活印记）</span>
-      </div>
-      <button
-        @click="emit('clearDateFilter')"
-        class="text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover-underline cursor-pointer"
-      >
-        [显示全部日期记录]
-      </button>
     </div>
 
     <!-- 空状态：散页藏书票 (Ex-Libris Bookplate) -->

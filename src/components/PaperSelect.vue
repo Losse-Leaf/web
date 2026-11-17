@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import { ChevronDown, Check } from 'lucide-vue-next'
+import { useFloatingDropdown } from '../composables/useFloatingDropdown'
 
 export interface PaperSelectOption {
   value: string | number | null
@@ -23,7 +24,7 @@ const props = withDefaults(
     size: 'md',
     font: 'mono',
     disabled: false,
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -34,7 +35,15 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
-const dropdownStyle = ref<Record<string, string>>({})
+
+const { floatingStyle: dropdownStyle } = useFloatingDropdown({
+  triggerRef,
+  panelRef: menuRef,
+  isOpen,
+  estimatedHeight: () => Math.min(props.options.length * 36 + 12, 240),
+  minWidth: 140,
+  offset: 4,
+})
 
 const selectedOption = computed(() => {
   return props.options.find((o) => o.value == props.modelValue) || null
@@ -62,35 +71,9 @@ const fontClass = computed(() => {
   return props.font === 'serif' ? 'font-serif-editorial' : 'font-mono-archive'
 })
 
-const updatePosition = () => {
-  if (!triggerRef.value || !isOpen.value) return
-  const rect = triggerRef.value.getBoundingClientRect()
-  const viewportHeight = window.innerHeight
-  const viewportWidth = window.innerWidth
-  const spaceBelow = viewportHeight - rect.bottom
-  const estimatedHeight = Math.min(props.options.length * 36 + 12, 240)
-  const openUpward = spaceBelow < estimatedHeight && rect.top > estimatedHeight
-  const width = Math.max(rect.width, 140)
-  const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8))
-
-  dropdownStyle.value = {
-    position: 'fixed',
-    left: `${left}px`,
-    width: `${width}px`,
-    zIndex: '9999',
-    ...(openUpward
-      ? { bottom: `${viewportHeight - rect.top + 4}px` }
-      : { top: `${rect.bottom + 4}px` }),
-  }
-}
-
-const toggleDropdown = async () => {
+const toggleDropdown = () => {
   if (props.disabled) return
   isOpen.value = !isOpen.value
-  if (isOpen.value) {
-    await nextTick()
-    updatePosition()
-  }
 }
 
 const selectOption = (opt: PaperSelectOption) => {
@@ -98,45 +81,6 @@ const selectOption = (opt: PaperSelectOption) => {
   emit('change', opt.value)
   isOpen.value = false
 }
-
-const handleClickOutside = (e: MouseEvent) => {
-  if (!isOpen.value) return
-  const target = e.target as Node
-  if (triggerRef.value?.contains(target) || menuRef.value?.contains(target)) {
-    return
-  }
-  isOpen.value = false
-}
-
-const handleKeydown = (e: KeyboardEvent) => {
-  if (!isOpen.value) return
-  if (e.key === 'Escape') {
-    e.stopPropagation()
-    isOpen.value = false
-  }
-}
-
-watch(isOpen, (open) => {
-  if (open) {
-    window.addEventListener('scroll', updatePosition, true)
-    window.addEventListener('resize', updatePosition)
-  } else {
-    window.removeEventListener('scroll', updatePosition, true)
-    window.removeEventListener('resize', updatePosition)
-  }
-})
-
-onMounted(() => {
-  document.addEventListener('mousedown', handleClickOutside)
-  window.addEventListener('keydown', handleKeydown, true)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleClickOutside)
-  window.removeEventListener('keydown', handleKeydown, true)
-  window.removeEventListener('scroll', updatePosition, true)
-  window.removeEventListener('resize', updatePosition)
-})
 </script>
 
 <template>
@@ -168,13 +112,13 @@ onBeforeUnmount(() => {
       />
     </button>
 
-    <!-- 纸本浮层菜单 (Teleport 至 body 避免被弹窗 overflow 裁剪，杜绝苹果液态玻璃原生菜单) -->
+    <!-- 纸本浮层菜单 (Teleport 至 body 避免被弹窗 overflow 裁剪) -->
     <Teleport to="body">
       <div
         v-if="isOpen"
         ref="menuRef"
         :style="dropdownStyle"
-        class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-[0_10px_30px_rgba(0,0,0,0.14)] max-h-60 overflow-y-auto divide-y divide-[var(--border-subtle)]/40 text-xs animate-in fade-in duration-120"
+        class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-[0_10px_30px_rgba(0,0,0,0.14)] max-h-60 overflow-y-auto divide-y divide-[var(--border-subtle)]/40 text-xs animate-in fade-in duration-150"
         :class="fontClass"
       >
         <div

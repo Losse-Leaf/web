@@ -5,6 +5,10 @@ import ImageUploader from './ImageUploader.vue'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import CityPicker from './CityPicker.vue'
+import PrivacyToggle from './PrivacyToggle.vue'
+import EntryTransactionForm from './entry/EntryTransactionForm.vue'
+import EntryProjectForm from './entry/EntryProjectForm.vue'
+import EntryWishForm from './entry/EntryWishForm.vue'
 import {
   matchCityFromLocation,
   getFallbackDefaultCity,
@@ -23,7 +27,13 @@ import {
   getAdminToken,
 } from '../utils/api'
 import { useCategories } from '../composables/useCategories'
-import { getBeijingDateTimeString, getBeijingISOString, parseOccurredDate } from '../utils/format'
+import {
+  centsToInputYuan,
+  getBeijingDateTimeString,
+  getBeijingISOString,
+  parseOccurredDate,
+  parseYuanToCents,
+} from '../utils/format'
 import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
@@ -45,7 +55,7 @@ const emit = defineEmits<{
   (e: 'transactionCreated', tx: Transaction): void
   (e: 'projectCreated', proj: Project): void
   (e: 'wishCreated', wish: Wish): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const {
@@ -55,7 +65,6 @@ const {
   paymentMethods,
   projectCategories,
   loadCategories,
-  openCategoryManager,
 } = useCategories()
 
 const selectedKind = ref<EntryKind>('life')
@@ -74,7 +83,16 @@ const selectedProjectId = ref<number | null>(null)
 const selectedFootprintId = ref<number | null>(null)
 const isPrivate = ref(false)
 const attachmentIds = ref<number[]>([])
+
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
+const projectFormRef = ref<InstanceType<typeof EntryProjectForm> | null>(null)
+const wishFormRef = ref<InstanceType<typeof EntryWishForm> | null>(null)
+
+const getActiveUploader = () => {
+  if (selectedKind.value === 'project') return projectFormRef.value
+  if (selectedKind.value === 'wish') return wishFormRef.value
+  return imageUploaderRef.value
+}
 
 // 自动草稿持久化 (looseleaf_entry_draft_v1)
 const DRAFT_STORAGE_KEY = 'looseleaf_entry_draft_v1'
@@ -169,13 +187,14 @@ const handleModalPaste = (e: ClipboardEvent) => {
       if (f) imageFiles.push(f)
     }
   }
-  if (imageFiles.length > 0 && imageUploaderRef.value) {
+  const uploader = getActiveUploader()
+  if (imageFiles.length > 0 && uploader) {
     e.preventDefault()
-    imageUploaderRef.value.uploadFiles(imageFiles)
+    uploader.uploadFiles(imageFiles)
   }
 }
 
-// 造物项目模式：'new' (立项新造物) | 'entry' (为已有项目写造物手记)
+// 造物项目模式
 const projectMode = ref<'new' | 'entry'>('new')
 const projTitle = ref('')
 const projSubtitle = ref('')
@@ -185,13 +204,13 @@ const projDescription = ref('')
 const projStory = ref('')
 const projGithubUrl = ref('')
 
-// 心愿模式专用状态
+// 心愿模式状态
 const wishKind = ref<'item' | 'travel' | 'milestone'>('item')
 const wishBudgetYuan = ref('')
 const wishSpec = ref('')
 const wishTargetDate = ref('')
 
-// 账目专用状态
+// 账目模式状态
 const txAmount = ref<string>('')
 const txType = ref<'expense' | 'income'>('expense')
 const txCategory = ref<string>('餐饮')
@@ -201,21 +220,14 @@ const syncToGear = ref(false)
 const gearCategory = ref('数码器材')
 const gearSpec = ref('')
 
-// 心愿单、旅程足迹与分期付款支持
+// 关联数据
 const availableWishes = ref<Wish[]>([])
 const availableFootprints = ref<Footprint[]>([])
-// 信贷渠道唯一事实源是后端渠道行（内置 huabei/baitiao 已在 DB 种子化且不可删）：
-// 不再保留前端兜底字典 —— 那会在用户修改渠道还款日后继续报旧值，形成第二事实源。
-// 列表为空（请求失败/未认证）时禁用分期开关并提示；印鉴认证成功后会重拉列表。
 const creditChannels = ref<CreditChannel[]>([])
 const selectedWishId = ref<number | null>(null)
 const isInstallment = ref(false)
 const installmentChannel = ref('huabei')
 const installmentMonths = ref(12)
-
-const currentTxCategories = computed(() => {
-  return txType.value === 'income' ? incomeCategories.value : expenseCategories.value
-})
 
 watch(txType, (newType) => {
   if (newType === 'income' && !incomeCategories.value.includes(txCategory.value)) {
@@ -223,13 +235,9 @@ watch(txType, (newType) => {
   } else if (newType === 'expense' && !expenseCategories.value.includes(txCategory.value)) {
     txCategory.value = expenseCategories.value[0] || '餐饮'
   }
-  // 心愿关联与旅程足迹仅支出语义：切到收入时清空，
-  // 避免被隐藏的选择器残留值随提交载荷写进一笔收入账
   if (newType === 'income') {
     selectedWishId.value = null
     selectedFootprintId.value = null
-    // 分期仅支出语义：切到收入时复位，避免 checkbox 被 disabled 但值残留，
-    // 提交时 note 拼入分期标签而 is_installment 又为 false 的口径矛盾
     isInstallment.value = false
   }
 })
@@ -288,8 +296,7 @@ const applyDefaultCity = () => {
 
 const loadAvailableWishes = async () => {
   try {
-    const list = await fetchWishes({ status: 'wanting' })
-    availableWishes.value = list
+    availableWishes.value = await fetchWishes({ status: 'wanting' })
   } catch (err) {
     console.error('Failed to load available wishes:', err)
     availableWishes.value = []
@@ -357,7 +364,6 @@ watch(
         projectMode.value = 'entry'
         selectedProjectId.value = initProjId
       } else if (props.projects && props.projects.length > 0 && selectedKind.value === 'project') {
-        // 项目预选仅服务于造物分支：日常/游历等分支不得静默携带 project_id
         projectMode.value = 'entry'
         selectedProjectId.value = props.projects[0].id
       } else if (props.projects && props.projects.length > 0) {
@@ -372,7 +378,7 @@ watch(
       errorMsg.value = null
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 let draftSaveTimer: number | null = null
@@ -390,7 +396,7 @@ watch(
   [title, content, location, selectedCityCode, selectedCityName, selectedKind, selectedProjectId],
   () => {
     scheduleSaveDraft()
-  }
+  },
 )
 
 const onWishSelected = () => {
@@ -401,7 +407,7 @@ const onWishSelected = () => {
       title.value = wish.title
     }
     if (!txAmount.value && wish.budget > 0) {
-      txAmount.value = (wish.budget / 100).toFixed(2)
+      txAmount.value = centsToInputYuan(wish.budget)
     }
     if (txCategory.value === '餐饮') {
       txCategory.value = '购物'
@@ -409,8 +415,6 @@ const onWishSelected = () => {
   }
 }
 
-// 心愿关联与旅程足迹互斥：一笔账只允许一条归册路径，
-// 选其一时清空另一个（后端 CreateTransaction 对两键照单全收，无互斥校验）
 watch(selectedWishId, (val) => {
   if (val && selectedFootprintId.value) {
     selectedFootprintId.value = null
@@ -423,15 +427,6 @@ watch(selectedFootprintId, (val) => {
   }
 })
 
-const calculatedMonthlyPay = computed(() => {
-  const amtFloat = parseFloat(txAmount.value)
-  if (isNaN(amtFloat) || amtFloat <= 0) return '0.00'
-  // 与提交口径一致：按分整除 floor（DEC-02 口径 A，尾差落在最后一期）
-  const cents = Math.floor((amtFloat * 100) / (installmentMonths.value || 1))
-  return (cents / 100).toFixed(2)
-})
-
-// 还款日单源化：一律派生自所选渠道行（custom 伪渠道已移除，后端同步强制按渠道派生）
 const effectiveRepaymentDay = computed(() => {
   const matched = creditChannels.value.find((c) => c.code === installmentChannel.value)
   return matched && matched.repayment_day > 0 ? matched.repayment_day : 10
@@ -439,7 +434,6 @@ const effectiveRepaymentDay = computed(() => {
 
 const selectKind = (k: EntryKind) => {
   if (selectedKind.value === k) return
-  // 分支切换即清理不归属新分支的关联 id，防止上一分支的选择静默泄漏进提交载荷
   if (k !== 'transaction') {
     selectedWishId.value = null
   }
@@ -454,6 +448,7 @@ const selectKind = (k: EntryKind) => {
   } else if (selectedKind.value === 'project' && !props.initialProjectId) {
     selectedProjectId.value = null
   }
+  attachmentIds.value = []
   selectedKind.value = k
   errorMsg.value = null
 }
@@ -489,7 +484,6 @@ const resetForm = () => {
   occurredAt.value = getBeijingDateTimeString()
   selectedFootprintId.value = null
   projectMode.value = props.initialProjectId || (props.projects && props.projects.length > 0) ? 'entry' : 'new'
-  // 项目预选仅造物分支生效，避免日常/游历等分支静默携带 project_id
   selectedProjectId.value =
     props.initialProjectId ||
     (selectedKind.value === 'project' && props.projects?.length ? props.projects[0].id : null)
@@ -523,74 +517,53 @@ const resetForm = () => {
   isResettingForm = false
 }
 
-const handleClose = () => {
-  // 提交中禁止关闭（含背景点击与取消按钮）：关闭会卸载弹窗并触发
-  // ImageUploader 的 cleanupUploads，把条目正在引用的附件当孤儿回收 ⇒ 图片死链。
-  if (isSubmitting.value) return
-  forceClose()
-}
-
-// 创建成功路径专用：此时附件已 markCommitted、isSubmitting 尚未在 finally 里复位，
-// 若走 handleClose 会被上面的守卫吞掉（弹窗永不关闭）。守卫只服务于用户侧入口。
 const forceClose = () => {
   resetForm()
   emit('close')
 }
 
+const handleClose = () => {
+  if (isSubmitting.value) return
+  forceClose()
+}
+
+useBodyScrollLock(() => props.isOpen)
+useEscapeClose(() => props.isOpen, handleClose)
+
 const currentKindMeta = computed(() => {
   return kindOptions.find((o) => o.key === selectedKind.value) || kindOptions[0]
 })
-
-const contentPlaceholder = computed(() => '')
 
 const handleSubmit = async () => {
   if (isSubmitting.value) return
   errorMsg.value = null
 
-  // 若当前尚未登录主理人，呼出印鉴校验弹窗，校验成功后自动继续发布
-  if (!Boolean(getAdminToken())) {
-    emit('requestAuth', () => {
-      // 认证成功后补拉信贷渠道：此前未登录时渠道列表为空，分期开关是被禁用的，
-      // 不重拉的话用户必须关掉弹窗重开才能开启分期
-      loadCreditChannelsList()
-      handleSubmit()
-    })
+  if (!getAdminToken()) {
+    emit('requestAuth')
     return
   }
 
   // 1. 提交账目 (Transaction)
   if (selectedKind.value === 'transaction') {
-    const amtFloat = parseFloat(txAmount.value)
-    if (isNaN(amtFloat) || amtFloat <= 0) {
-      errorMsg.value = '请输入有效的金额'
+    const parsedAmt = parseYuanToCents(txAmount.value, { fieldLabel: '金额' })
+    if (!parsedAmt.ok) {
+      errorMsg.value = parsedAmt.error
       return
     }
-    // 金额以「分」为最小单位：拒绝 0.001 等多位小数与 1e5 科学计数法，
-    // 避免 parseFloat 静默接受后与后端按分落库口径分叉
-    if (!/^\d+(\.\d{1,2})?$/.test(txAmount.value.trim())) {
-      errorMsg.value = '金额最多保留两位小数'
-      return
-    }
-    const amountInCents = Math.round(amtFloat * 100)
+    const amountInCents = parsedAmt.cents
     const repaymentDay = effectiveRepaymentDay.value
-    // 关键：与后端 / mac 端**同口径**（整除截断，不四舍五入）。
-    // 原先用 Math.round，而 Go 与 Swift 的整数除法都是向零截断 ——
-    // 三端对同一笔账算出不同的 installment_monthly_pay，
-    // 落库后两端负债口径分叉（总额 ¥9,169.00 分 12 期：
-    // 截断 76,408 分 vs 四舍五入 76,409 分，差 1 分，
-    // 还了 6 期就差 6 分）。
-    const installmentPay = isInstallment.value
+    const useInstallment = txType.value === 'expense' && isInstallment.value
+    const installmentPay = useInstallment
       ? Math.floor(amountInCents / (installmentMonths.value || 1))
       : undefined
 
     const matchedChannel = creditChannels.value.find(
-      (c) => c.code === installmentChannel.value
+      (c) => c.code === installmentChannel.value,
     )
-    // 渠道名取自后端渠道字典，前端不再硬编码渠道显示名 (FE-20)
     const channelLabel = matchedChannel?.name || installmentChannel.value
 
     let noteText = txNote.value.trim()
-    if (isInstallment.value && !noteText.includes('期')) {
+    if (useInstallment && !noteText.includes('期')) {
       const monthlyYuan = ((installmentPay || 0) / 100).toFixed(2)
       const installmentTag = `[${channelLabel} ${installmentMonths.value}期 · 每月${repaymentDay}日还款 · 每期¥${monthlyYuan}]`
       noteText = noteText ? `${noteText} ${installmentTag}` : installmentTag
@@ -604,26 +577,18 @@ const handleSubmit = async () => {
         category: txCategory.value,
         title: title.value.trim() || txCategory.value,
         note: noteText,
-        // 分期账目的支付方式由所选信贷渠道承载（installment_channel_code 单源），
-        // 不再往 payment_method 写「{渠道} (分期)」合成文本；用户显式选择的支付渠道仅在非分期时生效
-        payment_method: isInstallment.value ? undefined : txPaymentMethod.value,
+        payment_method: useInstallment ? undefined : txPaymentMethod.value,
         occurred_at: getBeijingISOString(occurredAt.value),
         wish_id: selectedWishId.value || undefined,
         footprint_id: selectedFootprintId.value || undefined,
         city_code: selectedCityCode.value || undefined,
-        is_installment: txType.value === 'expense' && isInstallment.value,
-        installment_channel_code:
-          txType.value === 'expense' && isInstallment.value ? installmentChannel.value : undefined,
-        installment_total_amount:
-          txType.value === 'expense' && isInstallment.value ? amountInCents : undefined,
-        installment_months:
-          txType.value === 'expense' && isInstallment.value ? installmentMonths.value : undefined,
-        installment_monthly_pay:
-          txType.value === 'expense' && isInstallment.value ? installmentPay : undefined,
-        installment_remain_months:
-          txType.value === 'expense' && isInstallment.value ? installmentMonths.value : undefined,
-        repayment_day:
-          txType.value === 'expense' && isInstallment.value ? repaymentDay : undefined,
+        is_installment: useInstallment,
+        installment_channel_code: useInstallment ? installmentChannel.value : undefined,
+        installment_total_amount: useInstallment ? amountInCents : undefined,
+        installment_months: useInstallment ? installmentMonths.value : undefined,
+        installment_monthly_pay: useInstallment ? installmentPay : undefined,
+        installment_remain_months: useInstallment ? installmentMonths.value : undefined,
+        repayment_day: useInstallment ? repaymentDay : undefined,
         link_gear_asset: txType.value === 'expense' && syncToGear.value,
         gear_category:
           txType.value === 'expense' && syncToGear.value ? gearCategory.value : undefined,
@@ -636,11 +601,6 @@ const handleSubmit = async () => {
       emit('transactionCreated', createdTx)
       forceClose()
     } catch (err: any) {
-      // 凭证在提交瞬间过期：统一交回印鉴登录并在成功后继续本次提交 (FE-22)
-      if (!getAdminToken()) {
-        emit('requestAuth', () => handleSubmit())
-        return
-      }
       errorMsg.value = err.message || '记账失败'
     } finally {
       isSubmitting.value = false
@@ -648,7 +608,7 @@ const handleSubmit = async () => {
     return
   }
 
-  // 2. 提交心愿 (Wish · 自动伴生创建 wish 类型 LifeEntry)
+  // 2. 提交心愿 (Wish)
   if (selectedKind.value === 'wish') {
     if (!title.value.trim()) {
       errorMsg.value = '请填写心愿名称'
@@ -658,8 +618,15 @@ const handleSubmit = async () => {
       errorMsg.value = '旅程心愿请选择目的地城市'
       return
     }
-    const budgetFloat = parseFloat(wishBudgetYuan.value)
-    const budgetCents = !isNaN(budgetFloat) && budgetFloat > 0 ? Math.round(budgetFloat * 100) : 0
+    const parsedBudget = parseYuanToCents(wishBudgetYuan.value, {
+      allowEmpty: true,
+      allowZero: true,
+      fieldLabel: '预估预算',
+    })
+    if (!parsedBudget.ok) {
+      errorMsg.value = parsedBudget.error
+      return
+    }
 
     try {
       isSubmitting.value = true
@@ -670,7 +637,7 @@ const handleSubmit = async () => {
         spec: wishKind.value === 'item' ? wishSpec.value.trim() || undefined : undefined,
         city_code: wishKind.value === 'travel' ? selectedCityCode.value || undefined : undefined,
         city_name: wishKind.value === 'travel' ? selectedCityName.value || undefined : undefined,
-        budget: budgetCents,
+        budget: parsedBudget.cents,
         target_date: wishTargetDate.value || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
         is_private: isPrivate.value,
@@ -683,18 +650,11 @@ const handleSubmit = async () => {
         } catch {}
       }
 
-      // 参考图已随心愿落库绑定，标记后上传器卸载不再回收这些文件
-      imageUploaderRef.value?.markCommitted()
+      wishFormRef.value?.markCommitted()
       clearSavedDraft()
       emit('wishCreated', createdWish)
       forceClose()
     } catch (err: any) {
-      if (!getAdminToken()) {
-        emit('requestAuth', () => {
-          handleSubmit()
-        })
-        return
-      }
       errorMsg.value = err.message || '创建心愿失败'
     } finally {
       isSubmitting.value = false
@@ -702,7 +662,7 @@ const handleSubmit = async () => {
     return
   }
 
-  // 3. 提交造物 (Project：立项新造物 或 撰写已有项目进展手记)
+  // 3. 提交造物 (Project)
   if (selectedKind.value === 'project') {
     if (projectMode.value === 'new') {
       if (!projTitle.value.trim()) {
@@ -722,8 +682,6 @@ const handleSubmit = async () => {
           is_private: isPrivate.value,
         })
 
-        // 后端 CreateProject 已原子创建伴生手记；仅当用户同时上传了相册附件时，
-        // 才调用 createLifeEntry 命中后端 10s 伴生复用窗口以绑定附件，避免重复立项手记。
         let createdEntry: LifeEntry | null = null
         if (attachmentIds.value.length > 0) {
           createdEntry = await createLifeEntry({
@@ -740,7 +698,7 @@ const handleSubmit = async () => {
           })
         }
 
-        imageUploaderRef.value?.markCommitted()
+        projectFormRef.value?.markCommitted()
         clearSavedDraft()
         emit('projectCreated', createdProj)
         if (createdEntry) {
@@ -748,17 +706,12 @@ const handleSubmit = async () => {
         }
         forceClose()
       } catch (err: any) {
-        if (!getAdminToken()) {
-          emit('requestAuth', () => handleSubmit())
-          return
-        }
         errorMsg.value = err.message || '创建造物项目失败'
       } finally {
         isSubmitting.value = false
       }
       return
     } else {
-      // 为已有项目写进展手记
       if (!selectedProjectId.value) {
         errorMsg.value = '请选择关联的造物项目'
         return
@@ -780,7 +733,7 @@ const handleSubmit = async () => {
           attachment_ids: attachmentIds.value,
           is_private: isPrivate.value,
         })
-        imageUploaderRef.value?.markCommitted()
+        projectFormRef.value?.markCommitted()
         clearSavedDraft()
         emit('entryCreated', createdEntry)
         forceClose()
@@ -824,8 +777,6 @@ const handleSubmit = async () => {
       location: finalLocation,
       city_code: finalCityCode,
       city_name: finalCityName,
-      // 关联归属按分支过滤：日常不携带任何 project/wish/footprint 归属，
-      // 游历仅携带显式选择的旅程足迹 —— 防止其它分支的残留状态静默泄漏进提交载荷
       footprint_id:
         selectedKind.value === 'travel' ? selectedFootprintId.value || undefined : undefined,
       attachment_ids: attachmentIds.value,
@@ -842,17 +793,14 @@ const handleSubmit = async () => {
     isSubmitting.value = false
   }
 }
-
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => props.isOpen)
-  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-  useEscapeClose(() => props.isOpen, () => emit('close'))
 </script>
 
 <template>
   <div
     v-if="isOpen"
-    role="dialog" aria-modal="true" aria-label="记录生活档案"
+    role="dialog"
+    aria-modal="true"
+    aria-label="记录生活档案"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="handleClose"
   >
@@ -887,6 +835,7 @@ const handleSubmit = async () => {
         </div>
 
         <button
+          type="button"
           @click="handleClose"
           :disabled="isSubmitting"
           class="p-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -916,531 +865,71 @@ const handleSubmit = async () => {
 
       <!-- 统一发布表单 -->
       <form @submit.prevent="handleSubmit" class="space-y-5">
-        <!-- ==================== 分支 A：账目 (transaction) ==================== -->
-        <template v-if="selectedKind === 'transaction'">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">金额 (¥) *</label>
-              <div class="relative">
-                <span class="absolute left-3 top-2.5 text-sm font-mono-archive text-[var(--ink-muted)]">¥</span>
-                <input
-                  v-model="txAmount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  placeholder="0.00"
-                  class="w-full pl-7 pr-3 py-2 text-lg font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                  autofocus
-                />
-              </div>
-            </div>
+        <!-- 分支 A：账目 -->
+        <EntryTransactionForm
+          v-if="selectedKind === 'transaction'"
+          v-model:txAmount="txAmount"
+          v-model:txType="txType"
+          v-model:txCategory="txCategory"
+          v-model:title="title"
+          v-model:txPaymentMethod="txPaymentMethod"
+          v-model:txNote="txNote"
+          v-model:selectedCityCode="selectedCityCode"
+          v-model:selectedFootprintId="selectedFootprintId"
+          v-model:selectedWishId="selectedWishId"
+          v-model:isInstallment="isInstallment"
+          v-model:installmentChannel="installmentChannel"
+          v-model:installmentMonths="installmentMonths"
+          v-model:syncToGear="syncToGear"
+          v-model:gearCategory="gearCategory"
+          v-model:gearSpec="gearSpec"
+          v-model:occurredAt="occurredAt"
+          :availableFootprints="availableFootprints"
+          :availableWishes="availableWishes"
+          :creditChannels="creditChannels"
+          :effectiveRepaymentDay="effectiveRepaymentDay"
+          @selectCity="handleEntryCitySelect"
+          @footprintSelected="onFootprintSelected"
+          @wishSelected="onWishSelected"
+        />
 
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">收支类型</label>
-              <div class="flex gap-2 pt-0.5">
-                <button
-                  type="button"
-                  @click="txType = 'expense'"
-                  class="flex-1 py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-                  :class="txType === 'expense' ? 'border-[var(--ink-primary)] font-bold text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-                >
-                  支出
-                </button>
-                <button
-                  type="button"
-                  @click="txType = 'income'"
-                  class="flex-1 py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-                  :class="txType === 'income' ? 'border-[var(--ink-primary)] font-bold text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-                >
-                  收入
-                </button>
-              </div>
-            </div>
-          </div>
+        <!-- 分支 B：造物 -->
+        <EntryProjectForm
+          v-else-if="selectedKind === 'project'"
+          ref="projectFormRef"
+          :projects="projects"
+          v-model:projectMode="projectMode"
+          v-model:selectedProjectId="selectedProjectId"
+          v-model:title="title"
+          v-model:content="content"
+          v-model:occurredAt="occurredAt"
+          v-model:projTitle="projTitle"
+          v-model:projSubtitle="projSubtitle"
+          v-model:projCategory="projCategory"
+          v-model:projStatus="projStatus"
+          v-model:projDescription="projDescription"
+          v-model:projStory="projStory"
+          v-model:projGithubUrl="projGithubUrl"
+          @update:attachmentIds="attachmentIds = $event"
+        />
 
-          <!-- 分类标签选择 -->
-          <div class="space-y-1.5">
-            <div class="flex items-center justify-between">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-                {{ txType === 'income' ? '收入分类' : '支出分类' }}
-              </label>
-              <button
-                type="button"
-                @click="openCategoryManager(txType === 'income' ? 'income' : 'expense')"
-                class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
-              >
-                管理分类
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="cat in currentTxCategories"
-                :key="cat"
-                type="button"
-                @click="txCategory = cat"
-                class="px-2.5 py-1 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-                :class="txCategory === cat ? 'border-[var(--ink-primary)] font-medium text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-              >
-                {{ cat }}
-              </button>
-            </div>
-          </div>
+        <!-- 分支 C：心愿 -->
+        <EntryWishForm
+          v-else-if="selectedKind === 'wish'"
+          ref="wishFormRef"
+          v-model:wishKind="wishKind"
+          v-model:title="title"
+          v-model:wishBudgetYuan="wishBudgetYuan"
+          v-model:wishSpec="wishSpec"
+          v-model:selectedCityCode="selectedCityCode"
+          v-model:wishTargetDate="wishTargetDate"
+          v-model:content="content"
+          @selectCity="handleEntryCitySelect"
+          @update:attachmentIds="attachmentIds = $event"
+        />
 
-          <!-- 账目名称与支付方式 -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">事项名称</label>
-              <input
-                v-model="title"
-                type="text"
-                class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
-              />
-            </div>
-
-            <div class="space-y-1.5">
-              <div class="flex items-center justify-between">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">支付渠道</label>
-                <button
-                  type="button"
-                  @click="openCategoryManager('payment')"
-                  class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
-                >
-                  管理渠道
-                </button>
-              </div>
-              <PaperSelect
-                v-model="txPaymentMethod"
-                :options="paymentMethods.map((m) => ({ value: m, label: m }))"
-                :disabled="isInstallment"
-              />
-              <p class="mt-1 text-[10px] font-mono-archive text-[var(--ink-muted)] transition-opacity" :class="isInstallment ? 'opacity-100' : 'opacity-0'">
-                分期账目由所选信贷渠道代扣，支付方式随分期渠道生效，不再单独记录
-              </p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">备注说明</label>
-              <input
-                v-model="txNote"
-                type="text"
-                class="w-full px-3 py-2 text-sm bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none font-serif-editorial"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">所在城市</label>
-              <CityPicker
-                v-model="selectedCityCode"
-                @select="handleEntryCitySelect"
-              />
-            </div>
-          </div>
-
-          <!-- 关联旅程足迹 (支持一次旅程归集多笔账单；与心愿关联互斥，仅支出可见) -->
-          <div class="space-y-1.5 transition-opacity" :class="txType === 'expense' && availableFootprints.length > 0 ? '' : 'opacity-50 pointer-events-none'">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              关联旅程足迹
-            </label>
-            <PaperSelect
-              v-model="selectedFootprintId"
-              @change="onFootprintSelected"
-              :disabled="txType !== 'expense' || availableFootprints.length === 0 || !!selectedWishId"
-              :options="[
-                { value: null, label: '-- 自动匹配同城近期旅程 / 不指定 --' },
-                ...availableFootprints.map((fp) => ({
-                  value: fp.id,
-                  label: formatFootprintOptionLabel(fp),
-                })),
-              ]"
-            />
-            <p v-if="selectedWishId" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
-              已关联心愿（二者互斥）：先取消心愿关联即可选择旅程足迹
-            </p>
-          </div>
-
-          <!-- 联动心愿单 -->
-          <div class="space-y-1.5 transition-opacity" :class="txType === 'expense' && availableWishes.length > 0 ? '' : 'opacity-50 pointer-events-none'">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">关联心愿清单 (自动达成归册)</label>
-            <PaperSelect
-              v-model="selectedWishId"
-              @change="onWishSelected"
-              :disabled="txType !== 'expense' || availableWishes.length === 0 || !!selectedFootprintId"
-              :options="[
-                { value: null, label: '-- 不关联心愿 --' },
-                ...availableWishes.map((w) => ({
-                  value: w.id,
-                  label: `${w.title} (预算: ¥${(w.budget / 100).toFixed(2)})`,
-                })),
-              ]"
-            />
-            <p v-if="selectedFootprintId" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
-              已关联旅程足迹（二者互斥）：先取消足迹关联即可选择心愿
-            </p>
-          </div>
-
-          <!-- 分期付款支持（渠道唯一事实源为后端渠道行；列表为空时禁用分期并对齐 Android 提示） -->
-          <div class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5 transition-opacity" :class="txType === 'expense' ? '' : 'opacity-50 pointer-events-none'">
-            <div class="flex items-center gap-2">
-              <input
-                id="isInstallmentCheckbox"
-                v-model="isInstallment"
-                type="checkbox"
-                :disabled="txType !== 'expense' || creditChannels.length === 0"
-                class="rounded-xs cursor-pointer accent-[var(--ink-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-              />
-              <label for="isInstallmentCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none" :class="creditChannels.length === 0 ? 'opacity-40' : ''">
-                分期付款 (花呗 / 京东白条 / 信用卡等信贷渠道)
-              </label>
-            </div>
-
-            <p v-if="creditChannels.length === 0" class="text-[10px] font-mono-archive text-[var(--ink-muted)]">
-              请先在信贷渠道管理添加分期渠道
-            </p>
-
-            <div class="space-y-3 pt-1 text-xs font-mono-archive transition-opacity" :class="txType === 'expense' && isInstallment && creditChannels.length > 0 ? '' : 'opacity-50 pointer-events-none'">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-[var(--ink-muted)] mb-1">分期渠道</label>
-                  <PaperSelect
-                    v-model="installmentChannel"
-                    size="sm"
-                    :disabled="txType !== 'expense' || !isInstallment || creditChannels.length === 0"
-                    :options="
-                      creditChannels.map((ch) => ({
-                        value: ch.code,
-                        label: `${ch.name} (每月 ${ch.repayment_day} 日还款)`,
-                      }))
-                    "
-                  />
-                </div>
-                <div>
-                  <label class="block text-[var(--ink-muted)] mb-1">分期期数</label>
-                  <div class="flex gap-1.5">
-                    <button
-                      v-for="m in [3, 6, 12, 24]"
-                      :key="m"
-                      type="button"
-                      @click="installmentMonths = m"
-                      :disabled="txType !== 'expense' || !isInstallment || creditChannels.length === 0"
-                      class="flex-1 py-1 text-xs border rounded-xs transition-colors cursor-pointer text-center"
-                      :class="installmentMonths === m ? 'border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-                    >
-                      {{ m }}期
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="p-2 rounded-xs bg-[var(--bg-archive)] border border-[var(--border-subtle)] text-[11px] text-[var(--ink-secondary)] flex items-center justify-between">
-                <span>每期月供测算（整除口径，末期含尾差）：<strong class="text-[var(--ink-primary)] tabular-nums inline-block min-w-[6rem] text-right">¥{{ calculatedMonthlyPay }}</strong> / 期</span>
-                <span>绑定还款日：<strong>每月 {{ effectiveRepaymentDay }} 日</strong></span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 同步收录至随身与桌面固定资产库 -->
-          <div class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 space-y-2.5 transition-opacity" :class="txType === 'expense' ? '' : 'opacity-50 pointer-events-none'">
-            <div class="flex items-center gap-2">
-              <input
-                id="syncToGearCheckbox"
-                v-model="syncToGear"
-                type="checkbox"
-                :disabled="txType !== 'expense'"
-                class="rounded-xs cursor-pointer accent-[var(--ink-primary)]"
-              />
-              <label for="syncToGearCheckbox" class="text-xs font-mono-archive text-[var(--ink-primary)] cursor-pointer select-none">
-                同步收录至随身与桌面设备库 (固定资产沉淀)
-              </label>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-mono-archive transition-opacity" :class="txType === 'expense' && syncToGear ? '' : 'opacity-50 pointer-events-none'">
-              <div>
-                <div class="flex items-center justify-between mb-1">
-                  <label class="block text-[var(--ink-muted)]">设备类别</label>
-                  <button
-                    type="button"
-                    @click="openCategoryManager('gear')"
-                    class="text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
-                  >
-                    管理分类
-                  </button>
-                </div>
-                <PaperSelect
-                  v-model="gearCategory"
-                  size="sm"
-                  :disabled="txType !== 'expense' || !syncToGear"
-                  :options="gearCategories.map((c) => ({ value: c, label: c }))"
-                />
-              </div>
-              <div>
-                <label class="block text-[var(--ink-muted)] mb-1">规格型号</label>
-                <input
-                  v-model="gearSpec"
-                  type="text"
-                  :disabled="txType !== 'expense' || !syncToGear"
-                  class="w-full px-2.5 py-1.5 text-xs bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none disabled:opacity-60"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">入账时间</label>
-            <PaperDatePicker
-              v-model="occurredAt"
-              enableTime
-            />
-          </div>
-        </template>
-
-        <!-- ==================== 分支 B：造物 (project) ==================== -->
-        <template v-else-if="selectedKind === 'project'">
-          <!-- 子模式切换：写造物进展手记 vs 立项新造物 -->
-          <div v-if="projects && projects.length > 0" class="flex items-center gap-2 pb-1">
-            <button
-              type="button"
-              @click="projectMode = 'entry'"
-              class="px-3 py-1.5 text-xs font-mono-archive rounded-xs border transition-colors cursor-pointer"
-              :class="projectMode === 'entry' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-            >
-              撰写已有项目进展手记
-            </button>
-            <button
-              type="button"
-              @click="projectMode = 'new'"
-              class="px-3 py-1.5 text-xs font-mono-archive rounded-xs border transition-colors cursor-pointer"
-              :class="projectMode === 'new' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-            >
-              ＋ 立项新造物项目
-            </button>
-          </div>
-
-          <!-- B1: 撰写已有项目的造物进展手记 -->
-          <div v-if="projectMode === 'entry' && projects && projects.length > 0" class="space-y-4">
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">选择造物项目 *</label>
-              <PaperSelect
-                v-model="selectedProjectId"
-                :options="projects.map((p) => ({ value: p.id, label: `${p.title} (${p.status || '进行中'})` }))"
-              />
-            </div>
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">手记标题</label>
-              <input
-                v-model="title"
-                type="text"
-                class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-              />
-            </div>
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">进展内容 *</label>
-              <textarea
-                v-model="content"
-                rows="5"
-                :placeholder="contentPlaceholder"
-                class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
-              ></textarea>
-            </div>
-
-            <ImageUploader
-              ref="imageUploaderRef"
-              @update:attachments="attachmentIds = $event"
-            />
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">记录时间</label>
-              <PaperDatePicker
-                v-model="occurredAt"
-                enableTime
-              />
-            </div>
-          </div>
-
-          <!-- B2: 立项新造物项目 -->
-          <div v-else class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物名称 *</label>
-                <input
-                  v-model="projTitle"
-                  type="text"
-                  class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">副标题</label>
-                <input
-                  v-model="projSubtitle"
-                  type="text"
-                  class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">造物分类</label>
-                  <button
-                    type="button"
-                    @click="openCategoryManager('project')"
-                    class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
-                  >
-                    管理分类
-                  </button>
-                </div>
-                <PaperSelect
-                  v-model="projCategory"
-                  :options="projectCategories.map((c) => ({ value: c, label: c }))"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">运行状态</label>
-                <PaperSelect
-                  v-model="projStatus"
-                  :options="[
-                    { value: '进行中', label: '进行中' },
-                    { value: '已完成', label: '已完成' },
-                    { value: '维护中', label: '维护中' },
-                    { value: '已搁置', label: '已搁置' }
-                  ]"
-                />
-              </div>
-            </div>
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">项目简介 *</label>
-              <textarea
-                v-model="projDescription"
-                rows="2"
-                class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
-              ></textarea>
-            </div>
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">立项初衷</label>
-              <textarea
-                v-model="projStory"
-                rows="3"
-                class="w-full px-3 py-2 text-sm font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
-              ></textarea>
-            </div>
-
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">仓库链接</label>
-              <input
-                v-model="projGithubUrl"
-                type="url"
-                placeholder="https://github.com/..."
-                class="w-full px-3 py-2 text-xs font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-              />
-            </div>
-
-            <ImageUploader
-              ref="imageUploaderRef"
-              @update:attachments="attachmentIds = $event"
-            />
-          </div>
-        </template>
-
-        <!-- ==================== 分支 C：心愿 (wish) ==================== -->
-        <template v-else-if="selectedKind === 'wish'">
-          <div class="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              @click="wishKind = 'item'"
-              class="py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-              :class="wishKind === 'item' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-            >
-              好物心愿
-            </button>
-            <button
-              type="button"
-              @click="wishKind = 'travel'"
-              class="py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-              :class="wishKind === 'travel' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-            >
-              远方旅程
-            </button>
-            <button
-              type="button"
-              @click="wishKind = 'milestone'"
-              class="py-2 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-              :class="wishKind === 'milestone' ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] font-semibold text-[var(--ink-primary)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
-            >
-              阶段里程碑
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">心愿名称 *</label>
-              <input
-                v-model="title"
-                type="text"
-                class="w-full px-3 py-2 text-base font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">预估预算 (¥)</label>
-              <input
-                v-model="wishBudgetYuan"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                class="w-full px-3 py-2 text-base font-mono-archive bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-              />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div v-if="wishKind === 'item'" class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">规格型号</label>
-              <input
-                v-model="wishSpec"
-                type="text"
-                class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-              />
-            </div>
-            <div v-if="wishKind === 'travel'" class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">目的地城市 *</label>
-              <CityPicker
-                v-model="selectedCityCode"
-                @select="handleEntryCitySelect"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">期许达成日期</label>
-              <PaperDatePicker
-                v-model="wishTargetDate"
-              />
-            </div>
-          </div>
-
-          <div class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">心愿寄语</label>
-            <textarea
-              v-model="content"
-              rows="4"
-              :placeholder="contentPlaceholder"
-              class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
-            ></textarea>
-          </div>
-
-          <ImageUploader
-            ref="imageUploaderRef"
-            @update:attachments="attachmentIds = $event"
-          />
-        </template>
-
-        <!-- ==================== 分支 D：日常 (life) 与 游历 (travel) ==================== -->
+        <!-- 分支 D：日常 (life) 与 游历 (travel) -->
         <template v-else>
-          <!-- 游历专属：城市必选高亮置于顶部 + 关联多日旅程足迹 -->
           <div v-if="selectedKind === 'travel'" class="p-3.5 rounded-xs border border-[var(--accent-warm)]/40 bg-[var(--bg-subtle)]/40 space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
@@ -1464,7 +953,6 @@ const handleSubmit = async () => {
               </div>
             </div>
 
-            <!-- 关联已有旅程足迹 (支持一次多日旅游挂载多条游记手记) -->
             <div v-if="availableFootprints.length > 0" class="space-y-1.5 pt-1 border-t border-[var(--border-subtle)]/60">
               <label class="block text-xs font-mono-archive text-[var(--ink-secondary)]">
                 归属旅程足迹
@@ -1484,7 +972,6 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          <!-- 标题 -->
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               标题
@@ -1496,7 +983,6 @@ const handleSubmit = async () => {
             />
           </div>
 
-          <!-- 内容主体 -->
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               记录内容 *
@@ -1504,18 +990,15 @@ const handleSubmit = async () => {
             <textarea
               v-model="content"
               rows="5"
-              :placeholder="contentPlaceholder"
               class="w-full px-3 py-2 text-base font-serif-editorial leading-relaxed bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none resize-none"
             ></textarea>
           </div>
 
-          <!-- 照片上传组件 -->
           <ImageUploader
             ref="imageUploaderRef"
             @update:attachments="attachmentIds = $event"
           />
 
-          <!-- 发生时间与驻足城市 (日常模式下可选) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
@@ -1548,30 +1031,10 @@ const handleSubmit = async () => {
           </div>
         </template>
 
-        <div
+        <PrivacyToggle
           v-if="selectedKind !== 'transaction'"
-          class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40"
-        >
-          <div>
-            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
-            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
-              开启后仅主理人登录可见，展厅公开时不会展示此条记录
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="isPrivate"
-            @click="isPrivate = !isPrivate"
-            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
-            :class="isPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
-          >
-            <span
-              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
-              :class="isPrivate ? 'translate-x-5' : 'translate-x-0'"
-            />
-          </button>
-        </div>
+          v-model="isPrivate"
+        />
 
         <!-- 底部错误提示与操作按钮 -->
         <div class="min-h-[44px] flex items-center" role="alert" aria-live="polite">

@@ -13,16 +13,19 @@ import {
   Camera,
   Compass,
   Layers,
-  ScanLine,
   AlertCircle,
 } from 'lucide-vue-next'
 import { getBeijingDotDate, getBeijingYear } from '../utils/format'
-import { markEnteredArchive, clearEnteredArchive, redirectToOIDCLogin } from '../utils/auth'
+import {
+  markEnteredArchive,
+  clearEnteredArchive,
+  redirectToOIDCLogin,
+  logoutAndReload,
+} from '../utils/auth'
 import {
   claimDevice,
   getAdminToken,
   removeAdminToken,
-  clearApiCache,
 } from '../utils/api'
 import type { SystemStatus } from '../types'
 
@@ -112,13 +115,7 @@ const handleEnterAsGuest = () => {
 }
 
 // 退出主人身份
-const handleLogout = async () => {
-  removeAdminToken()
-  clearEnteredArchive()
-  // 与页脚登出保持一致：清掉 API 快照与 Workbox 运行时缓存。
-  await clearApiCache()
-  window.location.reload()
-}
+const handleLogout = () => logoutAndReload()
 
 const todayDisplay = computed(() => getBeijingDotDate())
 
@@ -574,7 +571,7 @@ watch(
                   <div class="flex items-center gap-2">
                     <KeyRound class="w-4 h-4 text-[var(--accent-warm)]" />
                     <span class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
-                      {{ isOIDCEnabled ? '主人通道 · 通行证钤印' : '主人通道 · 设备配对钤印' }}
+                      {{ isOIDCEnabled ? '主人通道 · 通行证钤印' : '主人通道 · 本机会话钤印' }}
                     </span>
                   </div>
                   <span
@@ -630,18 +627,18 @@ watch(
                   </button>
                 </div>
 
-                <!-- 纯局域网离线部署兜底：设备配对指引 -->
+                <!-- 纯局域网离线部署兜底：浏览器会话与认领说明 -->
                 <div
                   v-else
                   class="p-3.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex items-start gap-3 min-h-[128px]"
                 >
-                  <ScanLine class="w-4 h-4 text-[var(--accent-warm)] shrink-0 mt-0.5" />
+                  <KeyRound class="w-4 h-4 text-[var(--accent-warm)] shrink-0 mt-0.5" />
                   <div class="space-y-1">
                     <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                      请在一台已配对的设备上打开「设置 → 设备配对」，生成新的配对二维码或链接，再用本浏览器扫码或粘贴接入。
+                      当前浏览器尚未持有主理人 Cookie 会话。离线模式下，浏览器管理会话在首次认领时签发（配对二维码仅供移动端与桌面客户端扫码绑定）。
                     </p>
                     <p class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                      若所有设备均已丢失，请使用服务端自救参数重开首次认领入口。
+                      如需为本浏览器重新签发管理会话，请使用服务端自救参数重开首次认领入口。
                     </p>
                   </div>
                 </div>

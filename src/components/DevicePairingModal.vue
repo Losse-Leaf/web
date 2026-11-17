@@ -26,6 +26,7 @@ import {
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import { parseOccurredDate } from '../utils/format'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 const props = defineProps<{
   isOpen: boolean
@@ -301,8 +302,16 @@ onUnmounted(() => {
   stopPairingPolling()
 })
 
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => props.isOpen)
+const handleEscapeClose = () => {
+  if (editingDeviceKey.value !== null) {
+    cancelRenameDevice()
+    return
+  }
+  emit('close')
+}
+
+useBodyScrollLock(() => props.isOpen)
+useEscapeClose(() => props.isOpen, handleEscapeClose)
 </script>
 
 <template>

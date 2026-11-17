@@ -78,6 +78,19 @@ export interface Attachment {
   created_at?: string
 }
 
+export interface AttachmentBindPayload {
+  attachment_ids?: number[]
+  /**
+   * 显式声明「本次要解除全部附件绑定」
+   *
+   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
+   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
+   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
+   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
+   */
+  clear_attachments?: boolean
+}
+
 export interface LifeEntry {
   id: number
   type: EntryType | string

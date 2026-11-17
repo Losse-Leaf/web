@@ -74,7 +74,5 @@ export function useTheme() {
   return {
     theme: currentTheme,
     toggleTheme,
-    applyTheme,
-    initTheme,
   }
 }

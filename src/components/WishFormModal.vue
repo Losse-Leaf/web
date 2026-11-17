@@ -2,11 +2,17 @@
 import { ref, watch } from 'vue'
 import { X, Sparkles, Check } from 'lucide-vue-next'
 import { createWish, updateWish, getAdminToken } from '../utils/api'
-import { getBeijingDateString, parseOccurredDate } from '../utils/format'
+import {
+  getBeijingDateString,
+  parseOccurredDate,
+  centsToInputYuan,
+  parseYuanToCents,
+} from '../utils/format'
 import type { Wish, Attachment } from '../types'
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import ImageUploader from './ImageUploader.vue'
+import PrivacyToggle from './PrivacyToggle.vue'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
 
@@ -18,7 +24,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved', wish: Wish): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const kind = ref<'item' | 'travel' | 'milestone'>('item')
@@ -54,7 +60,7 @@ watch(
       spec.value = w.spec || ''
       cityName.value = w.city_name || ''
       cityCode.value = w.city_code || ''
-      budgetYuan.value = w.budget > 0 ? (w.budget / 100).toFixed(2) : ''
+      budgetYuan.value = centsToInputYuan(w.budget, true)
       targetDate.value = w.target_date ? parseOccurredDate(w.target_date).dateKey : ''
       plantedAt.value = w.planted_at ? parseOccurredDate(w.planted_at).dateKey : getBeijingDateString()
       attachments.value = w.attachments ? [...w.attachments] : []
@@ -93,27 +99,20 @@ const handleSubmit = async () => {
   }
 
   if (!getAdminToken()) {
-    emit('requestAuth', () => {
-      handleSubmit()
-    })
+    emit('requestAuth')
     return
   }
 
-  const budgetValue = Number(budgetYuan.value)
-  if (!Number.isFinite(budgetValue) || budgetValue < 0) {
-    errorMsg.value = '请输入有效的非负预算金额'
+  const parsedBudget = parseYuanToCents(budgetYuan.value, {
+    allowEmpty: true,
+    allowZero: true,
+    fieldLabel: '预算金额',
+  })
+  if (!parsedBudget.ok) {
+    errorMsg.value = parsedBudget.error
     return
   }
-  const budgetRaw = String(budgetYuan.value).trim()
-  if (budgetRaw && !/^\d+(\.\d{1,2})?$/.test(budgetRaw)) {
-    errorMsg.value = '预算金额最多保留两位小数'
-    return
-  }
-  const budgetCents = Math.round(budgetValue * 100)
-  if (!Number.isSafeInteger(budgetCents)) {
-    errorMsg.value = '预算金额过大，请调小后重试'
-    return
-  }
+  const budgetCents = parsedBudget.cents
 
   try {
     isSubmitting.value = true
@@ -165,30 +164,24 @@ const handleSubmit = async () => {
     imageUploaderRef.value?.markCommitted()
     emit('close')
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => {
-        handleSubmit()
-      })
-      return
-    }
     errorMsg.value = err.message || '保存心愿失败'
   } finally {
     isSubmitting.value = false
   }
 }
 
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => props.isOpen)
-  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-  useEscapeClose(() => props.isOpen, () => emit('close'))
-
-  // 提交中禁止用户侧关闭（背景/X/取消）：关闭会卸载弹窗并触发 ImageUploader
+  // 提交中禁止用户侧关闭（背景/X/取消/Escape）：关闭会卸载弹窗并触发 ImageUploader
   // 的 cleanupUploads，把在途 PUT 正在绑定的参考图当孤儿回收 ⇒ 图片死链。
   // 成功路径的 emit('close') 发生在 finally 复位之前，必须直接 emit、绕过本守卫。
   const handleClose = () => {
     if (isSubmitting.value) return
     emit('close')
   }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
+  // MOB-OPT-P2 (a11y): LIFO Escape 键关闭弹窗
+  useEscapeClose(() => props.isOpen, handleClose)
 </script>
 
 <template>
@@ -348,27 +341,10 @@ const handleSubmit = async () => {
           />
         </div>
 
-        <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
-          <div>
-            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
-            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
-              开启后仅主理人登录可见，展厅公开时不会展示此心愿
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="isPrivate"
-            @click="isPrivate = !isPrivate"
-            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
-            :class="isPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
-          >
-            <span
-              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
-              :class="isPrivate ? 'translate-x-5' : 'translate-x-0'"
-            />
-          </button>
-        </div>
+        <PrivacyToggle
+          v-model="isPrivate"
+          description="开启后仅主理人登录可见，展厅公开时不会展示此心愿"
+        />
 
         <!-- 底部提交操作 -->
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">

@@ -1,3 +1,5 @@
+import { removeAdminToken, clearApiCache } from './api'
+
 const ENTERED_KEY = 'looseleaf_entered'
 
 /**
@@ -66,4 +68,14 @@ export function buildOIDCLoginURL(returnTo?: string): string {
 export function redirectToOIDCLogin(returnTo?: string): void {
   if (typeof window === 'undefined') return
   window.location.assign(buildOIDCLoginURL(returnTo))
+}
+
+/**
+ * 统一退出主理人身份：清除会话、进馆状态与本地 API 快照缓存后重载页面
+ */
+export async function logoutAndReload(): Promise<void> {
+  removeAdminToken()
+  clearEnteredArchive()
+  await clearApiCache()
+  window.location.reload()
 }

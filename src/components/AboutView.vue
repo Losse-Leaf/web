@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import type { CuratorProfile, LifeEntry } from '../types'
-import { loadCuratorProfile } from '../utils/profile'
+import { loadCuratorProfile, getDisplayCity } from '../utils/profile'
 import { getAdminToken } from '../utils/api'
 import { getBeijingYear, parseOccurredDate } from '../utils/format'
 import EditorialLightbox from './EditorialLightbox.vue'
@@ -27,7 +27,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'profileUpdated', profile: CuratorProfile): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'gearChanged'): void
+  (e: 'requestAuth'): void
   (e: 'selectEntry', entry: LifeEntry): void
 }>()
 
@@ -81,9 +82,7 @@ const openAlmanacForYear = (year: number) => {
 
 const handleOpenEdit = () => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => {
-      isEditOpen.value = true
-    })
+    emit('requestAuth')
     return
   }
   isEditOpen.value = true
@@ -134,14 +133,7 @@ const githubUsername = computed(() => {
 })
 
 // 城市提取
-const cityDisplay = computed(() => {
-  return (
-    localProfile.value.current_city ||
-    localProfile.value.location?.split('·')[1]?.trim() ||
-    localProfile.value.location ||
-    ''
-  )
-})
+const cityDisplay = computed(() => getDisplayCity(localProfile.value))
 
 // 印章首字提取（未上传头像时显示雅致方印，而非巨幅空白占位框）
 const sealChar = computed(() => {
@@ -450,6 +442,7 @@ onUnmounted(() => {
       :profile="localProfile"
       @close="isEditOpen = false"
       @updated="handleProfileUpdated"
+      @gearChanged="emit('gearChanged')"
     />
 
     <!-- 头像大图灯箱 -->

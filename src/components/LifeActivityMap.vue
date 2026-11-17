@@ -14,14 +14,12 @@ const emit = defineEmits<{
 
 const scrollContainer = ref<HTMLElement | null>(null)
 
-// 悬停气泡信息
+// 悬停状态栏信息（底部静态状态栏展示，无需计算 DOM 坐标）
 const hoveredDay = ref<{
   date: string
   dayOfWeek: string
   entries: LifeEntry[]
   count: number
-  x: number
-  y: number
 } | null>(null)
 
 // 建立日期映射表
@@ -47,12 +45,10 @@ const weekLabels = [
 
 export interface DayCell {
   date: string
-  displayDate: string
   dayOfWeekStr: string
   dayOfWeek: number
   month: number
   year: number
-  isToday: boolean
   isFuture: boolean
   entries: LifeEntry[]
   count: number
@@ -95,7 +91,6 @@ const calendarWeeks = computed(() => {
     const dateStr = `${y}.${pad(m)}.${pad(d)}`
     const dayOfWeek = cur.getUTCDay() // 0=Sun, ..., 6=Sat
 
-    const isToday = dateStr === todayStr
     const isFuture = cur.getTime() > today.getTime()
 
     const matchedEntries = !isFuture ? (entryMap.value.get(dateStr) || []) : []
@@ -127,12 +122,10 @@ const calendarWeeks = computed(() => {
 
     currentWeek.push({
       date: dateStr,
-      displayDate: `${m}月${d}日`,
       dayOfWeekStr: `周${weekDays[dayOfWeek]}`,
       dayOfWeek,
       month: m,
       year: y,
-      isToday,
       isFuture,
       entries: matchedEntries,
       count,
@@ -207,13 +200,12 @@ const activeDaysCount = computed(() => {
   return pastYearDays.value.filter(d => d.count > 0).length
 })
 
-// 统计：连续记录 Streak 计算（当前连续 & 最长连续）
-const streaks = computed(() => {
-  const days = pastYearDays.value
+// 统计：最长连续记录天数
+const longestStreak = computed(() => {
   let maxStreak = 0
   let curRunning = 0
 
-  days.forEach(d => {
+  pastYearDays.value.forEach((d) => {
     if (d.count > 0) {
       curRunning++
       if (curRunning > maxStreak) maxStreak = curRunning
@@ -222,27 +214,10 @@ const streaks = computed(() => {
     }
   })
 
-  // 计算当前连续天数（从今天往回倒推）
-  let currentStreak = 0
-  for (let i = days.length - 1; i >= 0; i--) {
-    if (days[i].count > 0) {
-      currentStreak++
-    } else {
-      // 如果今天是 0，允许从昨天看起
-      if (i === days.length - 1 && days[i].count === 0) {
-        continue
-      }
-      break
-    }
-  }
-
-  return {
-    longest: maxStreak,
-    current: currentStreak,
-  }
+  return maxStreak
 })
 
-// 事件委托：容器级鼠标悬浮
+// 事件委托：容器级鼠标悬浮（免除 getBoundingClientRect 强制同步布局重排）
 const onGridMouseOver = (event: MouseEvent) => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('button[data-date]')
   if (!target) {
@@ -259,14 +234,11 @@ const onGridMouseOver = (event: MouseEvent) => {
     hoveredDay.value = null
     return
   }
-  const rect = target.getBoundingClientRect()
   hoveredDay.value = {
     date: cell.date,
     dayOfWeek: cell.dayOfWeekStr,
     entries: cell.entries,
     count: cell.count,
-    x: rect.left + rect.width / 2,
-    y: rect.top,
   }
 }
 
@@ -327,8 +299,8 @@ onMounted(() => {
         <span>已记录 <strong class="text-[var(--ink-primary)] font-medium">{{ totalPastYearEntries }}</strong> 个瞬间</span>
         <span>·</span>
         <span>覆盖 <strong class="text-[var(--ink-primary)] font-medium">{{ activeDaysCount }}</strong> 天</span>
-        <span v-if="streaks.longest > 0">·</span>
-        <span v-if="streaks.longest > 0">最长连续 <strong class="text-[var(--accent-warm)] font-medium">{{ streaks.longest }}</strong> 天</span>
+        <span v-if="longestStreak > 0">·</span>
+        <span v-if="longestStreak > 0">最长连续 <strong class="text-[var(--accent-warm)] font-medium">{{ longestStreak }}</strong> 天</span>
       </div>
     </div>
 

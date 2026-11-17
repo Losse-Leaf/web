@@ -6,6 +6,7 @@ import { getBeijingDateString, getBeijingISOString, parseOccurredDate } from '..
 import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import ImageUploader from './ImageUploader.vue'
+import PrivacyToggle from './PrivacyToggle.vue'
 import {
   getFallbackDefaultCity,
   resolveDefaultCity,
@@ -30,7 +31,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved', footprint: Footprint): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const selectedCityCode = ref('')
@@ -131,7 +132,7 @@ const handleSubmit = async () => {
   }
 
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleSubmit())
+    emit('requestAuth')
     return
   }
 
@@ -179,28 +180,24 @@ const handleSubmit = async () => {
       emit('close')
     }
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => handleSubmit())
-      return
-    }
     errorMsg.value = err.message || '录入足迹失败'
   } finally {
     isSubmitting.value = false
   }
 }
 
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => props.isOpen)
-  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-  useEscapeClose(() => props.isOpen, () => emit('close'))
-
-  // 提交中禁止用户侧关闭（背景/X/取消）：关闭会卸载弹窗并触发 ImageUploader
+  // 提交中禁止用户侧关闭（背景/X/取消/Escape）：关闭会卸载弹窗并触发 ImageUploader
   // 的 cleanupUploads，把在途 PUT 正在绑定的足迹影像当孤儿回收 ⇒ 图片死链。
   // 成功路径的 emit('close') 发生在 finally 复位之前，直接 emit、绕过本守卫。
   const handleClose = () => {
     if (isSubmitting.value) return
     emit('close')
   }
+
+  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
+  useBodyScrollLock(() => props.isOpen)
+  // MOB-OPT-P2 (a11y): LIFO Escape 键关闭弹窗
+  useEscapeClose(() => props.isOpen, handleClose)
 </script>
 
 <template>
@@ -299,27 +296,10 @@ const handleSubmit = async () => {
           @update:attachments="(ids) => (attachmentIds = ids)"
         />
 
-        <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
-          <div>
-            <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
-            <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
-              开启后仅主理人登录可见，展厅公开时不会展示此条足迹
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="isPrivate"
-            @click="isPrivate = !isPrivate"
-            class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
-            :class="isPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
-          >
-            <span
-              class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
-              :class="isPrivate ? 'translate-x-5' : 'translate-x-0'"
-            />
-          </button>
-        </div>
+        <PrivacyToggle
+          v-model="isPrivate"
+          description="开启后仅主理人登录可见，展厅公开时不会展示此条足迹"
+        />
 
         <!-- 底部提交操作 -->
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">

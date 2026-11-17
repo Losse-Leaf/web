@@ -1,6 +1,29 @@
-import type { CuratorProfile } from '../types'
+import type { CuratorProfile, SiteConfig } from '../types'
 
 const PROFILE_STORAGE_KEY = 'looseleaf_curator_profile'
+
+/**
+ * 刊物主品牌名提取（由后端配置单一驱动，缺省回落「散页」）
+ */
+export function getSiteBrandName(config?: Pick<SiteConfig, 'site_name'> | null): string {
+  return config?.site_name?.split('·')?.[0]?.trim() || '散页'
+}
+
+/**
+ * 主理人常驻城市展示名提取（优先 current_city，回落 location / default_location）
+ */
+export function getDisplayCity(
+  profile?: Pick<CuratorProfile, 'current_city' | 'location'> | null,
+  config?: Pick<SiteConfig, 'default_location'> | null,
+): string {
+  const extract = (raw?: string) => raw?.split('·')?.[1]?.trim() || raw?.trim() || ''
+  return (
+    profile?.current_city?.trim() ||
+    extract(profile?.location) ||
+    extract(config?.default_location) ||
+    ''
+  )
+}
 
 // 主理人初始默认资料 (纯净真实空态，无虚构假数据 RC-47)
 export const DEFAULT_PROFILE: CuratorProfile = {

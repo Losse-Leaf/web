@@ -9,14 +9,18 @@
 @layer base {
   :root {
     --bg-archive: #f9f8f5;
+    --bg-paper: var(--bg-archive);
     --bg-subtle: #f2f0eb;
+    --bg-surface: var(--bg-subtle);
     --ink-primary: #181716;
     --ink-secondary: #57544e;
     /* MOB-P1-105：与 Android 端 theme/Color.kt 取同一组色值，
        原 #8c8880 在纸底上仅 ≈3.0:1（AA 需 4.5:1），影响全站次级元信息 */
     --ink-muted: #6f6b63;
+    --ink-faint: var(--ink-muted);
     --border-subtle: rgba(24, 23, 22, 0.08);
     --border-divider: rgba(24, 23, 22, 0.12);
+    --border-strong: rgba(24, 23, 22, 0.48);
     --accent-warm: #a24f2b;
     --accent-moss: #3f5a4a;
     --accent-vermilion: #b83b2a;
@@ -32,12 +36,16 @@
   html.darkroom,
   html.dark {
     --bg-archive: #141312;
+    --bg-paper: var(--bg-archive);
     --bg-subtle: #1d1b19;
+    --bg-surface: var(--bg-subtle);
     --ink-primary: #ede8e1;
     --ink-secondary: #a8a399;
     --ink-muted: #8e8a82;
+    --ink-faint: var(--ink-muted);
     --border-subtle: rgba(237, 232, 225, 0.08);
     --border-divider: rgba(237, 232, 225, 0.14);
+    --border-strong: rgba(237, 232, 225, 0.45);
     --accent-warm: #c85635;
     --accent-moss: #507661;
     --accent-vermilion: #d94f3d;
@@ -150,14 +158,6 @@
   }
 
   /* 模块化排版阶梯 (Modular Editorial Type Scale) */
-  .type-display-title {
-    font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
-    font-size: clamp(2rem, 4vw + 1rem, 2.75rem);
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-    font-weight: 400;
-  }
-
   .type-page-heading {
     font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
     font-size: clamp(1.5rem, 2.5vw + 0.75rem, 2rem);
@@ -171,24 +171,6 @@
     font-size: clamp(1.15rem, 1.5vw + 0.65rem, 1.375rem);
     line-height: 1.4;
     font-weight: 500;
-  }
-
-  .type-card-title {
-    font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
-    font-size: 1.0625rem;
-    line-height: 1.45;
-    font-weight: 500;
-  }
-
-  .type-body {
-    font-size: 0.9375rem;
-    line-height: 1.75;
-    letter-spacing: -0.005em;
-  }
-
-  .type-body-sm {
-    font-size: 0.8125rem;
-    line-height: 1.6;
   }
 
   .type-mono-meta {
@@ -206,18 +188,6 @@
   text-justify: inter-ideograph;
   word-break: break-word;
   font-feature-settings: "palt" 1, "kern" 1;
-}
-
-/* 优雅实体书籍首字下沉 (自白与长篇手记) */
-.drop-cap-editorial::first-letter {
-  font-family: 'Newsreader', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
-  float: left;
-  font-size: 3.2em;
-  line-height: 0.82;
-  margin-top: 0.12em;
-  margin-right: 0.15em;
-  color: var(--accent-warm);
-  font-weight: 500;
 }
 
 /* 书脊立体中缝折痕 */
@@ -265,14 +235,6 @@ html.dark .book-spine-crease::after {
   user-select: none;
 }
 
-/* 典藏票根虚线切边与打孔半圆 (Ticket Perforation) */
-.ticket-perforated {
-  position: relative;
-  background-image: radial-gradient(circle at 0 center, transparent 7px, var(--bg-subtle) 7.5px),
-                    radial-gradient(circle at 100% center, transparent 7px, var(--bg-subtle) 7.5px);
-  background-size: 100% 100%;
-}
-
 /* 出版级 A4 打印与存为 PDF 规则 */
 @media print {
   body {
@@ -286,19 +248,13 @@ html.dark .book-spine-crease::after {
   header,
   footer,
   aside,
-  button,
-  .print-hidden {
+  button {
     display: none !important;
   }
 
   .page-break-after {
     page-break-after: always !important;
     break-after: page !important;
-  }
-
-  .page-break-avoid {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
 }
 
@@ -309,6 +265,15 @@ html.dark .book-spine-crease::after {
 
 .editorial-image:hover {
   transform: scale(1.012);
+}
+
+/* 隐藏滚动条工具类（用于热力图横向视口等） */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* 极简纸张质感滚动条 */
@@ -325,15 +290,6 @@ html.dark .book-spine-crease::after {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(24, 23, 22, 0.3);
-}
-
-/* MOB-OPT-P2: 视图切换淡入淡出（给 main 子元素用 CSS animation 应用） */
-@keyframes looseleaf-view-enter {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.view-enter-anim {
-  animation: looseleaf-view-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* 链接下划线微动效 */
@@ -408,9 +364,9 @@ body.theme-transitioning {
 .slide-in-from-right { animation-name: looseleaf-slide-in-from-right; }
 .slide-in-from-top-2 { animation-name: looseleaf-slide-in-from-top-2; }
 
+.duration-150 { animation-duration: 150ms; }
 .duration-250 { animation-duration: 250ms; }
 .duration-500 { animation-duration: 500ms; }
-.duration-600 { animation-duration: 600ms; }
 
 /* MOB-P2-52：噪点覆盖层原先 z-index: 9999 —— 它浮在所有弹窗之上，
    既让弹窗表面蒙着一层噪点，也会在每次弹窗打开时多合成一张全屏图层。
@@ -454,27 +410,7 @@ html.dark .film-frame {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* 暗房接触印相表 (Silver-Halide Contact Sheet & Sprocket Holes) */
-.contact-sheet-strip {
-  position: relative;
-  background-color: #141312;
-  background-image:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
-}
-
-.sprocket-rail {
-  height: 10px;
-  background-image: repeating-linear-gradient(
-    to right,
-    transparent 0px,
-    transparent 6px,
-    rgba(249, 248, 245, 0.16) 6px,
-    rgba(249, 248, 245, 0.16) 14px,
-    transparent 14px,
-    transparent 22px
-  );
-}
-
+/* 暗房接触印相放大镜框 (Silver-Halide Contact Loupe Frame) */
 .contact-loupe-frame {
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.35s ease;
 }
@@ -482,13 +418,6 @@ html.dark .film-frame {
 .contact-loupe-frame:hover {
   transform: translateY(-2px) scale(1.015);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(200, 86, 53, 0.5);
-}
-
-/* 出版物藏书票边框 (Ex-Libris Bookplate) */
-.ex-libris-plate {
-  position: relative;
-  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg-archive) 100%);
-  box-shadow: inset 0 0 0 3px var(--bg-archive), inset 0 0 0 4px var(--border-divider);
 }
 
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -9,6 +9,8 @@ import {
   ChevronsRight,
   X,
 } from 'lucide-vue-next'
+import { getBeijingNow } from '../utils/format'
+import { useFloatingDropdown } from '../composables/useFloatingDropdown'
 
 const props = withDefaults(
   defineProps<{
@@ -32,10 +34,16 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
-import { getBeijingNow } from '../utils/format'
-
 const popoverRef = ref<HTMLElement | null>(null)
-const popoverStyle = ref<Record<string, string>>({})
+
+const { floatingStyle: popoverStyle } = useFloatingDropdown({
+  triggerRef,
+  panelRef: popoverRef,
+  isOpen,
+  estimatedHeight: () => (props.enableTime ? 380 : 310),
+  fixedWidth: 288,
+  offset: 6,
+})
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -261,78 +269,14 @@ const clearValue = (e?: MouseEvent) => {
   isOpen.value = false
 }
 
-const updatePosition = () => {
-  if (!triggerRef.value || !isOpen.value) return
-  const rect = triggerRef.value.getBoundingClientRect()
-  const viewportHeight = window.innerHeight
-  const viewportWidth = window.innerWidth
-  const panelWidth = 288
-  const panelHeight = props.enableTime ? 380 : 310
-
-  const spaceBelow = viewportHeight - rect.bottom
-  const openUpward = spaceBelow < panelHeight && rect.top > panelHeight
-  const left = Math.min(Math.max(8, rect.left), viewportWidth - panelWidth - 8)
-
-  popoverStyle.value = {
-    position: 'fixed',
-    left: `${left}px`,
-    width: `${panelWidth}px`,
-    zIndex: '9999',
-    ...(openUpward
-      ? { bottom: `${viewportHeight - rect.top + 6}px` }
-      : { top: `${rect.bottom + 6}px` }),
-  }
-}
-
-const togglePopover = async () => {
+const togglePopover = () => {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     const p = parseValue(props.modelValue)
     viewYear.value = p.year
     viewMonth.value = p.month
-    await nextTick()
-    updatePosition()
   }
 }
-
-const handleClickOutside = (e: MouseEvent) => {
-  if (!isOpen.value) return
-  const target = e.target as Node
-  if (triggerRef.value?.contains(target) || popoverRef.value?.contains(target)) {
-    return
-  }
-  isOpen.value = false
-}
-
-const handleKeydown = (e: KeyboardEvent) => {
-  if (!isOpen.value) return
-  if (e.key === 'Escape') {
-    e.stopPropagation()
-    isOpen.value = false
-  }
-}
-
-watch(isOpen, (open) => {
-  if (open) {
-    window.addEventListener('scroll', updatePosition, true)
-    window.addEventListener('resize', updatePosition)
-  } else {
-    window.removeEventListener('scroll', updatePosition, true)
-    window.removeEventListener('resize', updatePosition)
-  }
-})
-
-onMounted(() => {
-  document.addEventListener('mousedown', handleClickOutside)
-  window.addEventListener('keydown', handleKeydown, true)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleClickOutside)
-  window.removeEventListener('keydown', handleKeydown, true)
-  window.removeEventListener('scroll', updatePosition, true)
-  window.removeEventListener('resize', updatePosition)
-})
 </script>
 
 <template>
@@ -377,7 +321,7 @@ onBeforeUnmount(() => {
         v-if="isOpen"
         ref="popoverRef"
         :style="popoverStyle"
-        class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-[0_12px_36px_rgba(0,0,0,0.16)] p-3.5 space-y-3 font-mono-archive text-xs select-none animate-in fade-in duration-120"
+        class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs shadow-[0_12px_36px_rgba(0,0,0,0.16)] p-3.5 space-y-3 font-mono-archive text-xs select-none animate-in fade-in duration-150"
       >
         <!-- 顶栏年月切换器 -->
         <div class="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">

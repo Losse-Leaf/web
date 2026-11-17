@@ -10,6 +10,7 @@ import {
   Sun,
 } from 'lucide-vue-next'
 import { getAdminToken } from '../utils/api'
+import { getSiteBrandName } from '../utils/profile'
 import type { SiteConfig } from '../types'
 
 const props = defineProps<{
@@ -34,9 +35,7 @@ const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
 // 刊物品牌名（由后端配置单一驱动 RC-40）
-const displaySiteName = computed(() => {
-  return props.config?.site_name?.split('·')?.[0]?.trim() || '散页'
-})
+const displaySiteName = computed(() => getSiteBrandName(props.config))
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
 

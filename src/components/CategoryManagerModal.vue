@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { X, Plus, Trash2, Check } from 'lucide-vue-next'
 import { useCategories, CATEGORY_SCOPE_META } from '../composables/useCategories'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
 import type { CategoryOption, CategoryScope } from '../types'
 
@@ -15,13 +16,18 @@ const {
   removeCategory,
 } = useCategories()
 
-// MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-useEscapeClose(() => isCategoryManagerOpen.value, closeCategoryManager)
-
 const newCategoryName = ref('')
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 const successMsg = ref<string | null>(null)
+
+const handleClose = () => {
+  if (isSubmitting.value) return
+  closeCategoryManager()
+}
+
+useBodyScrollLock(() => isCategoryManagerOpen.value)
+useEscapeClose(() => isCategoryManagerOpen.value, handleClose)
 
 const currentScopeMeta = computed(() => {
   return (
@@ -88,7 +94,7 @@ const handleDelete = async (item: CategoryOption) => {
     v-if="isCategoryManagerOpen"
     role="dialog" aria-modal="true" aria-label="管理分类"
     class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
-    @click.self="closeCategoryManager"
+    @click.self="handleClose"
   >
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-2xl w-full max-w-2xl rounded-xs p-6 sm:p-8 text-left space-y-6 max-h-[88dvh] flex flex-col pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"

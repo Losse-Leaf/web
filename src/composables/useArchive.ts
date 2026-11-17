@@ -1,6 +1,5 @@
 import { shallowRef, ref } from 'vue'
 import type { LifeEntry, ArchiveCategory } from '../types'
-import { entryMatchesCategory } from '../types'
 import { fetchEntries, resetEntriesETag } from '../utils/api'
 import { parseOccurredDate } from '../utils/format'
 
@@ -354,6 +353,5 @@ export function useArchive() {
     addEntry,
     updateEntry,
     removeEntry,
-    entryMatchesCategory,
   }
 }

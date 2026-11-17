@@ -4,23 +4,21 @@ import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../
 import LifeStream from './LifeStream.vue'
 import { fetchOnThisDayEntries } from '../utils/api'
 import { getBeijingDotDate, getBeijingYear, parseOccurredDate } from '../utils/format'
+import { getSiteBrandName, getDisplayCity } from '../utils/profile'
 
 const props = defineProps<{
   entries: LifeEntry[]
-  allEntries?: LifeEntry[]
   currentCategory?: ArchiveCategory
   config?: SiteConfig | null
   profile?: CuratorProfile | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'navigate', view: string): void
   (e: 'changeCategory', category: ArchiveCategory): void
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'openAdd'): void
 }>()
 
-const selectedDate = ref<string>('')
 const remoteOnThisDay = ref<LifeEntry[]>([])
 
 const todayDisplay = computed(() => getBeijingDotDate())
@@ -36,8 +34,7 @@ const onThisDayEntries = computed<LifeEntry[]>(() => {
     }
   }
 
-  const localSource = props.allEntries && props.allEntries.length > 0 ? props.allEntries : props.entries
-  for (const item of localSource) {
+  for (const item of props.entries) {
     if (!item || !item.id || item.is_transaction || item.type === 'transaction') continue
     const parsed = parseOccurredDate(item.occurred_at)
     if (
@@ -53,7 +50,7 @@ const onThisDayEntries = computed<LifeEntry[]>(() => {
   }
 
   return Array.from(map.values()).sort(
-    (a, b) => parseOccurredDate(b.occurred_at).timestamp - parseOccurredDate(a.occurred_at).timestamp
+    (a, b) => parseOccurredDate(b.occurred_at).timestamp - parseOccurredDate(a.occurred_at).timestamp,
   )
 })
 
@@ -75,9 +72,7 @@ onMounted(async () => {
 })
 
 // 刊物品牌名（由后端配置单一驱动 RC-40）
-const displaySiteName = computed(() => {
-  return props.config?.site_name?.split('·')?.[0]?.trim() || '散页'
-})
+const displaySiteName = computed(() => getSiteBrandName(props.config))
 
 // 刊物副标题（由后端配置单一驱动 RC-40，缺省回落全维度副标）
 const displaySubtitle = computed(() => {
@@ -89,21 +84,11 @@ const displaySubtitle = computed(() => {
 })
 
 // 顶部常驻城市展示（无配置时不显示“未知”，仅显示日期）
-const headerLocation = computed(() => {
-  return (
-    props.profile?.current_city ||
-    props.profile?.location?.split('·')?.[1]?.trim() ||
-    props.profile?.location?.trim() ||
-    props.config?.default_location?.split('·')?.[1]?.trim() ||
-    props.config?.default_location?.trim() ||
-    ''
-  )
-})
+const headerLocation = computed(() => getDisplayCity(props.profile, props.config))
 </script>
 
 <template>
   <div class="max-w-5xl mx-auto px-4 sm:px-8 text-left">
-    
     <!-- 开篇抬头 (紧凑、静默、干净) -->
     <section class="pt-10 sm:pt-16 pb-8 border-b border-[var(--border-subtle)]">
       <div class="space-y-3">
@@ -135,7 +120,6 @@ const headerLocation = computed(() => {
       v-if="onThisDayEntries.length > 0"
       class="relative mt-6 p-4 sm:p-5 rounded-xs border border-[var(--accent-warm)]/35 bg-[var(--bg-subtle)]/65 space-y-3.5 shadow-2xs"
     >
-      <!-- 四角复古裁切基准线 -->
       <span class="pointer-events-none select-none absolute top-1.5 left-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌜</span>
       <span class="pointer-events-none select-none absolute top-1.5 right-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌝</span>
       <span class="pointer-events-none select-none absolute bottom-1.5 left-2 text-[11px] text-[var(--accent-warm)]/50 font-mono-archive">⌞</span>
@@ -181,16 +165,11 @@ const headerLocation = computed(() => {
     <section id="timeline-section" class="pt-6 pb-28">
       <LifeStream
         :entries="entries"
-        :limit="0"
-        :showFilters="true"
-        :dateFilter="selectedDate"
         :currentCategory="currentCategory"
-        @clearDateFilter="selectedDate = ''"
         @changeCategory="emit('changeCategory', $event)"
         @selectEntry="emit('selectEntry', $event)"
         @openAdd="emit('openAdd')"
       />
     </section>
-
   </div>
 </template>

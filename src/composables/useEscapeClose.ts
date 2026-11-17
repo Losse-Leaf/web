@@ -1,36 +1,68 @@
 /**
- * 通用 Escape 键关闭弹窗 (MOB-OPT-P2 · a11y)
+ * 通用 Escape 键关闭栈 (LIFO)
  *
- * 在弹窗打开期间监听 Escape 键并触发关闭回调。
- * 多个弹窗叠加时只有最顶层响应（后注册的优先）。
+ * 全局仅挂载单一 capture 阶段 keydown 监听器，维护后进先出栈：
+ * 当多层浮层叠加（如弹窗内展开下拉菜单、抽屉内点开灯箱、弹窗上弹出确认框）时，
+ * 按下 Escape 仅关闭最顶层激活项，绝不穿透误关底层弹窗。
  */
 import { onBeforeUnmount, watch } from 'vue'
 
+interface EscapeEntry {
+  id: symbol
+  onClose: () => void
+}
+
+const escapeStack: EscapeEntry[] = []
+let listenerAttached = false
+
+function onGlobalKeydown(e: KeyboardEvent) {
+  if (e.key !== 'Escape' || e.isComposing || e.keyCode === 229) return
+  const top = escapeStack[escapeStack.length - 1]
+  if (!top) return
+  e.preventDefault()
+  e.stopPropagation()
+  top.onClose()
+}
+
+function syncGlobalListener() {
+  if (typeof window === 'undefined') return
+  if (escapeStack.length > 0 && !listenerAttached) {
+    window.addEventListener('keydown', onGlobalKeydown, true)
+    listenerAttached = true
+  } else if (escapeStack.length === 0 && listenerAttached) {
+    window.removeEventListener('keydown', onGlobalKeydown, true)
+    listenerAttached = false
+  }
+}
+
 export function useEscapeClose(isOpen: () => boolean, onClose: () => void) {
-  const handleKeydown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      onClose()
+  const id = Symbol('escape-layer')
+
+  const push = () => {
+    const existingIdx = escapeStack.findIndex((item) => item.id === id)
+    if (existingIdx !== -1) {
+      escapeStack.splice(existingIdx, 1)
+    }
+    escapeStack.push({ id, onClose })
+    syncGlobalListener()
+  }
+
+  const remove = () => {
+    const idx = escapeStack.findIndex((item) => item.id === id)
+    if (idx !== -1) {
+      escapeStack.splice(idx, 1)
+      syncGlobalListener()
     }
   }
 
-  let listening = false
-  const start = () => {
-    if (listening) return
-    // capture 阶段注册，确保比其它 keydown 监听先触发
-    window.addEventListener('keydown', handleKeydown, true)
-    listening = true
-  }
-  const stop = () => {
-    if (!listening) return
-    window.removeEventListener('keydown', handleKeydown, true)
-    listening = false
-  }
+  watch(
+    isOpen,
+    (open) => {
+      if (open) push()
+      else remove()
+    },
+    { immediate: true },
+  )
 
-  watch(isOpen, (open) => {
-    if (open) start()
-    else stop()
-  }, { immediate: true })
-
-  onBeforeUnmount(stop)
+  onBeforeUnmount(remove)
 }

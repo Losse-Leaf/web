@@ -11,7 +11,7 @@ import {
   Compass,
 } from 'lucide-vue-next'
 import { fetchWishes, deleteWish, getAdminToken } from '../utils/api'
-import { formatMoney, parseOccurredDate } from '../utils/format'
+import { formatMoney, parseOccurredDate, getAttachmentThumbUrl } from '../utils/format'
 import type { Wish } from '../types'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 
@@ -24,7 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'wishResolved'): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const allWishes = ref<Wish[]>([])
@@ -100,10 +100,7 @@ watch([selectedKind, selectedStatus], async () => {
 
 const openCreateWish = () => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => {
-      editingWish.value = null
-      isFormOpen.value = true
-    })
+    emit('requestAuth')
     return
   }
   editingWish.value = null
@@ -423,7 +420,7 @@ onMounted(() => {
             <img
               v-for="att in w.attachments"
               :key="att.id"
-              :src="att.thumbnail_url || att.url"
+              :src="getAttachmentThumbUrl(att)"
               :alt="w.title"
               width="64"
               height="64"
@@ -504,7 +501,7 @@ onMounted(() => {
       :editingWish="editingWish"
       @close="isFormOpen = false"
       @saved="handleWishSaved"
-      @requestAuth="(cb) => emit('requestAuth', cb)"
+      @requestAuth="emit('requestAuth')"
     />
 
     <WishResolutionModal
@@ -513,7 +510,7 @@ onMounted(() => {
       :wish="resolvingWish"
       @close="isResolutionOpen = false"
       @resolved="handleWishResolved"
-      @requestAuth="(cb) => emit('requestAuth', cb)"
+      @requestAuth="emit('requestAuth')"
     />
 
   </div>

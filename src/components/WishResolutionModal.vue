@@ -2,7 +2,14 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { X, Sparkles, Check, ShieldCheck } from 'lucide-vue-next'
 import { resolveWish, fetchCreditChannels, getAdminToken } from '../utils/api'
-import { getBeijingDateString, getBeijingISOString, parseOccurredDate } from '../utils/format'
+import {
+  getBeijingDateString,
+  getBeijingISOString,
+  parseOccurredDate,
+  centsToInputYuan,
+  formatMoney,
+  parseYuanToCents,
+} from '../utils/format'
 import type { Wish, CreditChannel } from '../types'
 import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
@@ -17,7 +24,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'resolved', wish: Wish): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 // 归册路径: exact(原配原价) | altered(改选替代) | relinquished(理性拔草)
@@ -56,7 +63,7 @@ watch(
     if (w) {
       resolutionType.value = 'exact'
       fulfilledDate.value = todayStr
-      actualCostYuan.value = w.budget > 0 ? (w.budget / 100).toFixed(2) : '0.00'
+      actualCostYuan.value = centsToInputYuan(w.budget)
       actualTitle.value = w.title
       entryContent.value = `圆满达成向往的心愿《${w.title}》，生活又多了一份确切的欣喜。`
 
@@ -90,14 +97,14 @@ onMounted(async () => {
 watch(resolutionType, (type) => {
   if (!props.wish) return
   if (type === 'exact') {
-    actualCostYuan.value = props.wish.budget > 0 ? (props.wish.budget / 100).toFixed(2) : '0.00'
+    actualCostYuan.value = centsToInputYuan(props.wish.budget)
     actualTitle.value = props.wish.title
     linkTransaction.value = true
     linkGearAsset.value = props.wish.kind === 'item'
     // 从「理性拔草」切回达成路径时必须重置感言，否则拔草文案会残留进达成散页/足迹
     entryContent.value = `圆满达成向往的心愿《${props.wish.title}》，生活又多了一份确切的欣喜。`
   } else if (type === 'altered') {
-    actualCostYuan.value = props.wish.budget > 0 ? (props.wish.budget / 100).toFixed(2) : '0.00'
+    actualCostYuan.value = centsToInputYuan(props.wish.budget)
     actualTitle.value = ''
     linkTransaction.value = true
     linkGearAsset.value = props.wish.kind === 'item'
@@ -152,16 +159,15 @@ const handleSubmit = async () => {
 
   let costCents = 0
   if (resolutionType.value !== 'relinquished') {
-    const costVal = parseFloat(actualCostYuan.value)
-    if (isNaN(costVal) || costVal < 0) {
-      errorMsg.value = '请输入有效实际支出金额'
+    const parsedCost = parseYuanToCents(actualCostYuan.value, {
+      allowZero: true,
+      fieldLabel: '实际支出金额',
+    })
+    if (!parsedCost.ok) {
+      errorMsg.value = parsedCost.error
       return
     }
-    if (!/^\d+(\.\d{1,2})?$/.test(actualCostYuan.value.trim())) {
-      errorMsg.value = '金额最多保留两位小数'
-      return
-    }
-    costCents = Math.round(costVal * 100)
+    costCents = parsedCost.cents
   }
 
   const finalTitle = resolutionType.value === 'altered'
@@ -169,7 +175,7 @@ const handleSubmit = async () => {
     : props.wish.title
 
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleSubmit())
+    emit('requestAuth')
     return
   }
 
@@ -196,20 +202,19 @@ const handleSubmit = async () => {
     emit('resolved', resolved)
     emit('close')
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => handleSubmit())
-      return
-    }
     errorMsg.value = err.message || '心愿归册仪式提交失败'
   } finally {
     isSubmitting.value = false
   }
 }
 
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => (props.isOpen && !!props.wish))
-  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-  useEscapeClose(() => props.isOpen, () => emit('close'))
+const handleClose = () => {
+  if (isSubmitting.value) return
+  emit('close')
+}
+
+useBodyScrollLock(() => props.isOpen && Boolean(props.wish))
+useEscapeClose(() => props.isOpen && Boolean(props.wish), handleClose)
 </script>
 
 <template>
@@ -217,7 +222,7 @@ const handleSubmit = async () => {
     v-if="isOpen && wish"
     role="dialog" aria-modal="true" aria-label="心愿归册"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--ink-primary)]/40 backdrop-blur-xs animate-in fade-in duration-200"
-    @click.self="emit('close')"
+    @click.self="handleClose"
   >
     <div
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] w-full max-w-xl rounded-xs shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto text-left pb-[max(2rem,env(safe-area-inset-bottom,2rem))]"
@@ -232,11 +237,11 @@ const handleSubmit = async () => {
             </h2>
           </div>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
-            《{{ wish.title }}》· 预算 ¥{{ (wish.budget / 100).toFixed(2) }} · 将期冀定格为生活记忆。
+            《{{ wish.title }}》· 预算 ¥{{ formatMoney(wish.budget) }} · 将期冀定格为生活记忆。
           </p>
         </div>
         <button
-          @click="emit('close')"
+          @click="handleClose"
           class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] p-1 cursor-pointer transition-colors"
         >
           <X class="w-4 h-4" />
@@ -437,7 +442,7 @@ const handleSubmit = async () => {
         <!-- 底部提交操作 -->
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">
           <button
-            @click="emit('close')"
+            @click="handleClose"
             type="button"
             class="px-3.5 py-1.5 text-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer transition-colors"
           >

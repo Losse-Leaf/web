@@ -2,7 +2,6 @@ import { ref, computed } from 'vue'
 import {
   fetchCategories,
   createCategoryOption,
-  updateCategoryOption,
   deleteCategoryOption,
 } from '../utils/api'
 import type { CategoryOption, CategoryScope } from '../types'
@@ -102,25 +101,12 @@ export function useCategories() {
     return created
   }
 
-  const renameCategory = async (id: number, newName: string) => {
-    const trimmed = newName.trim()
-    if (!trimmed) return null
-    const updated = await updateCategoryOption(id, {
-      name: trimmed,
-      rename_records: true,
-    })
-    await loadCategories(true)
-    return updated
-  }
-
   const removeCategory = async (id: number) => {
     await deleteCategoryOption(id)
     await loadCategories(true)
   }
 
   return {
-    categoryItems,
-    byScope,
     isLoadingCategories,
     expenseCategories,
     incomeCategories,
@@ -134,7 +120,6 @@ export function useCategories() {
     openCategoryManager,
     closeCategoryManager,
     addCategory,
-    renameCategory,
     removeCategory,
   }
 }

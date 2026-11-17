@@ -92,6 +92,7 @@ import { useArchive } from './composables/useArchive'
 import { useTransactions } from './composables/useTransactions'
 import { useCategories } from './composables/useCategories'
 import { useConfirm } from './composables/useConfirm'
+import { openModalCount } from './composables/useBodyScrollLock'
 import type {
   LifeEntry,
   Project,
@@ -102,7 +103,6 @@ import type {
   SystemStatus,
 } from './types'
 import { BookOpen, Heart, MapPin, Compass, User, Plus } from 'lucide-vue-next'
-import { entryMatchesCategory } from './types'
 import { parseOccurredDate, getBeijingYear } from './utils/format'
 import {
   fetchEntryById,
@@ -110,8 +110,6 @@ import {
   fetchSiteConfig,
   fetchCuratorProfile,
   fetchSystemStatus,
-  resetEntriesETag,
-  clearApiCache,
 } from './utils/api'
 import { loadCuratorProfile, saveCuratorProfile, DEFAULT_PROFILE } from './utils/profile'
 import {
@@ -119,6 +117,7 @@ import {
   clearEnteredArchive,
   hasEnteredArchiveSession,
   redirectToOIDCLogin,
+  logoutAndReload,
 } from './utils/auth'
 
 // 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32, RC-47, RG-09)
@@ -344,13 +343,12 @@ const isUpdateCheckOpen = ref(false)
 
 const isSessionHintOpen = ref(false)
 
-// MOB-P1-93：是否处于「某个弹窗打开」状态（用于隐藏悬浮按钮与移动端底栏）
-// z-[1150] 的移动端底栏会盖在任何漏计的弹窗上：分类管理弹窗（useCategories
-// 单例状态）与全局确认框（useConfirm 单例的 confirmRequest）此前都不在内。
+// 全局模态框计数（openModalCount 统一由 useBodyScrollLock 维护，覆盖所有顶层与子视图弹窗）
 const { confirmRequest } = useConfirm()
 const { loadCategories, isCategoryManagerOpen } = useCategories()
 const anyModalOpen = computed(
   () =>
+    openModalCount.value > 0 ||
     isSearchOpen.value ||
     isStorageBackupOpen.value ||
     isNewEntryOpen.value ||
@@ -361,43 +359,22 @@ const anyModalOpen = computed(
     Boolean(confirmRequest.value) ||
     Boolean(selectedEntry.value)
 )
-// Cmd+K / 搜索入口：anyModalOpen 含 isSearchOpen 自身，单独列出「其它弹窗」状态，
-// 避免把搜索自己算进去导致永远打不开；已有别的弹窗时忽略开启，防止两层 z-50 叠加。
-const anyOtherModalOpen = computed(
-  () =>
-    isStorageBackupOpen.value ||
-    isNewEntryOpen.value ||
-    isPairingOpen.value ||
-    isUpdateCheckOpen.value ||
-    isSessionHintOpen.value ||
-    isCategoryManagerOpen.value ||
-    Boolean(confirmRequest.value) ||
-    Boolean(selectedEntry.value)
-)
 const handleOpenSearch = () => {
-  if (anyOtherModalOpen.value) return
+  if (anyModalOpen.value) return
   isSearchOpen.value = true
 }
 const wishesRefreshKey = ref(0)
 const atlasRefreshKey = ref(0)
 const txRefreshKey = ref(0)
 
-// 母密钥已移除：未授信的浏览器无法就地自证身份，
-// 唯一接入方式是由已配对设备签发配对二维码，这里只做引导。
-const handleRequestAuth = (callback?: () => void) => {
-  if (Boolean(getAdminToken())) {
-    callback?.()
-    return
-  }
+// 未授信浏览器无法就地自证身份，统一引导 OIDC 登录或已配对设备扫码授权
+const handleRequestAuth = () => {
+  if (getAdminToken()) return
   isSessionHintOpen.value = true
 }
 
 const handleLogout = async () => {
-  removeAdminToken()
-  clearEnteredArchive()
-  // 登出时把 API 快照与 Workbox 运行时缓存一并清掉，避免下一位访客看到主理人数据。
-  await clearApiCache()
-  window.location.reload()
+  await logoutAndReload()
 }
 
 const openUpdateCheckModal = () => {
@@ -417,13 +394,6 @@ const allTimelineEntries = computed(() => {
   return combined
 })
 
-const filteredEntriesByCategory = computed(() => {
-  if (currentCategory.value === 'all') {
-    return allTimelineEntries.value
-  }
-  return allTimelineEntries.value.filter((e) => entryMatchesCategory(e, currentCategory.value))
-})
-
 const handleCategoryChange = (cat: ArchiveCategory) => {
   currentCategory.value = cat
   if (currentView.value !== 'home' && currentView.value !== 'life') {
@@ -433,7 +403,7 @@ const handleCategoryChange = (cat: ArchiveCategory) => {
 }
 
 const navigateTo = (view: string) => {
-  if (['transactions', 'assets'].includes(view) && !getAdminToken()) {
+  if (view === 'transactions' && !getAdminToken()) {
     const target = firstPublicView()
     currentView.value = target
     window.location.hash = target
@@ -469,13 +439,11 @@ const closeEntryDetail = () => {
 
 const openStorageBackupModal = (tab: 'backup' | 'storage' | 'visibility' = 'backup') => {
   if (!getAdminToken()) {
-    handleRequestAuth(() => openStorageBackupModal(tab))
+    handleRequestAuth()
     return
   }
   storageBackupInitialTab.value = tab
   isStorageBackupOpen.value = true
-  // WEB-5：/storage/status 延迟到弹窗打开时由 StorageBackupModal 自己拉取，
-  // 首屏与访客不再触碰这个管理端接口。
 }
 
 const handleEntryCreated = (newEntry: LifeEntry) => {
@@ -544,9 +512,7 @@ const handleGearChanged = async () => {
   ])
 }
 
-const handleRestored = async () => {
-  await clearApiCache()
-  resetEntriesETag()
+const handleRestored = () => {
   window.location.reload()
 }
 
@@ -657,7 +623,7 @@ const handleHashChange = async () => {
   } else if (
     ['transactions', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
   ) {
-    if (['transactions', 'assets'].includes(hash) && !getAdminToken()) {
+    if (hash === 'transactions' && !getAdminToken()) {
       const target = firstPublicView()
       currentView.value = target
       window.location.hash = target
@@ -879,7 +845,7 @@ watch(() => siteConfig.value?.public_modules, () => {
         <div class="text-[11px] font-mono-archive tracking-[0.25em] uppercase text-[var(--ink-faint)]">
           Private Archive
         </div>
-        <h2 class="text-2xl font-serif-archive text-[var(--ink-primary)]">
+        <h2 class="text-2xl font-serif-editorial text-[var(--ink-primary)]">
           当前展厅已设为仅主理人可见
         </h2>
         <p class="text-sm text-[var(--ink-muted)] leading-relaxed">
@@ -888,7 +854,7 @@ watch(() => siteConfig.value?.public_modules, () => {
         <div class="pt-2">
           <button
             type="button"
-            @click="systemStatus?.oidc_enabled ? redirectToOIDCLogin() : handleRequestAuth(() => refreshData())"
+            @click="systemStatus?.oidc_enabled ? redirectToOIDCLogin() : handleRequestAuth()"
             class="min-h-[44px] px-5 py-2.5 rounded-sm bg-[var(--ink-primary)] text-[var(--bg-archive)] text-xs font-mono-archive tracking-widest uppercase hover:opacity-90 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
           >
             {{ systemStatus?.oidc_enabled ? '通过 Vesper Auth 通行证进入' : '主理人登录' }}
@@ -899,12 +865,10 @@ watch(() => siteConfig.value?.public_modules, () => {
       <!-- 1. HOME 视图：克制开篇封面 + 最近一年生活刻度热力图 + 近况生活流 -->
       <HomeView
         v-else-if="currentView === 'home'"
-        :entries="filteredEntriesByCategory"
-        :allEntries="allTimelineEntries"
+        :entries="allTimelineEntries"
         :currentCategory="currentCategory"
         :config="siteConfig"
         :profile="curatorProfile"
-        @navigate="navigateTo"
         @changeCategory="handleCategoryChange"
         @selectEntry="openEntryDetail"
         @openAdd="openNewEntry()"
@@ -958,6 +922,7 @@ watch(() => siteConfig.value?.public_modules, () => {
         :profile="curatorProfile"
         :entries="allTimelineEntries"
         @profileUpdated="curatorProfile = $event"
+        @gearChanged="handleGearChanged"
         @requestAuth="handleRequestAuth"
         @selectEntry="openEntryDetail"
       />

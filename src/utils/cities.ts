@@ -1,3 +1,5 @@
+import { loadCuratorProfile } from './profile'
+
 // 中国合规地级行政区划、直辖市、特别行政区与台湾省全量标准字典 (共 375 个地级单位)
 // 依据 docs/wishlist-travel.md §五~§六 及 docs/web.md §5.11 合规要求一次性固化 (RC-86 / RC-95 / RC-98)
 // 坐标体系：中国标准 Albers 等面积圆锥投影正算星野坐标 (标准纬线 25°N / 47°N，中央经线 105°E)
@@ -474,8 +476,6 @@ function findNearestCityByCoords(lat: number, lng: number): CityOption | null {
 }
 
 const LAST_CITY_STORAGE_KEY = 'looseleaf_last_city'
-// 与 utils/profile.ts 的写入键保持一致（原先的 _v1 后缀导致该回退层永远读不到数据）
-const PROFILE_STORAGE_KEY = 'looseleaf_curator_profile'
 
 /**
  * 记录上次使用的城市，供三级回退机制使用
@@ -515,29 +515,14 @@ function getLastUsedCity(): CityOption | null {
 
 /**
  * 读取主理人常驻城市 (Tier 2: current_city / location)
- *
- * 键名与写入方 utils/profile.ts 的 saveCuratorProfile 一致
- * （原先写成 `looseleaf_curator_profile_v1`，全仓无任何写入者，该回退层恒为 null）；
- * 存储结构是 `{ cached_at, data: profile }` 信封，字段在 data 里。
+ * 统一复用 loadCuratorProfile，消除重复解析 localStorage 信封结构。
  */
 function getCuratorResidentCity(): CityOption | null {
-  try {
-    const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as {
-      current_city?: string
-      location?: string
-      data?: { current_city?: string; location?: string }
-    }
-    const profile =
-      parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed
-    const fromCurrent = matchCityFromLocation(profile.current_city)
-    if (fromCurrent) return fromCurrent
-    const fromLocation = matchCityFromLocation(profile.location)
-    if (fromLocation) return fromLocation
-  } catch {
-    // 忽略解析异常
-  }
+  const profile = loadCuratorProfile()
+  const fromCurrent = matchCityFromLocation(profile.current_city)
+  if (fromCurrent) return fromCurrent
+  const fromLocation = matchCityFromLocation(profile.location)
+  if (fromLocation) return fromLocation
   return null
 }
 

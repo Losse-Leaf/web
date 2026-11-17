@@ -13,10 +13,12 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { fetchFootprintsAtlas, fetchFootprints, deleteFootprint, getAdminToken } from '../utils/api'
-import { parseOccurredDate } from '../utils/format'
+import { formatMoney, parseOccurredDate } from '../utils/format'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { AtlasCitySummary, Footprint, LifeEntry } from '../types'
 import { CHINA_CITIES, type CityOption } from '../utils/cities'
+import VintageTicketCard, { type TicketCityItem } from './atlas/VintageTicketCard.vue'
+import TicketPlaceholderSlot from './atlas/TicketPlaceholderSlot.vue'
 
 const AddFootprintModal = defineAsyncComponent(() => import('./AddFootprintModal.vue'))
 const CityMemoryDrawerModal = defineAsyncComponent(() => import('./CityMemoryDrawerModal.vue'))
@@ -42,7 +44,7 @@ const emit = defineEmits<{
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'footprintSaved'): void
   (e: 'openAddWithCity', city: { code: string; name: string }): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const atlasData = ref<{
@@ -64,9 +66,20 @@ const addModalInitialCityCode = ref('')
 const addModalInitialCityName = ref('')
 const editingFootprint = ref<Footprint | null>(null)
 
+const openNewFootprintModal = () => {
+  if (!isAdmin.value) {
+    emit('requestAuth')
+    return
+  }
+  editingFootprint.value = null
+  addModalInitialCityCode.value = ''
+  addModalInitialCityName.value = ''
+  isAddModalOpen.value = true
+}
+
 const handleAddFootprintInCity = (city: { code: string; name: string }) => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => handleAddFootprintInCity(city))
+    emit('requestAuth')
     return
   }
   editingFootprint.value = null
@@ -77,7 +90,7 @@ const handleAddFootprintInCity = (city: { code: string; name: string }) => {
 
 const handleEditFootprint = (fp: Footprint) => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => handleEditFootprint(fp))
+    emit('requestAuth')
     return
   }
   editingFootprint.value = fp
@@ -86,7 +99,7 @@ const handleEditFootprint = (fp: Footprint) => {
 
 const handleDeleteFootprint = async (fp: Footprint) => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => handleDeleteFootprint(fp))
+    emit('requestAuth')
     return
   }
   const confirmed = await askConfirm({
@@ -108,7 +121,7 @@ const handleDeleteFootprint = async (fp: Footprint) => {
 
 const handleAddEntryInCity = (city: { code: string; name: string }) => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => handleAddEntryInCity(city))
+    emit('requestAuth')
     return
   }
   isDrawerOpen.value = false
@@ -205,22 +218,7 @@ const provincePrefecturesMap = computed<Map<string, CityOption[]>>(() => {
 })
 
 // 已点亮城市丰富信息模型
-export interface LitCityItem {
-  code: string
-  name: string
-  shortName: string
-  province: string
-  pinyin: string
-  epithet: string
-  visitCount: number
-  firstVisitedAt: string
-  latestVisitedAt: string
-  latestNote?: string
-  latestPhotoUrl?: string
-  photoCount: number
-  x: number
-  y: number
-}
+export type LitCityItem = TicketCityItem
 
 const litCitiesList = computed<LitCityItem[]>(() => {
   const list: LitCityItem[] = []
@@ -229,26 +227,15 @@ const litCitiesList = computed<LitCityItem[]>(() => {
     const name = summary.city_name || base?.name || '未知城市'
     const shortName = name.replace(/市|地区|自治州|特别行政区|盟/g, '') || name
     const province = base?.province || '其他'
-    const pinyin = base?.pinyin || ''
     const epithet = getCityEpithet(summary.city_code, name)
-    const x = base?.x ?? 450
-    const y = base?.y ?? 280
 
-    // 提取该城市最新的足迹笔记与照片
+    // 提取该城市最新的足迹笔记
     const fps = cityFootprintsMap.value.get(summary.city_code) || []
     let latestNote = ''
-    let latestPhotoUrl = ''
-    let photoCount = 0
-
     for (const fp of fps) {
-      if (!latestNote && fp.note) {
+      if (fp.note) {
         latestNote = fp.note
-      }
-      for (const att of fp.attachments || []) {
-        photoCount++
-        if (!latestPhotoUrl && att.url) {
-          latestPhotoUrl = att.url
-        }
+        break
       }
     }
 
@@ -257,16 +244,11 @@ const litCitiesList = computed<LitCityItem[]>(() => {
       name,
       shortName,
       province,
-      pinyin,
       epithet,
       visitCount: summary.visit_count || 1,
       firstVisitedAt: summary.first_visited_at || '',
       latestVisitedAt: summary.latest_visited_at || summary.first_visited_at || '',
       latestNote,
-      latestPhotoUrl,
-      photoCount,
-      x,
-      y,
     })
   }
 
@@ -410,13 +392,7 @@ const handleUnlitProvinceClick = (seal: ProvinceSealItem) => {
   if (defaultCity) {
     handleAddFootprintInCity({ code: defaultCity.code, name: defaultCity.name })
   } else {
-    if (!isAdmin.value) {
-      emit('requestAuth', () => {
-        isAddModalOpen.value = true
-      })
-      return
-    }
-    isAddModalOpen.value = true
+    openNewFootprintModal()
   }
 }
 
@@ -545,7 +521,7 @@ onMounted(() => {
           </div>
 
           <button
-            @click="isAdmin ? (isAddModalOpen = true) : emit('requestAuth', () => { isAddModalOpen = true })"
+            @click="openNewFootprintModal"
             class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-mono-archive rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
           >
             <Plus class="w-3.5 h-3.5" />
@@ -965,7 +941,7 @@ onMounted(() => {
               </p>
             </div>
             <button
-              @click="isAdmin ? (isAddModalOpen = true) : emit('requestAuth', () => { isAddModalOpen = true })"
+              @click="openNewFootprintModal"
               class="py-2 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-serif-editorial text-xs font-medium inline-flex items-center gap-1 cursor-pointer"
             >
               <Plus class="w-3.5 h-3.5" />
@@ -1049,7 +1025,7 @@ onMounted(() => {
           </div>
           <button
             v-if="isAdmin"
-            @click="isAddModalOpen = true"
+            @click="openNewFootprintModal"
             class="py-2 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-serif-editorial text-xs font-medium inline-flex items-center gap-1 cursor-pointer"
           >
             <Plus class="w-3.5 h-3.5" />
@@ -1096,163 +1072,20 @@ onMounted(() => {
 
           <!-- 车票阵列 (两段式复古物理车票质感) -->
           <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div
+            <VintageTicketCard
               v-for="city in group.cities"
               :key="city.code"
-              @click="openCityDrawer(city.code, city.name)"
-              class="vintage-ticket-card relative bg-[#FAF7F0] dark:bg-[#1C1A18] border border-[#D5CDC0] dark:border-[#383430] rounded-xs shadow-[0_6px_24px_rgba(0,0,0,0.06)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden flex flex-col md:flex-row cursor-pointer group"
-            >
-              <!-- 1. 左联：副券 / 旅客存根 -->
-              <div class="w-full md:w-52 shrink-0 bg-[#F2EDE2] dark:bg-[#23201D] border-b md:border-b-0 md:border-r-2 border-dashed border-[#C5BBAA] dark:border-[#423D38] p-5 flex flex-col justify-between relative overflow-hidden">
-                <!-- 针孔咬痕咬角 (PC 端为右侧纵切口，移动端为底部横切口) -->
-                <div class="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
-                <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
-                <div class="absolute -left-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
-                <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
+              :city="city"
+              mode="region"
+              @select="(c) => openCityDrawer(c.code, c.name)"
+            />
 
-                <div class="space-y-3">
-                  <!-- 存根抬头与仿真条形码 -->
-                  <div class="flex items-center justify-between">
-                    <span class="text-[11px] font-mono-archive text-[var(--ink-muted)] tracking-wider">
-                      存根 #{{ city.code.slice(0, 4) }}
-                    </span>
-                    <!-- 仿真条形码 -->
-                    <div class="flex items-center gap-[1.5px] h-3.5 opacity-65">
-                      <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[2px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[3px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[2px] h-full bg-[var(--ink-primary)]"></div>
-                    </div>
-                  </div>
-
-                  <!-- 真实中文省市题记与城市全称 -->
-                  <div class="space-y-1">
-                    <div class="text-xs font-serif-editorial text-[#b94a3b] font-medium tracking-wider">
-                      {{ city.province }} · {{ city.shortName }}
-                    </div>
-                    <div class="font-serif-editorial text-2xl font-bold tracking-wide text-[var(--ink-primary)] group-hover:text-[#b94a3b] transition-colors">
-                      {{ city.name }}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 存根底栏：朱砂省份印章 -->
-                <div class="pt-4 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial">
-                  <span class="text-[var(--ink-muted)]">旅客存根</span>
-                  <div class="w-6 h-6 rounded-xs border border-[#b94a3b] flex items-center justify-center font-bold text-xs text-[#b94a3b] bg-[#b94a3b]/5">
-                    {{ PROVINCE_SHORT_MAP[city.province] || city.province.slice(0, 1) }}
-                  </div>
-                </div>
-              </div>
-
-              <!-- 2. 右联：正券 / 乘车票面 -->
-              <div class="flex-1 p-5 sm:p-6 flex flex-col justify-between space-y-4 relative">
-                <!-- 票面顶栏：出版物客票信息 -->
-                <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[11px] font-serif-editorial text-[var(--ink-muted)] tracking-wider">
-                  <span>散页客票 · 山川行迹</span>
-                  <span>头等舱 · 登程</span>
-                  <span class="hidden sm:inline font-mono-archive text-[11px]">编号 {{ city.code }}</span>
-                </div>
-
-                <!-- 路线段：起步 ➔ 到达 -->
-                <div class="flex items-center justify-between gap-4">
-                  <div>
-                    <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">出发地</div>
-                    <div class="font-serif-editorial text-sm font-medium text-[var(--ink-secondary)]">起步站</div>
-                  </div>
-
-                  <div class="flex-1 flex items-center justify-center gap-2 text-[var(--ink-muted)] opacity-60">
-                    <span class="w-full border-t border-dashed border-[var(--border-subtle)]"></span>
-                    <span class="font-serif-editorial text-xs">❖</span>
-                    <span class="w-full border-t border-dashed border-[var(--border-subtle)]"></span>
-                  </div>
-
-                  <div class="text-right">
-                    <div class="text-[11px] font-serif-editorial text-[#b94a3b] font-medium">目的地</div>
-                    <div class="font-serif-editorial text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
-                      {{ city.name }}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 核心：复古双圈波浪橡皮邮戳 ＋ 手札笺注 -->
-                <div class="py-1 flex items-center justify-between gap-4">
-                  <!-- 左侧：风物注记与手写随笔 -->
-                  <div class="space-y-1.5 flex-1 text-left">
-                    <div class="text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
-                      {{ city.epithet }}
-                    </div>
-                    <div v-if="city.latestNote" class="text-xs font-serif-editorial text-[var(--ink-primary)] line-clamp-1">
-                      “{{ city.latestNote }}”
-                    </div>
-                    <div class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                      首访: {{ city.firstVisitedAt || '早年' }}
-                      <span v-if="city.latestVisitedAt && city.latestVisitedAt !== city.firstVisitedAt" class="ml-2">
-                        最近: {{ city.latestVisitedAt }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- 右侧：倾斜复古红色双圈波浪橡皮邮戳 -->
-                  <div class="shrink-0 transform rotate-[-6deg] group-hover:rotate-0 transition-transform duration-300">
-                    <div class="border-2 border-[#b94a3b]/85 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative shadow-[inset_0_0_6px_rgba(185,74,59,0.18)] bg-[#b94a3b]/[0.02]">
-                      <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center select-none">
-                        <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
-                        <span class="text-[11px] font-serif-editorial font-bold my-0.5">
-                          {{ city.latestVisitedAt || city.firstVisitedAt || '留步' }}
-                        </span>
-                        <span class="text-[8px] font-serif-editorial border-t border-[#b94a3b]/60 px-1 pt-0.5">
-                          {{ formatVisitStampCount(city.visitCount) }}
-                        </span>
-                      </div>
-                      <!-- 右侧波浪邮戳切线 -->
-                      <div class="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 text-[#b94a3b]/70 font-mono-archive text-[11px] select-none">
-                        <span>〰〰</span>
-                        <span>〰〰</span>
-                        <span>〰〰</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 票面底栏：点阵打码 ＋ 翻阅抽屉入口 -->
-                <div class="pt-2.5 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)] transition-colors">
-                  <span>已钤印归册 · {{ city.province }}</span>
-                  <div class="flex items-center gap-1 font-medium text-[var(--ink-primary)]">
-                    <span>翻阅回忆抽屉 (4章节)</span>
-                    <ChevronRight class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 空白待启程备忘插槽卡片 (当只有少量车票时优雅填充，消除空旷感) -->
-            <div
+            <TicketPlaceholderSlot
               v-if="group.cities.length < 3"
-              @click="isAdmin ? (isAddModalOpen = true) : null"
-              class="relative bg-[var(--bg-archive)]/50 border-2 border-dashed border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs p-6 flex flex-col items-center justify-center text-center space-y-3 group transition-all"
-              :class="{ 'cursor-pointer': isAdmin }"
-            >
-              <div class="w-12 h-12 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)] group-hover:scale-105 transition-all">
-                <Plus class="w-5 h-5" />
-              </div>
-              <div class="space-y-1">
-                <h4 class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
-                  下一站山川 · 待启程插槽
-                </h4>
-                <p class="font-serif-editorial text-xs text-[var(--ink-muted)] max-w-xs">
-                  {{ isAdmin ? '“山川尚远，步履不停。点击录入新一站行迹，装订专属车票。”' : '“山川尚远，步履不停。岁序常新，静候下一次出发。”' }}
-                </p>
-              </div>
-              <span v-if="isAdmin" class="text-xs font-serif-editorial text-[var(--ink-secondary)] group-hover:text-[var(--ink-primary)]">
-                ＋ 装订下一站车票
-              </span>
-              <span v-else class="text-xs font-serif-editorial text-[var(--ink-muted)]">
-                静候下一段山海旅程
-              </span>
-            </div>
+              mode="region"
+              :isAdmin="isAdmin"
+              @add="openNewFootprintModal"
+            />
           </div>
         </div>
       </div>
@@ -1276,7 +1109,7 @@ onMounted(() => {
           </div>
           <button
             v-if="isAdmin"
-            @click="isAddModalOpen = true"
+            @click="openNewFootprintModal"
             class="py-2 px-4 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-serif-editorial text-xs font-medium inline-flex items-center gap-1 cursor-pointer"
           >
             <Plus class="w-3.5 h-3.5" />
@@ -1300,131 +1133,21 @@ onMounted(() => {
           </div>
 
           <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div
+            <VintageTicketCard
               v-for="city in group.cities"
               :key="city.code"
-              @click="openCityDrawer(city.code, city.name)"
-              class="vintage-ticket-card relative bg-[#FAF7F0] dark:bg-[#1C1A18] border border-[#D5CDC0] dark:border-[#383430] rounded-xs shadow-[0_6px_24px_rgba(0,0,0,0.06)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden flex flex-col md:flex-row cursor-pointer group"
-            >
-              <!-- 存根联 -->
-              <div class="w-full md:w-52 shrink-0 bg-[#F2EDE2] dark:bg-[#23201D] border-b md:border-b-0 md:border-r-2 border-dashed border-[#C5BBAA] dark:border-[#423D38] p-5 flex flex-col justify-between relative overflow-hidden">
-                <!-- 针孔咬痕咬角 (PC 端为右侧纵切口，移动端为底部横切口) -->
-                <div class="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
-                <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] hidden md:block"></div>
-                <div class="absolute -left-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
-                <div class="absolute -right-3 -bottom-3 w-6 h-6 rounded-full bg-[var(--bg-archive)] border border-[#D5CDC0] dark:border-[#383430] md:hidden block"></div>
+              :city="city"
+              mode="timeline"
+              :yearLabel="group.year"
+              @select="(c) => openCityDrawer(c.code, c.name)"
+            />
 
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">存根 #{{ city.code.slice(0, 4) }}</span>
-                    <div class="flex items-center gap-[1.5px] h-3.5 opacity-65">
-                      <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[2px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[1px] h-full bg-[var(--ink-primary)]"></div>
-                      <div class="w-[3px] h-full bg-[var(--ink-primary)]"></div>
-                    </div>
-                  </div>
-                  <div class="space-y-1">
-                    <div class="text-xs font-serif-editorial text-[#b94a3b] font-medium tracking-wider">
-                      {{ city.province }} · {{ city.shortName }}
-                    </div>
-                    <div class="font-serif-editorial text-2xl font-bold tracking-wide text-[var(--ink-primary)] group-hover:text-[#b94a3b] transition-colors">
-                      {{ city.name }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pt-4 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial">
-                  <span class="text-[var(--ink-muted)]">{{ city.latestVisitedAt }}</span>
-                  <div class="w-6 h-6 rounded-xs border border-[#b94a3b] flex items-center justify-center font-bold text-xs text-[#b94a3b] bg-[#b94a3b]/5">
-                    {{ PROVINCE_SHORT_MAP[city.province] || city.province.slice(0, 1) }}
-                  </div>
-                </div>
-              </div>
-
-              <!-- 正券联 -->
-              <div class="flex-1 p-5 sm:p-6 flex flex-col justify-between space-y-4">
-                <div class="flex items-center justify-between pb-2.5 border-b border-[#D5CDC0]/70 dark:border-[#383430]/70 text-[11px] font-serif-editorial text-[var(--ink-muted)]">
-                  <span>散页客票 · 编年行迹</span>
-                  <span>{{ group.year }} 岁次卷</span>
-                </div>
-
-                <div class="flex items-center justify-between gap-4">
-                  <div>
-                    <div class="text-[11px] font-serif-editorial text-[var(--ink-muted)]">出发地</div>
-                    <div class="font-serif-editorial text-sm font-medium text-[var(--ink-secondary)]">起步站</div>
-                  </div>
-                  <div class="flex-1 flex items-center justify-center gap-2 text-[var(--ink-muted)] opacity-60">
-                    <span class="w-full border-t border-dashed border-[var(--border-subtle)]"></span>
-                    <span class="font-serif-editorial text-xs">❖</span>
-                    <span class="w-full border-t border-dashed border-[var(--border-subtle)]"></span>
-                  </div>
-                  <div class="text-right">
-                    <div class="text-[11px] font-serif-editorial text-[#b94a3b] font-medium">目的地</div>
-                    <div class="font-serif-editorial text-2xl font-medium tracking-tight text-[var(--ink-primary)]">
-                      {{ city.name }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="py-1 flex items-center justify-between gap-4">
-                  <div class="space-y-1 flex-1 text-left">
-                    <div class="text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
-                      {{ city.epithet }}
-                    </div>
-                    <div v-if="city.latestNote" class="text-xs font-serif-editorial text-[var(--ink-primary)] line-clamp-1">
-                      “{{ city.latestNote }}”
-                    </div>
-                  </div>
-
-                  <div class="shrink-0 transform rotate-[-6deg] group-hover:rotate-0 transition-transform">
-                    <div class="border-2 border-[#b94a3b]/85 rounded-full w-20 h-20 p-0.5 flex items-center justify-center relative shadow-[inset_0_0_6px_rgba(185,74,59,0.18)] bg-[#b94a3b]/[0.02]">
-                      <div class="border border-[#b94a3b]/70 rounded-full w-full h-full flex flex-col items-center justify-center text-[#b94a3b] text-center select-none">
-                        <span class="text-[8px] font-serif-editorial font-bold tracking-widest">散页 藏</span>
-                        <span class="text-[11px] font-serif-editorial font-bold my-0.5">{{ city.latestVisitedAt }}</span>
-                        <span class="text-[8px] font-serif-editorial border-t border-[#b94a3b]/60 px-1 pt-0.5">
-                          {{ formatVisitStampCount(city.visitCount) }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pt-2.5 border-t border-[#D5CDC0]/60 dark:border-[#383430]/60 flex items-center justify-between text-[11px] font-serif-editorial text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)] transition-colors">
-                  <span>已钤印归册 · 编号 {{ city.code }}</span>
-                  <div class="flex items-center gap-1 font-medium text-[var(--ink-primary)]">
-                    <span>翻阅回忆抽屉 (4章节)</span>
-                    <ChevronRight class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 空白待启程备忘插槽卡片 (时间轴模式下同样优雅填充) -->
-            <div
+            <TicketPlaceholderSlot
               v-if="group.cities.length < 3"
-              @click="isAdmin ? (isAddModalOpen = true) : null"
-              class="relative bg-[var(--bg-archive)]/50 border-2 border-dashed border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs p-6 flex flex-col items-center justify-center text-center space-y-3 group transition-all"
-              :class="{ 'cursor-pointer': isAdmin }"
-            >
-              <div class="w-12 h-12 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center text-[var(--ink-muted)] group-hover:text-[var(--ink-primary)] group-hover:scale-105 transition-all">
-                <Plus class="w-5 h-5" />
-              </div>
-              <div class="space-y-1">
-                <h4 class="font-serif-editorial text-base font-medium text-[var(--ink-primary)]">
-                  下一站行历 · 虚位以待
-                </h4>
-                <p class="font-serif-editorial text-xs text-[var(--ink-muted)] max-w-xs">
-                  {{ isAdmin ? '“记录岁序流转，新的远方即将在此钤印。”' : '“岁序常新，记录下一站时光故事。”' }}
-                </p>
-              </div>
-              <span v-if="isAdmin" class="text-xs font-serif-editorial text-[var(--ink-secondary)] group-hover:text-[var(--ink-primary)]">
-                ＋ 装订下一站车票
-              </span>
-              <span v-else class="text-xs font-serif-editorial text-[var(--ink-muted)]">
-                静候下一段山海旅程
-              </span>
-            </div>
+              mode="timeline"
+              :isAdmin="isAdmin"
+              @add="openNewFootprintModal"
+            />
           </div>
         </div>
       </div>
@@ -1497,7 +1220,7 @@ onMounted(() => {
                   {{ fp.attachments?.length }} 张影像
                 </span>
                 <span v-if="isAdmin && (fp.total_spent || 0) > 0" class="px-1.5 py-0.5 rounded-xs border border-[var(--accent-warm)]/30 bg-[var(--accent-warm)]/5 text-[var(--accent-warm)]">
-                  旅途消费 ¥{{ (fp.total_spent! / 100).toFixed(2) }}
+                  旅途消费 ¥{{ formatMoney(fp.total_spent!) }}
                 </span>
                 <span v-if="!(fp.entries_count || 0) && !(fp.total_spent || 0)">查看城市相片、随笔与账单</span>
               </div>
@@ -1517,7 +1240,7 @@ onMounted(() => {
       :editingFootprint="editingFootprint"
       @close="isAddModalOpen = false; editingFootprint = null; addModalInitialCityCode = ''; addModalInitialCityName = ''"
       @saved="handleFootprintSaved"
-      @requestAuth="(cb) => emit('requestAuth', cb)"
+      @requestAuth="emit('requestAuth')"
     />
 
     <!-- 两级回忆抽屉组件 (支持省份与城市无缝穿梭与四章节聚合) -->

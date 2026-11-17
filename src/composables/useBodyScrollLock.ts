@@ -1,19 +1,18 @@
 /**
- * 弹窗滚动锁 (MOB-P1-66)
+ * 弹窗滚动锁与全局打开层计数 (MOB-P1-66)
  *
- * 此前只有灯箱（EditorialLightbox）锁定了 body 滚动，
- * 其余 17 个弹窗打开时**背景页面仍可滑动** ——
- * 手机上在弹窗里滑到底会带着背后的页面一起滚（iOS 还会橡皮筋回弹），
- * 关闭弹窗后页面位置错乱，体验像「没点中」。
- *
- * 这里做成计数式的共享 composable：
+ * 计数式共享 composable：
  * - 多个弹窗叠加时，只有第一个锁、最后一个解锁；
- * - 采用 `position: fixed` + 记录滚动位置的方式锁定，恢复后位置不跳。
+ * - 采用 `position: fixed` + 记录滚动位置的方式锁定，恢复后位置不跳；
+ * - 同步暴露响应式 `openModalCount`，供 App.vue 隐藏移动端底栏/FAB 并拦截 Cmd+K。
  */
-import { onBeforeUnmount, watch } from 'vue'
+import { onBeforeUnmount, readonly, ref, watch } from 'vue'
 
 let lockCount = 0
 let savedScrollY = 0
+const activeModalCount = ref(0)
+
+export const openModalCount = readonly(activeModalCount)
 
 function lockBodyScroll() {
   if (lockCount === 0) {
@@ -27,10 +26,12 @@ function lockBodyScroll() {
     body.style.overflowY = 'scroll'
   }
   lockCount++
+  activeModalCount.value = lockCount
 }
 
 function unlockBodyScroll() {
   lockCount = Math.max(0, lockCount - 1)
+  activeModalCount.value = lockCount
   if (lockCount === 0) {
     const body = document.body
     body.style.position = ''
@@ -44,8 +45,7 @@ function unlockBodyScroll() {
 }
 
 /**
- * 在弹窗打开期间锁定背景滚动。
- * @param open 弹窗是否打开
+ * 在弹窗打开期间锁定背景滚动并计入全局打开弹窗计数。
  */
 export function useBodyScrollLock(open: () => boolean) {
   let locked = false

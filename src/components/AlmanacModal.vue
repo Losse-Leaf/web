@@ -7,7 +7,7 @@ import {
   Printer,
 } from 'lucide-vue-next'
 import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
-import { formatMoney, getBeijingYear, parseOccurredDate } from '../utils/format'
+import { formatMoney, getBeijingYear, parseOccurredDate, getAttachmentThumbUrl } from '../utils/format'
 import type { AnnualAlmanacSummary } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
@@ -407,7 +407,7 @@ const formatDate = (dateStr?: string) => {
                 class="aspect-square bg-[var(--bg-subtle)] border border-[var(--border-subtle)] overflow-hidden rounded-xs"
               >
                 <img
-                  :src="photo.url"
+                  :src="getAttachmentThumbUrl(photo)"
                   loading="lazy"
                   class="w-full h-full object-cover"
                   alt="年度相片"
@@ -489,12 +489,3 @@ const formatDate = (dateStr?: string) => {
     </div>
   </div>
 </template>
-
-<style scoped>
-@media print {
-  body {
-    background-color: white !important;
-    color: black !important;
-  }
-}
-</style>

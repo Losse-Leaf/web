@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { X, ShieldAlert, ScanLine, KeyRound, ArrowRight } from 'lucide-vue-next'
+import { X, ShieldAlert, KeyRound, ArrowRight } from 'lucide-vue-next'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 import { redirectToOIDCLogin } from '../utils/auth'
 import type { SystemStatus } from '../types'
 
@@ -13,8 +14,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
-
-useBodyScrollLock(() => props.isOpen)
 
 const isOIDCEnabled = computed(() => Boolean(props.systemStatus?.oidc_enabled))
 
@@ -40,28 +39,22 @@ const handleOIDCLogin = () => {
   redirectToOIDCLogin()
 }
 
-const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen) {
-    e.preventDefault()
-    closeDialog()
-  }
-}
+useBodyScrollLock(() => props.isOpen)
+useEscapeClose(() => props.isOpen, closeDialog)
 
 watch(
   () => props.isOpen,
   (open) => {
     if (open) focusDialog()
     else restoreFocus()
-  }
+  },
 )
 
 onMounted(() => {
   focusDialog()
-  window.addEventListener('keydown', handleKeydown)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown)
   restoreFocus()
 })
 </script>
@@ -87,10 +80,10 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <h2 id="session-expired-title" class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
-              {{ isOIDCEnabled ? '需要验证主理人通行证' : '主理人会话已失效' }}
+              {{ isOIDCEnabled ? '需要验证主理人通行证' : '需要主理人会话权限' }}
             </h2>
             <p class="font-serif-editorial text-[11px] text-[var(--ink-muted)]">
-              {{ isOIDCEnabled ? '核验统一通行证以恢复或建立受信任会话' : '本浏览器需要重新配对后才能继续管理档案' }}
+              {{ isOIDCEnabled ? '核验统一通行证以恢复或建立受信任会话' : '当前浏览器未持有有效的主理人会话凭证' }}
             </p>
           </div>
         </div>
@@ -109,7 +102,7 @@ onBeforeUnmount(() => {
         class="space-y-4 font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed"
       >
         <p>
-          当前浏览器尚未建立有效的主理人会话，或原设备授权已过期。点击下方按钮通过 Vesper Auth 完成身份核验，即可直接恢复管理权限。
+          当前浏览器尚未建立有效的主理人会话，或原会话凭证已过期。点击下方按钮通过 Vesper Auth 完成身份核验，即可直接恢复管理权限。
         </p>
 
         <div class="space-y-2.5 font-mono-archive text-xs pt-1">
@@ -135,13 +128,13 @@ onBeforeUnmount(() => {
       <template v-else>
         <div class="space-y-3 font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
           <p class="flex items-start gap-2">
-            <ScanLine class="w-4 h-4 mt-0.5 shrink-0 text-[var(--accent-warm)]" />
+            <KeyRound class="w-4 h-4 mt-0.5 shrink-0 text-[var(--accent-warm)]" />
             <span>
-              请在一台已配对的设备上打开「设置 → 设备配对」，生成新的配对二维码或链接，再用本浏览器扫码或粘贴接入。
+              离线模式下，Web 浏览器的管理权限由首次认领签发的受保护 Cookie 会话承载（设备配对二维码仅供移动端与桌面客户端绑定使用）。
             </span>
           </p>
           <p class="text-[11px] font-mono-archive text-[var(--ink-muted)] border-t border-[var(--border-subtle)] pt-3">
-            若所有设备均已丢失，请使用服务端自救标志重开首次认领入口。
+            若本浏览器会话已过期或被清除，可通过服务端恢复参数重新开启首次认领入口以重签会话。
           </p>
         </div>
 

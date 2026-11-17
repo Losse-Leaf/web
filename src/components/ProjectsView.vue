@@ -6,7 +6,10 @@ import { createProject, updateProject, deleteProject, getAdminToken } from '../u
 import { parseOccurredDate } from '../utils/format'
 import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
+import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+import { useEscapeClose } from '../composables/useEscapeClose'
 import PaperSelect from './PaperSelect.vue'
+import PrivacyToggle from './PrivacyToggle.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -19,7 +22,7 @@ const emit = defineEmits<{
   (e: 'projectDeleted', id: number): void
   (e: 'selectEntry', entry: LifeEntry): void
   (e: 'openAddProjectEntry', projectId: number): void
-  (e: 'requestAuth', callback: () => void): void
+  (e: 'requestAuth'): void
 }>()
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
@@ -90,7 +93,7 @@ const projectStatusLabel = (raw?: string | null): string => normalizeProjectStat
 
 const openCreateModal = () => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => openCreateModal())
+    emit('requestAuth')
     return
   }
   editingId.value = null
@@ -108,7 +111,7 @@ const openCreateModal = () => {
 
 const openEditModal = (proj: Project) => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => openEditModal(proj))
+    emit('requestAuth')
     return
   }
   editingId.value = proj.id
@@ -124,6 +127,14 @@ const openEditModal = (proj: Project) => {
   isModalOpen.value = true
 }
 
+const handleCloseModal = () => {
+  if (isSubmitting.value) return
+  isModalOpen.value = false
+}
+
+useBodyScrollLock(() => isModalOpen.value)
+useEscapeClose(() => isModalOpen.value, handleCloseModal)
+
 const handleSave = async () => {
   if (!formTitle.value.trim()) {
     formError.value = '造物项目名称不能为空'
@@ -131,7 +142,7 @@ const handleSave = async () => {
   }
 
   if (!getAdminToken()) {
-    emit('requestAuth', () => handleSave())
+    emit('requestAuth')
     return
   }
 
@@ -161,10 +172,6 @@ const handleSave = async () => {
     }
     isModalOpen.value = false
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => handleSave())
-      return
-    }
     formError.value = err.message || '保存失败'
   } finally {
     isSubmitting.value = false
@@ -173,7 +180,7 @@ const handleSave = async () => {
 
 const handleDelete = async (id: number) => {
   if (!isAdmin.value) {
-    emit('requestAuth', () => handleDelete(id))
+    emit('requestAuth')
     return
   }
   const ok = await askConfirm({
@@ -188,10 +195,6 @@ const handleDelete = async (id: number) => {
     localProjects.value = localProjects.value.filter((p) => p.id !== id)
     emit('projectDeleted', id)
   } catch (err: any) {
-    if (!getAdminToken()) {
-      emit('requestAuth', () => handleDelete(id))
-      return
-    }
     await showAlert({ title: '删除失败', message: err.message || '删除失败', danger: true })
   }
 }
@@ -429,8 +432,11 @@ const isGitHubUrl = (url?: string) => {
     <!-- 新建 / 编辑造物项目模态框 (RG-10) -->
     <div
       v-if="isModalOpen"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="editingId ? '编辑造物项目' : '新建造物项目'"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
-      @click.self="isModalOpen = false"
+      @click.self="handleCloseModal"
     >
       <div class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-lg rounded-xs p-6 sm:p-8 text-left space-y-5">
         
@@ -438,7 +444,11 @@ const isGitHubUrl = (url?: string) => {
           <h3 class="font-serif-editorial text-xl font-medium text-[var(--ink-primary)]">
             {{ editingId ? '编辑造物项目' : '新建造物项目' }}
           </h3>
-          <button @click="isModalOpen = false" class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer">
+          <button
+            @click="handleCloseModal"
+            aria-label="关闭"
+            class="text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+          >
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -531,32 +541,15 @@ const isGitHubUrl = (url?: string) => {
             ></textarea>
           </div>
 
-          <div class="flex items-center justify-between px-3 py-2.5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40">
-            <div>
-              <div class="text-xs font-serif-archive text-[var(--ink-primary)]">仅自己可见（私密）</div>
-              <div class="text-[11px] font-mono-archive text-[var(--ink-faint)]">
-                开启后仅主理人登录可见，展厅公开时不会展示此造物项目
-              </div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="formIsPrivate"
-              @click="formIsPrivate = !formIsPrivate"
-              class="w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer shrink-0"
-              :class="formIsPrivate ? 'bg-[var(--ink-primary)]' : 'bg-[var(--border-strong)]'"
-            >
-              <span
-                class="block w-4 h-4 rounded-full bg-[var(--bg-archive)] transition-transform"
-                :class="formIsPrivate ? 'translate-x-5' : 'translate-x-0'"
-              />
-            </button>
-          </div>
+          <PrivacyToggle
+            v-model="formIsPrivate"
+            description="开启后仅主理人登录可见，展厅公开时不会展示此造物项目"
+          />
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border-subtle)]">
           <button
-            @click="isModalOpen = false"
+            @click="handleCloseModal"
             class="px-4 py-2 border border-[var(--border-subtle)] hover:border-[var(--border-divider)] rounded-xs font-mono-archive text-xs cursor-pointer text-[var(--ink-secondary)]"
           >
             取消

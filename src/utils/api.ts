@@ -29,23 +29,12 @@ import type {
   CategoriesResponse,
   CategoryScope,
   BackupItem,
+  AttachmentBindPayload,
 } from '../types'
 
 const API_BASE = '/api/v1'
-// 旧版：明文令牌落盘（仅用于兼容**尚未下发 Cookie 的旧服务端**）
-const ADMIN_TOKEN_KEY = 'looseleaf_admin_token'
-// MOB-P1-69：Cookie 会话标记 —— **不是凭据**，只用来判断「当前是不是主人」
+// MOB-P1-69：Cookie 会话标记 —— 不是凭据，只用来判断「当前是不是主人」
 const ADMIN_SESSION_KEY = 'looseleaf_admin_session'
-// MOB-P1-69：Cookie 会话模式下的占位符。绝不可当作令牌发送出去。
-const COOKIE_SESSION_MARKER = '__cookie_session__'
-
-function readStoredAdminToken(): string {
-  try {
-    return localStorage.getItem(ADMIN_TOKEN_KEY) || ''
-  } catch {
-    return ''
-  }
-}
 
 /** MOB-P1-69：是否已建立基于 HttpOnly Cookie 的会话 */
 function hasCookieSession(): boolean {
@@ -56,28 +45,18 @@ function hasCookieSession(): boolean {
   }
 }
 
-const adminTokenRef = ref<string>(hasCookieSession() ? COOKIE_SESSION_MARKER : readStoredAdminToken())
-
 /**
- * MOB-P1-xx：**响应式**的会话态。
- *
- * 之前 `Boolean(getAdminToken())` 这类 computed 在 Cookie 会话模式下**永远不失效** ——
- * `getAdminToken()` 在 Cookie 分支里只**写** `adminTokenRef`、不**读**它，
- * 于是 computed 收集不到任何响应式依赖，缓存的 true 永远留着。
- * 结果：登出 / 401 之后，界面仍显示主人专属入口，点进去立刻再 401。
- *
- * 现在把「是否有会话」放进一个 ref，computed 读它就能正常建立依赖。
+ * 响应式的会话态（真实凭据由同源 HttpOnly Cookie `looseleaf_session` 承载，JS 不可读）。
  */
-const sessionActiveRef = ref<boolean>(hasCookieSession() || readStoredAdminToken() !== '')
+const sessionActiveRef = ref<boolean>(hasCookieSession())
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key === ADMIN_TOKEN_KEY || e.key === ADMIN_SESSION_KEY || e.key === null) {
-      adminTokenRef.value = hasCookieSession() ? COOKIE_SESSION_MARKER : readStoredAdminToken()
+    if (e.key === ADMIN_SESSION_KEY || e.key === null) {
+      sessionActiveRef.value = hasCookieSession()
     }
     // WEB-7：跨标签页同步每页 ETag。entriesPageETags 是模块级内存对象，
     // 别的标签页写入/清除该键后这里重新读回，否则仍持旧值命中 304、复用旧 pageCache。
-    // 仅在 ETag 键变化时触发；解析失败（catch）保持原对象，不影响已有 token 监听。
     if (e.key === ENTRIES_ETAG_KEY) {
       try {
         const raw = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
@@ -103,104 +82,49 @@ if (typeof window !== 'undefined') {
   })
 }
 
+export function hasAdminSession(): boolean {
+  return sessionActiveRef.value
+}
+
 /**
- * 当前是否具备主理人权限。
- *
- * MOB-P1-69：Cookie 会话模式下返回的是一个**占位符**而不是真实令牌 ——
- * 既有的 60 余处 `Boolean(getAdminToken())` 守卫语义一字不变，
- * 而真正发请求的地方会因为「这是占位符」而不去设置 Authorization 头
- * （浏览器会自动带上 HttpOnly Cookie，令牌从此不落在 JS 能读到的地方）。
+ * 当前是否具备主理人权限（响应式依赖 sessionActiveRef，由同源 HttpOnly Cookie 承载鉴权）。
  */
-export function getAdminToken(): string {
-  // 读一下响应式的会话态 —— 这一句是让 `Boolean(getAdminToken())` 形式的
-  // computed 能正常失效的关键（见 sessionActiveRef 的说明）。
-  void sessionActiveRef.value
-  if (hasCookieSession()) {
-    adminTokenRef.value = COOKIE_SESSION_MARKER
-    return COOKIE_SESSION_MARKER
-  }
-  const stored = readStoredAdminToken()
-  if (adminTokenRef.value !== stored) {
-    adminTokenRef.value = stored
-  }
-  return adminTokenRef.value
+export function getAdminToken(): boolean {
+  return sessionActiveRef.value
 }
 
-/** 该「令牌」是否只是 Cookie 会话占位符（不可作为凭据发送） */
-function isCookieSessionOnly(token: string): boolean {
-  return token === COOKIE_SESSION_MARKER
-}
-
-/** 兼容路径：服务端未下发 Cookie 时才落盘明文令牌 */
-function setAdminToken(token: string): void {
-  const clean = token.trim()
-  if (!clean || isCookieSessionOnly(clean)) return
-  try {
-    localStorage.setItem(ADMIN_TOKEN_KEY, clean)
-  } catch {}
-  adminTokenRef.value = clean
-  sessionActiveRef.value = true
-}
-
-/** MOB-P1-69：标记「已建立 Cookie 会话」，并清掉历史遗留的明文令牌 */
+/** 标记「已建立 Cookie 会话」 */
 function markCookieSession(): void {
   try {
     localStorage.setItem(ADMIN_SESSION_KEY, '1')
   } catch {}
-  try {
-    localStorage.removeItem(ADMIN_TOKEN_KEY)
-  } catch {}
-  adminTokenRef.value = COOKIE_SESSION_MARKER
   sessionActiveRef.value = true
 }
 
-export function removeAdminToken(): void {
-  try {
-    localStorage.removeItem(ADMIN_TOKEN_KEY)
-  } catch {}
+/**
+ * 只清本地会话标记，不发登出请求（供 401 被动失效与主动登出共用）。
+ */
+function clearLocalCredential(): void {
   try {
     localStorage.removeItem(ADMIN_SESSION_KEY)
   } catch {}
-  adminTokenRef.value = ''
   sessionActiveRef.value = false
-  // MOB-P1-69：让服务端把 HttpOnly Cookie 一并清掉。
-  //
-  // MOB-P1-xx：注意这里的语义 —— 清除本地态（token / 会话标记）已由上面完成，
-  // 而服务端 LogoutSession 只清浏览器 Cookie、**不吊销** devices 表里的设备令牌
-  // （后端注释里写明这是有意设计）。所以这次登出是「清浏览器里的凭据」，
-  // 不是「吊销设备」。若把这两件事混为一谈，一个只读接口的偶发 401
-  // 就会把用户整个踢出主人态。
+}
+
+export function removeAdminToken(): void {
+  clearLocalCredential()
+  // 让服务端把 HttpOnly Cookie 一并清掉（不吊销 devices 表里的设备令牌）。
   void fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'same-origin' }).catch(() => {})
 }
 
 /**
- * MOB-P1-xx：只清**本地**凭据，不发登出请求。
- *
- * 401 只说明「这次请求没被认账」（令牌轮换、网关鉴权抖动……），
- * 不代表整个浏览器会话该被清掉 —— 之前 401 一律走 removeAdminToken()，
- * 而 removeAdminToken() 会连带 POST /auth/logout 把 HttpOnly Cookie 打死，
- * 于是一次只读接口的偶发 401 就把用户静默踢出主人态。
- */
-function clearLocalCredential(): void {
-  try {
-    localStorage.removeItem(ADMIN_TOKEN_KEY)
-  } catch {}
-  try {
-    localStorage.removeItem(ADMIN_SESSION_KEY)
-  } catch {}
-  adminTokenRef.value = ''
-  sessionActiveRef.value = false
-}
-
-/**
  * MOB-P1-69：探测服务端是否认账当前浏览器带的 HttpOnly Cookie。
- *
  * 只回传角色、不回传任何凭据，因此可以安全地在启动时调用。
  */
 type SessionProbe =
   | { kind: 'admin' }
   | { kind: 'not-admin' }
-  /** 探针本身失败（离线 / 网关 5xx / 旧服务端没这个路由）—— **不能**据此判定会话失效 */
+  /** 探针本身失败（离线 / 网关 5xx）—— 不能据此判定会话失效 */
   | { kind: 'unknown' }
 
 async function probeSessionCookie(): Promise<SessionProbe> {
@@ -211,9 +135,7 @@ async function probeSessionCookie(): Promise<SessionProbe> {
       credentials: 'same-origin',
       signal: controller.signal,
     })
-    // 401/403 才是「服务端明确说不认账」
     if (res.status === 401 || res.status === 403) return { kind: 'not-admin' }
-    // 5xx / 404（旧服务端未实现该路由）属于「探针不可用」，不是「会话失效」
     if (!res.ok) return { kind: 'unknown' }
     const json = await res.json()
     const data = json && typeof json === 'object' && 'data' in json ? json.data : json
@@ -221,31 +143,10 @@ async function probeSessionCookie(): Promise<SessionProbe> {
       ? { kind: 'admin' }
       : { kind: 'not-admin' }
   } catch {
-    // 网络不可达 / 超时 —— 探针没跑成，不代表 Cookie 失效
     return { kind: 'unknown' }
   } finally {
     clearTimeout(timer)
   }
-}
-
-/**
- * MOB-P1-69：登录 / 配对成功后建立会话。
- *
- * 优先使用服务端下发的 HttpOnly Cookie（令牌 JS 读不到 ⇒ 一次 XSS 也偷不走）；
- * 若服务端仍是旧版（不下发 Cookie），自动回落到旧的明文令牌路径，保证不兼容中断。
- */
-async function establishSession(token: string): Promise<void> {
-  const clean = token.trim()
-  if (!clean || isCookieSessionOnly(clean)) return
-  const probe = await probeSessionCookie()
-  if (probe.kind === 'admin') {
-    markCookieSession()
-    return
-  }
-  // 'unknown'（探针没跑成）与 'not-admin' 都先回落���明文令牌路径 ——
-  // 登录动作本身说明服务端认这个密钥，先用它保证可用；
-  // 下次 refreshSessionState 会按探针的真实结果校正。
-  setAdminToken(clean)
 }
 
 /** MOB-P1-69：启动时确认 Cookie 会话是否仍然有效（刷新页面后恢复主理人视角） */
@@ -257,33 +158,19 @@ export async function refreshSessionState(): Promise<boolean> {
     return true
   }
 
-  // MOB-P1-xx：探针**没跑成**（离线 / 网关 5xx / 旧服务端没有这个路由）
-  // 不等于「会话已失效」。
-  // 之前一律当作失效 ⇒ 一次网络抖动就把主理人视角清掉，
-  // 而 HttpOnly Cookie 其实还在、服务端仍然认账 ⇒ 网络一恢复主人态又凭空回来，
-  // 行为来回跳变。
   if (probe.kind === 'unknown') {
-    // 保留现状（不增不减），让 UI 维持当前认知，等网络恢复后自然校正。
-    return hasCookieSession() || readStoredAdminToken() !== ''
+    return sessionActiveRef.value
   }
 
-  // 服务端**明确**说不认账（401/403，或返回了 is_admin=false）
-  // ⇒ 这时必须把标记清掉，否则 UI 会一直以为「还是主人」，
-  // 直到下一次请求 401 才反应过来 —— 主理人视角会挂在不该出现的界面上。
-  if (hasCookieSession()) {
-    try {
-      localStorage.removeItem(ADMIN_SESSION_KEY)
-    } catch {}
-    adminTokenRef.value = readStoredAdminToken()
-    sessionActiveRef.value = adminTokenRef.value !== ''
+  if (hasCookieSession() || sessionActiveRef.value) {
+    clearLocalCredential()
   }
   return false
 }
 
 // 通用请求处理
-// MOB-P1-101：移动网络断连时 fetch 可能挂起数分钟（iOS 默认 ~300s），
-// 这里为所有 JSON 请求加上统一超时，避免页面永远转圈。
 const REQUEST_TIMEOUT_MS = 25_000
+const UPLOAD_TIMEOUT_MS = 120_000
 
 /** 兼容没有 AbortSignal.any 的老 Safari / 微信内核 */
 function anyAbortSignal(signals: AbortSignal[]): AbortSignal {
@@ -301,68 +188,66 @@ function anyAbortSignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal
 }
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = getAdminToken()
-  const authHeaders: Record<string, string> = {}
-  // MOB-P1-69：Cookie 会话模式下不发送令牌头 —— 同源请求会自动带上 HttpOnly Cookie
-  if (token && !isCookieSessionOnly(token)) {
-    authHeaders['Authorization'] = `Bearer ${token}`
-    authHeaders['X-Device-Token'] = token
+function notifyUnauthorizedIfNeeded(url: string, status: number): void {
+  if (status === 401 && !url.includes('/auth/claim')) {
+    clearLocalCredential()
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
+    }
   }
+}
 
+interface RawRequestOptions extends RequestInit {
+  timeoutMs?: number
+  allowNotModified?: boolean
+  abortReturnsNull?: boolean
+  errorPrefix?: string
+}
+
+async function rawRequest<T>(
+  url: string,
+  options: RawRequestOptions | undefined,
+  parseResponse: (res: Response) => Promise<T>,
+): Promise<T> {
+  const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
   const timeoutController = new AbortController()
-  const timer = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
-  // 外部 signal 与超时 signal 合并：有 AbortSignal.any 直接合，
-  // 老浏览器经 anyAbortSignal 转发 abort —— 两个中止来源都保留
-  //（原先降级分支直接换成 options.signal，25s 超时静默失效）。
+  const timer = setTimeout(() => timeoutController.abort(), timeoutMs)
   const signal: AbortSignal = options?.signal
     ? anyAbortSignal([options.signal, timeoutController.signal])
     : timeoutController.signal
 
+  const { timeoutMs: _t, allowNotModified, abortReturnsNull, errorPrefix, ...fetchInit } = options || {}
+
   try {
     const res = await fetch(url, {
-      ...options,
+      credentials: 'same-origin',
+      ...fetchInit,
       signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-        ...(options?.headers as Record<string, string> | undefined),
-      },
     })
 
+    if (allowNotModified && res.status === 304) {
+      return await parseResponse(res)
+    }
+
     if (!res.ok) {
-      if (res.status === 401 && !url.includes('/auth/claim')) {
-        // MOB-P1-xx：401 只清**本地**凭据，不做全局登出。
-        //
-        // 之前这里走 removeAdminToken()，而它会连带 POST /auth/logout 把 HttpOnly Cookie 打死
-        // ⇒ 任何一次只读接口的偶发 401（令牌轮换、网关鉴权抖动）都会把用户静默踢出主人态。
-        // 服务端的 LogoutSession 只清浏览器 Cookie、并不吊销 devices 表里的设备令牌，
-        // 所以那次「登出」既粗暴又没真正吊销任何东西。
-        clearLocalCredential()
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
-        }
-      }
-      let msg = `HTTP error ${res.status}`
+      notifyUnauthorizedIfNeeded(url, res.status)
+      let msg = errorPrefix ? `${errorPrefix} (HTTP ${res.status})` : `HTTP error ${res.status}`
       try {
         const errJson = await res.json()
-        if (errJson.message) msg = errJson.message
+        if (errJson?.message) msg = errJson.message
       } catch {
         // ignore
       }
       throw new Error(msg)
     }
 
-    // 响应体解析也必须留在 25 秒计时器内：只等响应头就清计时器，
-    // 服务端缓慢吐 body 时 res.json() 会无限挂起。
-    const json = await res.json()
-    // 兼容标准结构 { code: 200, message: "success", data: ... }
-    if (json && typeof json === 'object' && 'code' in json && 'data' in json) {
-      return json.data as T
-    }
-    return json as T
+    // 响应体解析也留在计时器内，防止服务端缓慢吐 body 时无限挂起
+    return await parseResponse(res)
   } catch (err: any) {
     if (err?.name === 'AbortError') {
+      if (abortReturnsNull) {
+        return null as T
+      }
       throw new Error('请求超时，请检查网络后重试')
     }
     throw err
@@ -371,385 +256,38 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   }
 }
 
-// 1. Life Entries
-// MOB-P0-17：原先所有 fetchEntries 调用共用一个模块级 AbortController，
-// 归档页（按年分页）会连带 abort 掉首页时间流的请求，导致首页被清空。
-// 现在由调用方（useArchive 的全量分页 / 单年补拉两条流程）各自持有
-// controller 传入 signal，fetchEntries 不再自行管理生命周期。
-
-const ENTRIES_ETAG_KEY = 'looseleaf_entries_etag'
-// WEB-7：缓存协商从「只有第 1 页」升级为「每页各存各的 ETag」。
-// 否则第 1 页命中 304 时，旧页（第 2 页以后）是否被跨设备修改完全无从得知。
-let entriesPageETags: Record<number, string> = {}
-try {
-  const raw = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
-  if (raw.trim().startsWith('{')) {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object') {
-      for (const [k, v] of Object.entries(parsed)) {
-        const page = Number(k)
-        if (Number.isFinite(page) && typeof v === 'string' && v) {
-          entriesPageETags[page] = v
-        }
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  return rawRequest<T>(
+    url,
+    {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options?.headers as Record<string, string> | undefined),
+      },
+    },
+    async (res) => {
+      const json = await res.json()
+      if (json && typeof json === 'object' && 'code' in json && 'data' in json) {
+        return json.data as T
       }
-    }
-  }
-} catch {}
-
-function persistEntriesPageETags(): void {
-  try {
-    localStorage.setItem(ENTRIES_ETAG_KEY, JSON.stringify(entriesPageETags))
-  } catch {}
+      return json as T
+    },
+  )
 }
 
-export function resetEntriesETag(): void {
-  entriesPageETags = {}
-  try {
-    localStorage.removeItem(ENTRIES_ETAG_KEY)
-  } catch {}
-}
-
-/**
- * 清空 localStorage 中的 API 快照，并删除 Workbox 运行时缓存。
- *
- * 恢复备份 / 登出时必须 await：Cache Storage 的删除是异步的，
- * 如果先 reload 再删，旧的 looseleaf-api 响应仍可能被新页面命中。
- * 这里只删除本项目命名空间（looseleaf-*），不碰 Workbox 预缓存。
- */
-export async function clearApiCache(): Promise<void> {
-  resetEntriesETag()
-  try {
-    localStorage.removeItem('looseleaf_cached_entries_v2')
-    localStorage.removeItem('looseleaf_cached_transactions_v2')
-    localStorage.removeItem('looseleaf_curator_profile')
-  } catch {}
-
-  if (typeof caches === 'undefined') return
-
-  try {
-    const cacheNames = await caches.keys()
-    await Promise.all(
-      cacheNames
-        .filter((name) => name.startsWith('looseleaf-'))
-        .map((name) => caches.delete(name)),
-    )
-  } catch {
-    // 隐私模式 / 无 Cache Storage 权限时静默失败，不阻塞恢复或登出。
-  }
-}
-
-export async function fetchEntries(params?: {
-  page?: number
-  page_size?: number
-  type?: string
-  category?: string
-  year?: string
+function xhrUploadFormData<T>(params: {
+  url: string
+  formData: FormData
+  onProgress?: (percent: number) => void
   signal?: AbortSignal
-  /** WEB-7：跳过 If-None-Match，用于「304 但没有本地页缓存」时强制取回该页 */
-  noCache?: boolean
-}): Promise<LifeEntry[] | null> {
-  // 竞态保护由调用方负责：传入 signal 时随请求透传（AbortSignal.any 合并超时）。
-  const signal = params?.signal
-
-  const query = new URLSearchParams()
-  if (params?.page) query.set('page', String(params.page))
-  if (params?.page_size) query.set('page_size', String(params.page_size))
-  if (params?.type && params.type !== 'all') query.set('type', params.type)
-  if (params?.category && params.category !== 'all') query.set('category', params.category)
-  if (params?.year && params.year !== 'all') query.set('year', params.year)
-
-  const url = `${API_BASE}/entries?${query.toString()}`
-
-  const token = getAdminToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-  // MOB-P1-69：Cookie 会话模式下不发送令牌头
-  if (token && !isCookieSessionOnly(token)) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
-  // WEB-7：默认列表的每一页都可以做缓存协商（不再只限第 1 页）。
-  // 每页 ETag 独立保存；若调用方要求 noCache（本地没有该页兜底数据）则跳过。
-  const page = params?.page || 1
-  const isDefaultList = !params?.type && !params?.category && !params?.year
-  if (isDefaultList && !params?.noCache && entriesPageETags[page]) {
-    headers['If-None-Match'] = entriesPageETags[page]
-  }
-
-  // 统一 25 秒超时：分页请求若挂死，不能永久占住启动顺序（原先前端只有 request()
-  // 带超时，fetchEntries 走裸 fetch，网络黑洞时首屏会一直等）。
-  // 老浏览器（Safari < 17.4 / Chrome < 116 / 旧微信内核）没有 AbortSignal.any，
-  // 原先直接调用会 TypeError，导致首页时间流请求全挂；经 anyAbortSignal 降级转发。
-  const timeoutController = new AbortController()
-  const timeoutTimer = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
-  const combinedSignal: AbortSignal = signal
-    ? anyAbortSignal([signal, timeoutController.signal])
-    : timeoutController.signal
-
-  try {
-    const res = await fetch(url, {
-      headers,
-      signal: combinedSignal,
-    })
-
-    // 命中 304 缓存协商：返回 null 告知调用方保持现有引用，跳过重渲染 (FE-10)
-    if (res.status === 304) {
-      return null
-    }
-
-    if (!res.ok) {
-      if (res.status === 401 && !url.includes('/auth/claim')) {
-        clearLocalCredential()
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('looseleaf-auth-expired'))
-        }
-      }
-      let msg = `HTTP error ${res.status}`
-      try {
-        const errJson = await res.json()
-        if (errJson.message) msg = errJson.message
-      } catch {}
-      throw new Error(msg)
-    }
-
-    const newEtag = res.headers.get('ETag')
-    if (isDefaultList && newEtag) {
-      entriesPageETags[page] = newEtag
-      persistEntriesPageETags()
-    }
-
-    const json = await res.json()
-    const data = (json && typeof json === 'object' && 'code' in json && 'data' in json) ? json.data : json
-    if (!Array.isArray(data?.entries)) {
-      throw new Error('fetchEntries: 响应缺少 entries 数组')
-    }
-    return data.entries
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      // MOB-P0-17：中断表示「本次结果作废」，必须返回 null（与 304 同义），
-      // 绝不能返回 [] —— 否则调用方会把既有时间流整片清空。
-      return null
-    }
-    throw err
-  } finally {
-    clearTimeout(timeoutTimer)
-  }
-}
-
-export async function fetchEntryById(id: number): Promise<LifeEntry> {
-  return request<LifeEntry>(`${API_BASE}/entries/${id}`)
-}
-
-export async function fetchOnThisDayEntries(): Promise<{
-  month: number
-  day: number
-  entries: LifeEntry[]
-}> {
-  const res = await request<{
-    month?: number
-    day?: number
-    entries?: LifeEntry[]
-  }>(`${API_BASE}/entries/on-this-day`)
-  return {
-    month: Number(res?.month || 0),
-    day: Number(res?.day || 0),
-    entries: Array.isArray(res?.entries) ? res.entries : [],
-  }
-}
-
-export async function searchGlobalArchive(
-  q: string,
-  limit = 30
-): Promise<{
-  query: string
-  entries: LifeEntry[]
-  footprints: Footprint[]
-  wishes: Wish[]
-  projects: Project[]
-}> {
-  const params = new URLSearchParams()
-  params.set('q', q)
-  params.set('limit', String(limit))
-  const res = await request<{
-    query?: string
-    entries?: LifeEntry[]
-    footprints?: Footprint[]
-    wishes?: Wish[]
-    projects?: Project[]
-  }>(`${API_BASE}/search?${params.toString()}`)
-  return {
-    query: res?.query ?? q,
-    entries: Array.isArray(res?.entries) ? res.entries : [],
-    footprints: Array.isArray(res?.footprints) ? res.footprints : [],
-    wishes: Array.isArray(res?.wishes) ? res.wishes : [],
-    projects: Array.isArray(res?.projects) ? res.projects : [],
-  }
-}
-
-/**
- * 从正文派生标题（朋友圈式发布：只填正文，标题取首行）
- *
- * 关键：这条规则必须与**后端、mac 端一致**，
- * 否则同一条记录在不同端标题会不一样，搜索与索引也对不上。
- */
-function deriveTitleFromContent(content: string, maxLength = 40): string {
-  if (!content) return ''
-  const firstLine = content.split('\n')[0] ?? ''
-  const trimmed = firstLine.trim()
-  if (!trimmed) return ''
-  const chars = Array.from(trimmed)
-  if (chars.length > maxLength) return chars.slice(0, maxLength).join('') + '…'
-  return trimmed
-}
-
-export async function createLifeEntry(data: {
-  type: string
-  title?: string
-  content: string
-  occurred_at?: string
-  location?: string
-  city_code?: string
-  city_name?: string
-  project_id?: number | null
-  wish_id?: number | null
-  footprint_id?: number | null
-  attachment_ids?: number[]
-  /**
-   * 显式声明「本次要解除全部附件绑定」
-   *
-   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
-   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
-   */
-  clear_attachments?: boolean
-  is_private?: boolean
-}): Promise<LifeEntry> {
-  // 朋友圈式发布：标题为空时从正文首行派生（与后端同一套规则）
-  const payload = {
-    ...data,
-    title: (data.title ?? '').trim() || deriveTitleFromContent(data.content ?? ''),
-  }
-  const result = await request<LifeEntry>(`${API_BASE}/entries`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-  resetEntriesETag()
-  return result
-}
-
-export async function updateLifeEntry(
-  id: number,
-  data: {
-    type?: string
-    title?: string
-    content?: string
-    occurred_at?: string
-    location?: string
-    city_code?: string
-    city_name?: string
-    project_id?: number | null
-    wish_id?: number | null
-    footprint_id?: number | null
-    clear_city?: boolean
-    attachment_ids?: number[]
-  /**
-   * 显式声明「本次要解除全部附件绑定」
-   *
-   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
-   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
-   */
-  clear_attachments?: boolean
-  is_private?: boolean
-  }
-): Promise<LifeEntry> {
-  const result = await request<LifeEntry>(`${API_BASE}/entries/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  resetEntriesETag()
-  return result
-}
-
-export async function deleteLifeEntry(id: number): Promise<boolean> {
-  await request(`${API_BASE}/entries/${id}`, {
-    method: 'DELETE',
-  })
-  resetEntriesETag()
-  return true
-}
-
-// 2. R2 Presigned Upload
-export async function cleanupUploads(objectKeys: string[]): Promise<void> {
-  if (objectKeys.length === 0) return
-  try {
-    await request(`${API_BASE}/uploads/cleanup`, {
-      method: 'POST',
-      body: JSON.stringify({ object_keys: objectKeys }),
-    })
-  } catch (err) {
-    console.warn('Upload cleanup request failed:', err)
-  }
-}
-
-export async function fetchStorageStatus(): Promise<StorageStatus> {
-  return request<StorageStatus>(`${API_BASE}/storage/status`)
-}
-
-export async function testStorageConfig(payload: StorageConfigPayload): Promise<{ status: string; message: string; latency_ms?: number }> {
-  return request<{ status: string; message: string; latency_ms?: number }>(`${API_BASE}/storage/test`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-}
-
-export async function updateStorageConfig(payload: StorageConfigPayload): Promise<StorageStatus> {
-  return request<StorageStatus>(`${API_BASE}/storage/config`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  })
-}
-
-export async function resetStorageConfig(): Promise<StorageStatus> {
-  return request<StorageStatus>(`${API_BASE}/storage/config`, {
-    method: 'DELETE',
-  })
-}
-
-export async function migrateStorageMedia(): Promise<{
-  uploaded_to_r2: number
-  downloaded_to_local: number
-  message: string
-}> {
-  return request<{
-    uploaded_to_r2: number
-    downloaded_to_local: number
-    message: string
-  }>(`${API_BASE}/storage/migrate`, {
-    method: 'POST',
-  })
-}
-
-// 统一文件上传接口：上传物理文件至后端 POST /api/v1/files/upload，返回相对路径 object_key 与临时签名 URL
-// MOB-P0-16：补上超时与取消能力 —— 移动网络下弱网上传会无限挂起，
-// 进度条永远停在某个百分比，用户既看不到错误也无法放弃。
-const UPLOAD_TIMEOUT_MS = 120_000
-
-export async function uploadUnifiedFile(
-  file: File,
-  folder: string = 'avatar',
-  onProgress?: (percent: number) => void,
-  signal?: AbortSignal
-): Promise<UnifiedUploadResult> {
+  errorPrefix: string
+  networkErrorMessage: string
+  parseErrorMessage: string
+}): Promise<T> {
+  const { url, formData, onProgress, signal, errorPrefix, networkErrorMessage, parseErrorMessage } = params
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('folder', folder)
-
     let settled = false
     const fail = (message: string) => {
       if (settled) return
@@ -787,44 +325,341 @@ export async function uploadUnifiedFile(
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const res = JSON.parse(xhr.responseText)
-          if (res.data) {
-            resolve(res.data)
+          if (res && typeof res === 'object' && 'data' in res && res.data) {
+            resolve(res.data as T)
           } else {
-            resolve(res)
+            resolve(res as T)
           }
         } catch {
-          reject(new Error('解析上传响应失败'))
+          reject(new Error(parseErrorMessage))
         }
       } else {
+        notifyUnauthorizedIfNeeded(url, xhr.status)
         try {
           const errRes = JSON.parse(xhr.responseText)
-          reject(new Error(errRes.message || `上传失败 (HTTP ${xhr.status})`))
+          reject(new Error(errRes.message || `${errorPrefix} (HTTP ${xhr.status})`))
         } catch {
-          reject(new Error(`上传失败 (HTTP ${xhr.status})`))
+          reject(new Error(`${errorPrefix} (HTTP ${xhr.status})`))
         }
       }
     }
 
-    xhr.onerror = () => {
-      fail('网络中断，上传请求失败')
-    }
-
-    xhr.ontimeout = () => {
-      fail('上传超时，请检查网络后重试')
-    }
-
-    xhr.onabort = () => {
-      fail('上传已取消')
-    }
+    xhr.onerror = () => fail(networkErrorMessage)
+    xhr.ontimeout = () => fail('上传超时，请检查网络后重试')
+    xhr.onabort = () => fail('上传已取消')
 
     xhr.timeout = UPLOAD_TIMEOUT_MS
-    xhr.open('POST', `${API_BASE}/files/upload`, true)
-    const token = getAdminToken()
-    // MOB-P1-69：Cookie 会话模式下不发送令牌头（同源 XHR 会自动带上 Cookie）
-    if (token && !isCookieSessionOnly(token)) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-    }
+    xhr.open('POST', url, true)
     xhr.send(formData)
+  })
+}
+
+// 1. Life Entries
+const ENTRIES_ETAG_KEY = 'looseleaf_entries_etag'
+let entriesPageETags: Record<number, string> = {}
+try {
+  const raw = localStorage.getItem(ENTRIES_ETAG_KEY) || ''
+  if (raw.trim().startsWith('{')) {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      for (const [k, v] of Object.entries(parsed)) {
+        const page = Number(k)
+        if (Number.isFinite(page) && typeof v === 'string' && v) {
+          entriesPageETags[page] = v
+        }
+      }
+    }
+  }
+} catch {}
+
+function persistEntriesPageETags(): void {
+  try {
+    localStorage.setItem(ENTRIES_ETAG_KEY, JSON.stringify(entriesPageETags))
+  } catch {}
+}
+
+export function resetEntriesETag(): void {
+  entriesPageETags = {}
+  try {
+    localStorage.removeItem(ENTRIES_ETAG_KEY)
+  } catch {}
+}
+
+/**
+ * 清空 localStorage 中的 API 快照，并删除 Workbox 运行时缓存。
+ */
+export async function clearApiCache(): Promise<void> {
+  resetEntriesETag()
+  try {
+    localStorage.removeItem('looseleaf_cached_entries_v2')
+    localStorage.removeItem('looseleaf_cached_transactions_v2')
+    localStorage.removeItem('looseleaf_curator_profile')
+  } catch {}
+
+  if (typeof caches === 'undefined') return
+
+  try {
+    const cacheNames = await caches.keys()
+    await Promise.all(
+      cacheNames
+        .filter((name) => name.startsWith('looseleaf-'))
+        .map((name) => caches.delete(name)),
+    )
+  } catch {
+    // 隐私模式 / 无 Cache Storage 权限时静默失败，不阻塞恢复或登出。
+  }
+}
+
+export async function fetchEntries(params?: {
+  page?: number
+  page_size?: number
+  type?: string
+  category?: string
+  year?: string
+  signal?: AbortSignal
+  /** WEB-7：跳过 If-None-Match，用于「304 但没有本地页缓存」时强制取回该页 */
+  noCache?: boolean
+}): Promise<LifeEntry[] | null> {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.page_size) query.set('page_size', String(params.page_size))
+  if (params?.type && params.type !== 'all') query.set('type', params.type)
+  if (params?.category && params.category !== 'all') query.set('category', params.category)
+  if (params?.year && params.year !== 'all') query.set('year', params.year)
+
+  const url = `${API_BASE}/entries?${query.toString()}`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  const page = params?.page || 1
+  const isDefaultList = !params?.type && !params?.category && !params?.year
+  if (isDefaultList && !params?.noCache && entriesPageETags[page]) {
+    headers['If-None-Match'] = entriesPageETags[page]
+  }
+
+  return rawRequest<LifeEntry[] | null>(
+    url,
+    {
+      headers,
+      signal: params?.signal,
+      allowNotModified: true,
+      abortReturnsNull: true,
+    },
+    async (res) => {
+      if (res.status === 304) {
+        return null
+      }
+
+      const newEtag = res.headers.get('ETag')
+      if (isDefaultList && newEtag) {
+        entriesPageETags[page] = newEtag
+        persistEntriesPageETags()
+      }
+
+      const json = await res.json()
+      const data = json && typeof json === 'object' && 'code' in json && 'data' in json ? json.data : json
+      if (!Array.isArray(data?.entries)) {
+        throw new Error('fetchEntries: 响应缺少 entries 数组')
+      }
+      return data.entries
+    },
+  )
+}
+
+export async function fetchEntryById(id: number): Promise<LifeEntry> {
+  return request<LifeEntry>(`${API_BASE}/entries/${id}`)
+}
+
+export async function fetchOnThisDayEntries(): Promise<{
+  month: number
+  day: number
+  entries: LifeEntry[]
+}> {
+  const res = await request<{
+    month?: number
+    day?: number
+    entries?: LifeEntry[]
+  }>(`${API_BASE}/entries/on-this-day`)
+  return {
+    month: Number(res?.month || 0),
+    day: Number(res?.day || 0),
+    entries: Array.isArray(res?.entries) ? res.entries : [],
+  }
+}
+
+export async function searchGlobalArchive(
+  q: string,
+  limit = 30,
+): Promise<{
+  query: string
+  entries: LifeEntry[]
+  footprints: Footprint[]
+  wishes: Wish[]
+  projects: Project[]
+}> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  const res = await request<{
+    query?: string
+    entries?: LifeEntry[]
+    footprints?: Footprint[]
+    wishes?: Wish[]
+    projects?: Project[]
+  }>(`${API_BASE}/search?${params.toString()}`)
+  return {
+    query: res?.query ?? q,
+    entries: Array.isArray(res?.entries) ? res.entries : [],
+    footprints: Array.isArray(res?.footprints) ? res.footprints : [],
+    wishes: Array.isArray(res?.wishes) ? res.wishes : [],
+    projects: Array.isArray(res?.projects) ? res.projects : [],
+  }
+}
+
+/**
+ * 从正文派生标题（朋友圈式发布：只填正文，标题取首行），与后端、mac 端一致。
+ */
+function deriveTitleFromContent(content: string, maxLength = 40): string {
+  if (!content) return ''
+  const firstLine = content.split('\n')[0] ?? ''
+  const trimmed = firstLine.trim()
+  if (!trimmed) return ''
+  const chars = Array.from(trimmed)
+  if (chars.length > maxLength) return chars.slice(0, maxLength).join('') + '…'
+  return trimmed
+}
+
+export async function createLifeEntry(
+  data: {
+    type: string
+    title?: string
+    content: string
+    occurred_at?: string
+    location?: string
+    city_code?: string
+    city_name?: string
+    project_id?: number | null
+    wish_id?: number | null
+    footprint_id?: number | null
+    is_private?: boolean
+  } & AttachmentBindPayload,
+): Promise<LifeEntry> {
+  const payload = {
+    ...data,
+    title: (data.title ?? '').trim() || deriveTitleFromContent(data.content ?? ''),
+  }
+  const result = await request<LifeEntry>(`${API_BASE}/entries`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  resetEntriesETag()
+  return result
+}
+
+export async function updateLifeEntry(
+  id: number,
+  data: {
+    type?: string
+    title?: string
+    content?: string
+    occurred_at?: string
+    location?: string
+    city_code?: string
+    city_name?: string
+    project_id?: number | null
+    wish_id?: number | null
+    footprint_id?: number | null
+    clear_city?: boolean
+    is_private?: boolean
+  } & AttachmentBindPayload,
+): Promise<LifeEntry> {
+  const result = await request<LifeEntry>(`${API_BASE}/entries/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  resetEntriesETag()
+  return result
+}
+
+export async function deleteLifeEntry(id: number): Promise<boolean> {
+  await request(`${API_BASE}/entries/${id}`, {
+    method: 'DELETE',
+  })
+  resetEntriesETag()
+  return true
+}
+
+// 2. Storage & Unified File Upload
+export async function cleanupUploads(objectKeys: string[]): Promise<void> {
+  if (objectKeys.length === 0) return
+  try {
+    await request(`${API_BASE}/uploads/cleanup`, {
+      method: 'POST',
+      body: JSON.stringify({ object_keys: objectKeys }),
+    })
+  } catch (err) {
+    console.warn('Upload cleanup request failed:', err)
+  }
+}
+
+export async function fetchStorageStatus(): Promise<StorageStatus> {
+  return request<StorageStatus>(`${API_BASE}/storage/status`)
+}
+
+export async function testStorageConfig(
+  payload: StorageConfigPayload,
+): Promise<{ status: string; message: string; latency_ms?: number }> {
+  return request<{ status: string; message: string; latency_ms?: number }>(`${API_BASE}/storage/test`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateStorageConfig(payload: StorageConfigPayload): Promise<StorageStatus> {
+  return request<StorageStatus>(`${API_BASE}/storage/config`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function resetStorageConfig(): Promise<StorageStatus> {
+  return request<StorageStatus>(`${API_BASE}/storage/config`, {
+    method: 'DELETE',
+  })
+}
+
+export async function migrateStorageMedia(): Promise<{
+  uploaded_to_r2: number
+  downloaded_to_local: number
+  message: string
+}> {
+  return request<{
+    uploaded_to_r2: number
+    downloaded_to_local: number
+    message: string
+  }>(`${API_BASE}/storage/migrate`, {
+    method: 'POST',
+  })
+}
+
+export async function uploadUnifiedFile(
+  file: File,
+  folder: string = 'avatar',
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<UnifiedUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('folder', folder)
+  return xhrUploadFormData<UnifiedUploadResult>({
+    url: `${API_BASE}/files/upload`,
+    formData,
+    onProgress,
+    signal,
+    errorPrefix: '上传失败',
+    networkErrorMessage: '网络中断，上传请求失败',
+    parseErrorMessage: '解析上传响应失败',
   })
 }
 
@@ -878,7 +713,10 @@ export async function createTransaction(data: {
 }
 
 // 3.1 Wishes (心愿单，公开只读与联动)
-export async function fetchWishes(params?: { kind?: string; status?: string }, signal?: AbortSignal): Promise<Wish[]> {
+export async function fetchWishes(
+  params?: { kind?: string; status?: string },
+  signal?: AbortSignal,
+): Promise<Wish[]> {
   const pageSize = 100
   let page = 1
   const all: Wish[] = []
@@ -900,29 +738,20 @@ export async function fetchWishes(params?: { kind?: string; status?: string }, s
   return all
 }
 
-export async function createWish(data: {
-  title: string
-  kind: 'item' | 'travel' | 'milestone'
-  note?: string
-  spec?: string
-  city_code?: string
-  city_name?: string
-  budget?: number
-  target_date?: string
-  /** 许下心愿的时刻（可选，支持补录过去的心愿） */
-  planted_at?: string
-  attachment_ids?: number[]
-  /**
-   * 显式声明「本次要解除全部附件绑定」
-   *
-   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
-   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
-   */
-  clear_attachments?: boolean
-  is_private?: boolean
-}): Promise<Wish> {
+export async function createWish(
+  data: {
+    title: string
+    kind: 'item' | 'travel' | 'milestone'
+    note?: string
+    spec?: string
+    city_code?: string
+    city_name?: string
+    budget?: number
+    target_date?: string
+    planted_at?: string
+    is_private?: boolean
+  } & AttachmentBindPayload,
+): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -931,18 +760,7 @@ export async function createWish(data: {
 
 export async function updateWish(
   id: number,
-  data: Partial<Wish> & {
-    attachment_ids?: number[]
-    /**
-     * 显式声明「本次要解除全部参考图绑定」
-     *
-     * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-     * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-     * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
-     * 于是在没有附件 UI 的 mac 编辑弹窗里改个标题也会把照片解绑。
-     */
-    clear_attachments?: boolean
-  }
+  data: Partial<Wish> & AttachmentBindPayload,
 ): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes/${id}`, {
     method: 'PUT',
@@ -969,21 +787,11 @@ export async function resolveWish(
     create_life_entry?: boolean
     create_footprint?: boolean
     entry_content?: string
-    attachment_ids?: number[]
-  /**
-   * 显式声明「本次要解除全部附件绑定」
-   *
-   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
-   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
-   */
-  clear_attachments?: boolean
     is_installment?: boolean
     installment_channel_code?: string
     installment_months?: number
     repayment_day?: number
-  }
+  } & AttachmentBindPayload,
 ): Promise<Wish> {
   return request<Wish>(`${API_BASE}/wishes/${id}/resolve`, {
     method: 'POST',
@@ -994,16 +802,11 @@ export async function resolveWish(
 export async function updateTransaction(
   id: number,
   data: Partial<Transaction> & {
-    /**
-     * 显式声明「本次要取消分期」
-     *
-     * 三态契约（四端统一）：单传 `is_installment: false` **不足以**表达「取消分期」——
-     * 不带 `clear_installment` 就保持原值；只有 `true` 才真的降级并清空账期字段。
-     */
+    /** 显式声明「本次要取消分期」（三态契约） */
     clear_installment?: boolean
     /** 显式清空城市归属（跨端统一契约 A），优先级高于 city_code 字段 */
     clear_city?: boolean
-  }
+  },
 ): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions/${id}`, {
     method: 'PUT',
@@ -1052,7 +855,7 @@ export async function updateProject(
     status?: string
     order?: number
     is_private?: boolean
-  }
+  },
 ): Promise<Project> {
   return request<Project>(`${API_BASE}/projects/${id}`, {
     method: 'PUT',
@@ -1083,11 +886,14 @@ export async function initPairingTicket(params?: {
 
 export async function pollPairingTicketStatus(ticket: string): Promise<PairStatusResult> {
   return request<PairStatusResult>(
-    `${API_BASE}/auth/pair/status?ticket=${encodeURIComponent(ticket)}`
+    `${API_BASE}/auth/pair/status?ticket=${encodeURIComponent(ticket)}`,
   )
 }
 
-export async function fetchPairQRCode(hubUrl: string, ticket: string): Promise<{
+export async function fetchPairQRCode(
+  hubUrl: string,
+  ticket: string,
+): Promise<{
   hub_url: string
   ticket: string
   qr_payload: string
@@ -1115,7 +921,7 @@ export async function revokeTrustedDevice(id: number): Promise<boolean> {
 
 export async function updateTrustedDeviceName(
   id: string | number,
-  name: string
+  name: string,
 ): Promise<TrustedDevice> {
   return request<TrustedDevice>(`${API_BASE}/auth/devices/${encodeURIComponent(String(id))}`, {
     method: 'PUT',
@@ -1152,12 +958,11 @@ export async function updateCuratorProfile(data: Partial<CuratorProfile>): Promi
   })
 }
 
-// 10. 系统生命周期与首台设备认领 (System Lifecycle & Device Claim)
+// 10. 系统生命周期与首台设备认领
 export async function fetchSystemStatus(): Promise<SystemStatus> {
   return request<SystemStatus>(`${API_BASE}/system/status`)
 }
 
-// 11. 浏览器设备名识别与首台设备认领 (Device Claim)
 function detectBrowserDeviceName(): string {
   if (typeof navigator === 'undefined') return 'Web Browser'
   const ua = navigator.userAgent || ''
@@ -1186,20 +991,17 @@ export async function claimDevice(data: ClaimPayload): Promise<ClaimResult> {
       platform: data.platform || 'web',
     }),
   })
-  if (res.device_token) {
-    // MOB-P1-69：优先建立 HttpOnly Cookie 会话
-    await establishSession(res.device_token)
-  }
+  markCookieSession()
   return res
 }
 
-// 12. 资产管理中枢、固定设备库与信贷渠道 (Assets, Gear & Credit Channels RC-53, FE-15, RG-20)
+// 12. 资产管理中枢、固定设备库与信贷渠道
 export async function fetchAssetsOverview(): Promise<AssetsOverview> {
   return request<AssetsOverview>(`${API_BASE}/assets/overview`)
 }
 
 export async function updateInitialLiquidBalance(
-  initial_liquid_balance: number
+  initial_liquid_balance: number,
 ): Promise<{ initial_liquid_balance: number }> {
   return request<{ initial_liquid_balance: number }>(`${API_BASE}/assets/liquid-balance`, {
     method: 'PUT',
@@ -1234,25 +1036,20 @@ export async function sellGearAsset(
     sold_price_cents: number
     sold_date?: string
     note?: string
-  }
+  },
 ): Promise<GearItem> {
-  return request<GearItem>(
-    `${API_BASE}/assets/gear/${encodeURIComponent(id)}/sell`,
-    {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }
-  )
+  return request<GearItem>(`${API_BASE}/assets/gear/${encodeURIComponent(id)}/sell`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }
 
-export async function deleteGearAsset(
-  id: string
-): Promise<{ id: string; deleted: boolean }> {
+export async function deleteGearAsset(id: string): Promise<{ id: string; deleted: boolean }> {
   return request<{ id: string; deleted: boolean }>(
     `${API_BASE}/assets/gear/${encodeURIComponent(id)}`,
     {
       method: 'DELETE',
-    }
+    },
   )
 }
 
@@ -1274,7 +1071,7 @@ export async function createCreditChannel(data: {
 
 export async function updateCreditChannel(
   id: number,
-  data: Partial<CreditChannel>
+  data: Partial<CreditChannel>,
 ): Promise<CreditChannel> {
   return request<CreditChannel>(`${API_BASE}/credit-channels/${id}`, {
     method: 'PUT',
@@ -1289,7 +1086,7 @@ export async function deleteCreditChannel(id: number): Promise<boolean> {
   return true
 }
 
-// 13. 空间旅游足迹与城市回忆抽屉 (Footprints & Atlas & Memory Drawer FE-12, FE-13)
+// 13. 空间旅游足迹与城市回忆抽屉
 export async function fetchFootprints(params?: {
   city_code?: string
   year?: number
@@ -1315,27 +1112,19 @@ export async function fetchProvinceMemoryDrawer(adcode: string): Promise<Provinc
   return request<ProvinceMemoryDrawerData>(`${API_BASE}/footprints/provinces/${adcode}/drawer`)
 }
 
-export async function createFootprint(data: {
-  city_code: string
-  city_name: string
-  visited_at: string
-  departed_at?: string
-  title?: string
-  note?: string
-  life_entry_id?: number
-  wish_id?: number
-  attachment_ids?: number[]
-  /**
-   * 显式声明「本次要解除全部附件绑定」
-   *
-   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传，
-   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
-   */
-  clear_attachments?: boolean
-  is_private?: boolean
-}): Promise<Footprint> {
+export async function createFootprint(
+  data: {
+    city_code: string
+    city_name: string
+    visited_at: string
+    departed_at?: string
+    title?: string
+    note?: string
+    life_entry_id?: number
+    wish_id?: number
+    is_private?: boolean
+  } & AttachmentBindPayload,
+): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -1353,19 +1142,9 @@ export async function updateFootprint(
     note: string
     life_entry_id: number | null
     wish_id: number | null
-    attachment_ids: number[]
-  /**
-   * 显式声明「本次要解除全部附件绑定」
-   *
-   * 关键：单传 `attachment_ids: []` **不足以**表达「解绑」——
-   * 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-   * 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传 ——
-   * 于是在没有附件 UI 的编辑弹窗里改个标题也会把照片解绑。
-   * 编辑时若最终附件列表为空（用户删光了照片），必须带上这个信号。
-   */
-    clear_attachments: boolean
     is_private: boolean
-  }>
+  }> &
+    AttachmentBindPayload,
 ): Promise<Footprint> {
   return request<Footprint>(`${API_BASE}/footprints/${id}`, {
     method: 'PUT',
@@ -1380,7 +1159,7 @@ export async function deleteFootprint(id: number, purge?: boolean): Promise<bool
   return true
 }
 
-// 14. 年度生活年鉴画卷 (Annual Almanac Summary FE-14)
+// 14. 年度生活年鉴画卷
 export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlmanacSummary> {
   const raw = await request<any>(`${API_BASE}/almanac/summary?year=${year}`)
 
@@ -1395,23 +1174,14 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
     : []
 
   const footprints: Footprint[] = Array.isArray(rawAtlas.footprints) ? rawAtlas.footprints : []
-
-  const fulfilledWishes: Wish[] = Array.isArray(rawWishes.wishes)
-    ? rawWishes.wishes
-    : []
-
-  const photos = Array.isArray(rawHighlights.photos)
-    ? rawHighlights.photos
-    : []
+  const fulfilledWishes: Wish[] = Array.isArray(rawWishes.wishes) ? rawWishes.wishes : []
+  const photos = Array.isArray(rawHighlights.photos) ? rawHighlights.photos : []
 
   const activeDays = Number(rawPrologue.active_days ?? rawPrologue.distinct_days ?? 0)
   const totalBudget = Number(rawWishes.total_budget ?? 0)
   const totalActual = Number(rawWishes.total_actual ?? 0)
   const wantingCount = Number(rawWishes.wanting_count ?? 0)
-
-  // 后端唯一权威键为百分比口径 wish_spending_ratio (BE-38 去除同义双键)
   const wishSpendingPercent = Number(rawFinances.wish_spending_ratio ?? 0)
-
   const categories = Array.isArray(rawFinances.categories) ? rawFinances.categories : []
 
   return {
@@ -1456,7 +1226,7 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
   }
 }
 
-// 15. 系统版本检测 (System Update Check · 管理端专用 RC-97)
+// 15. 系统版本检测 (管理端专用)
 export async function checkSystemUpdate(force?: boolean): Promise<UpdateCheckResult> {
   return request<UpdateCheckResult>(`${API_BASE}/system/update-check${force ? '?force=true' : ''}`)
 }
@@ -1478,20 +1248,6 @@ export async function createCategoryOption(data: {
   })
 }
 
-export async function updateCategoryOption(
-  id: number,
-  data: {
-    name?: string
-    sort_order?: number
-    rename_records?: boolean
-  }
-): Promise<CategoryOption> {
-  return request<CategoryOption>(`${API_BASE}/categories/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-}
-
 export async function deleteCategoryOption(id: number): Promise<boolean> {
   await request(`${API_BASE}/categories/${id}`, {
     method: 'DELETE',
@@ -1499,7 +1255,7 @@ export async function deleteCategoryOption(id: number): Promise<boolean> {
   return true
 }
 
-// 17. 全量 ZIP 备份与灾难恢复 (System Backup & Disaster Recovery)
+// 17. 全量 ZIP 备份与灾难恢复
 export async function fetchBackupList(): Promise<BackupItem[]> {
   const res = await request<BackupItem[]>(`${API_BASE}/system/backup/list`)
   return Array.isArray(res) ? res : []
@@ -1512,21 +1268,24 @@ export async function createBackupNow(): Promise<BackupItem> {
 }
 
 export async function deleteBackup(filename: string): Promise<BackupItem[]> {
-  const res = await request<BackupItem[]>(`${API_BASE}/system/backup/${encodeURIComponent(filename)}`, {
-    method: 'DELETE',
-  })
+  const res = await request<BackupItem[]>(
+    `${API_BASE}/system/backup/${encodeURIComponent(filename)}`,
+    {
+      method: 'DELETE',
+    },
+  )
   return Array.isArray(res) ? res : []
 }
 
 export async function restoreBackupByFilename(
-  filename: string
+  filename: string,
 ): Promise<{ message: string; filename: string; size: number }> {
   const res = await request<{ message: string; filename: string; size: number }>(
     `${API_BASE}/system/backup/restore`,
     {
       method: 'POST',
       body: JSON.stringify({ filename }),
-    }
+    },
   )
   await clearApiCache()
   return res
@@ -1534,80 +1293,31 @@ export async function restoreBackupByFilename(
 
 export async function restoreBackupByFile(
   file: File,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
 ): Promise<{ message: string; filename: string; size: number }> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    const formData = new FormData()
-    formData.append('file', file)
-
-    if (xhr.upload && onProgress) {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100)
-          onProgress(percent)
-        }
-      }
-    }
-
-    xhr.onload = async () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const res = JSON.parse(xhr.responseText)
-          await clearApiCache()
-          if (res.data) {
-            resolve(res.data)
-          } else {
-            resolve(res)
-          }
-        } catch {
-          reject(new Error('解析还原响应失败'))
-        }
-      } else {
-        try {
-          const errRes = JSON.parse(xhr.responseText)
-          reject(new Error(errRes.message || `恢复失败 (HTTP ${xhr.status})`))
-        } catch {
-          reject(new Error(`恢复失败 (HTTP ${xhr.status})`))
-        }
-      }
-    }
-
-    xhr.onerror = () => {
-      reject(new Error('网络中断，上传恢复文件失败'))
-    }
-
-    xhr.open('POST', `${API_BASE}/system/backup/restore`, true)
-    const token = getAdminToken()
-    // MOB-P1-69：Cookie 会话模式下不发送令牌头
-    if (token && !isCookieSessionOnly(token)) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-      xhr.setRequestHeader('X-Device-Token', token)
-    }
-    xhr.send(formData)
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await xhrUploadFormData<{ message: string; filename: string; size: number }>({
+    url: `${API_BASE}/system/backup/restore`,
+    formData,
+    onProgress,
+    errorPrefix: '恢复失败',
+    networkErrorMessage: '网络中断，上传恢复文件失败',
+    parseErrorMessage: '解析还原响应失败',
   })
+  await clearApiCache()
+  return res
 }
 
 export async function downloadBackup(filename: string): Promise<void> {
-  const token = getAdminToken()
-  const authHeaders: Record<string, string> = {}
-  // MOB-P1-69：Cookie 会话模式下不发送令牌头
-  if (token && !isCookieSessionOnly(token)) {
-    authHeaders['Authorization'] = `Bearer ${token}`
-    authHeaders['X-Device-Token'] = token
-  }
-  const res = await fetch(`${API_BASE}/system/backup/download/${encodeURIComponent(filename)}`, {
-    headers: authHeaders,
-  })
-  if (!res.ok) {
-    let msg = `下载备份失败 (HTTP ${res.status})`
-    try {
-      const err = await res.json()
-      if (err.message) msg = err.message
-    } catch {}
-    throw new Error(msg)
-  }
-  const blob = await res.blob()
+  const blob = await rawRequest<Blob>(
+    `${API_BASE}/system/backup/download/${encodeURIComponent(filename)}`,
+    {
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+      errorPrefix: '下载备份失败',
+    },
+    (res) => res.blob(),
+  )
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -1617,8 +1327,3 @@ export async function downloadBackup(filename: string): Promise<void> {
   document.body.removeChild(a)
   window.URL.revokeObjectURL(url)
 }
-
-
-
-
-

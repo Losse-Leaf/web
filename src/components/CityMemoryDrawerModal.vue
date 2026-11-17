@@ -10,9 +10,10 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { fetchCityMemoryDrawer, fetchProvinceMemoryDrawer, getAdminToken, deleteFootprint } from '../utils/api'
-import { formatMoney, parseOccurredDate } from '../utils/format'
+import { formatMoney, parseOccurredDate, getAttachmentThumbUrl } from '../utils/format'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import type { CityMemoryDrawerData, ProvinceMemoryDrawerData, Attachment } from '../types'
+import EditorialLightbox from './EditorialLightbox.vue'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
 
@@ -429,7 +430,7 @@ const handleDeleteFootprint = async (fp: any) => {
               class="w-24 h-24 sm:w-32 sm:h-32 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs overflow-hidden cursor-zoom-in transition-colors"
             >
               <img
-                :src="att.thumbnail_url || att.url"
+                :src="getAttachmentThumbUrl(att)"
                 width="128"
                 height="128"
                 loading="lazy"
@@ -511,17 +512,12 @@ const handleDeleteFootprint = async (fp: any) => {
       </div>
     </div>
 
-    <!-- 全屏暗房底片灯箱 (点击第二章相片唤起) -->
-    <div
-      v-if="activeLightboxUrl"
-      class="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-4 cursor-zoom-out"
-      @click.stop="activeLightboxUrl = ''"
-    >
-      <img
-        :src="activeLightboxUrl"
-        class="max-w-full max-h-[90vh] object-contain rounded-xs shadow-2xl"
-        alt="旅途底片大图"
-       loading="lazy" decoding="async">
-    </div>
+    <!-- 全屏暗房底片灯箱 (点击第二章相片唤起，纳入 LIFO Escape 栈) -->
+    <EditorialLightbox
+      :isOpen="Boolean(activeLightboxUrl)"
+      :imageUrl="activeLightboxUrl"
+      :title="displayName"
+      @close="activeLightboxUrl = ''"
+    />
   </div>
 </template>

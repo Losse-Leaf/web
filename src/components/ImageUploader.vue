@@ -4,6 +4,7 @@ import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { showAlert } from '../composables/useConfirm'
 import { compressClientImage } from '../utils/imageCompressor'
+import { getAttachmentThumbUrl } from '../utils/format'
 import type { Attachment } from '../types'
 
 const props = defineProps<{
@@ -34,7 +35,7 @@ const items = ref<UploadItem[]>(
     id: `existing-${att.id}`,
     name: att.original_filename || 'image',
     size: att.size || 0,
-    previewUrl: att.url,
+    previewUrl: getAttachmentThumbUrl(att),
     progress: 100,
     status: 'completed',
     attachmentId: att.id,

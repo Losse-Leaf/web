@@ -11,6 +11,88 @@ export function formatMoney(cents: number): string {
   return moneyFormatter.format((cents || 0) / 100)
 }
 
+/**
+ * 将以“分”为单位的金额转为表单输入框纯数字两位小数串（无千分位逗号，兼容 input[type=number]）
+ */
+export function centsToInputYuan(cents?: number | null, emptyWhenZero = false): string {
+  if (!cents) return emptyWhenZero ? '' : '0.00'
+  return (cents / 100).toFixed(2)
+}
+
+export interface ParseYuanOptions {
+  allowZero?: boolean
+  allowEmpty?: boolean
+  allowNegative?: boolean
+  fieldLabel?: string
+}
+
+/**
+ * 严格校验并将“元”输入串转换为整数“分”，统一拦截超过两位小数、科学计数法与安全整数溢出
+ */
+export function parseYuanToCents(
+  raw: string | number | null | undefined,
+  options?: ParseYuanOptions,
+): { ok: true; cents: number } | { ok: false; error: string } {
+  const label = options?.fieldLabel || '金额'
+  const text = String(raw ?? '').trim()
+  if (!text) {
+    if (options?.allowEmpty) return { ok: true, cents: 0 }
+    return { ok: false, error: `请输入有效的${label}` }
+  }
+
+  const pattern = options?.allowNegative ? /^-?\d+(\.\d{1,2})?$/ : /^\d+(\.\d{1,2})?$/
+  if (!pattern.test(text)) {
+    if (!options?.allowNegative && text.startsWith('-')) {
+      return { ok: false, error: `请输入有效的非负${label}` }
+    }
+    if (/^-?\d+\.\d{3,}$/.test(text)) {
+      return { ok: false, error: `${label}最多保留两位小数` }
+    }
+    return { ok: false, error: `请输入有效的${label}` }
+  }
+
+  const num = Number(text)
+  if (!Number.isFinite(num)) {
+    return { ok: false, error: `请输入有效的${label}` }
+  }
+
+  const cents = Math.round(num * 100)
+  if (!Number.isSafeInteger(cents)) {
+    return { ok: false, error: `${label}过大，请调小后重试` }
+  }
+
+  if (!options?.allowNegative) {
+    if (!options?.allowZero && cents <= 0) {
+      return { ok: false, error: `请输入大于 0 的${label}` }
+    }
+    if (options?.allowZero && cents < 0) {
+      return { ok: false, error: `请输入有效的非负${label}` }
+    }
+  }
+
+  return { ok: true, cents }
+}
+
+/**
+ * 格式化字节体积为人类可读单位 (如 1024 -> 1.0 KB)
+ */
+export function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
+}
+
+/**
+ * 统一取附件缩略图地址（列表/网格/上传器预览优先使用缩略图，避免拉取数 MB 原图阻塞渲染；灯箱才用 att.url）
+ */
+export function getAttachmentThumbUrl(
+  att?: { url?: string; thumbnail_url?: string } | null,
+): string {
+  if (!att) return ''
+  return att.thumbnail_url || att.url || ''
+}
+
 // ==========================================
 // 时区契约 (RC-134)：全站时间基准为中国北京时间 UTC+8
 // 后端返回带 +08:00 偏移的 ISO 串；无论浏览器处于何地，展示一律按北京时间还原，
