@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
+  BookOpen,
   ChevronDown,
   Menu,
   X,
@@ -22,6 +23,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'navigate', view: string): void
   (e: 'openAdd'): void
+  (e: 'openAlmanac'): void
+  (e: 'openProfile'): void
   (e: 'openStorageBackup', tab?: 'backup' | 'storage' | 'visibility'): void
   (e: 'openSearch'): void
   (e: 'openPairing'): void
@@ -39,34 +42,37 @@ const displaySiteName = computed(() => getSiteBrandName(props.config))
 
 const isAdmin = computed(() => Boolean(getAdminToken()))
 
-// 核心导航栏目（单轨统一；访客未登录时彻底不渲染私密资产管理 RC-53）
-// 注：登录/登出属身份态切换而非输入内容变化，此处保留既定语义不做常驻占位。
+const canShowAlmanac = computed(() => {
+  if (isAdmin.value) return true
+  const pub = props.config?.public_modules ?? []
+  return pub.includes('almanac')
+})
+
+// 核心导航栏目：仅保留「散页」与「记账」（访客若开放心愿单，第二入口展示心愿单）
 const navItems = computed(() => {
   if (isAdmin.value) {
     return [
-      { key: 'home', label: '时间流' },
-      { key: 'transactions', label: '资产' },
-      { key: 'wishes', label: '心愿' },
-      { key: 'atlas', label: '足迹' },
-      { key: 'projects', label: '项目' },
-      { key: 'about', label: '主理人' },
+      { key: 'home', label: '散页' },
+      { key: 'transactions', label: '记账' },
     ]
   }
   const pub = new Set(props.config?.public_modules || [])
   const items: { key: string; label: string }[] = []
-  if (pub.has('entries')) items.push({ key: 'home', label: '时间流' })
-  if (pub.has('wishes')) items.push({ key: 'wishes', label: '心愿' })
-  if (pub.has('footprints')) items.push({ key: 'atlas', label: '足迹' })
-  if (pub.has('projects')) items.push({ key: 'projects', label: '项目' })
-  if (pub.has('profile')) items.push({ key: 'about', label: '主理人' })
+  if (pub.has('entries')) items.push({ key: 'home', label: '散页' })
+  if (pub.has('wishes')) items.push({ key: 'transactions', label: '心愿单' })
   return items
 })
 
-// 辅助工具与设置（纯净无赘述；设备配对、数据备份、存储设置、检查更新仅管理端可见）
+// 辅助工具与设置（主理人资料、设备配对、数据备份、存储设置、检查更新仅管理端可见）
 const toolOptions = computed(() => {
   const opts: { key: string; label: string; action: () => void }[] = []
   if (isAdmin.value) {
     opts.push(
+      {
+        key: 'profile',
+        label: '主理人资料',
+        action: () => emit('openProfile'),
+      },
       {
         key: 'pair',
         label: '设备配对',
@@ -114,6 +120,10 @@ const handleOpenAdd = () => {
   mobileMenuOpen.value = false
 }
 
+const handleOpenAlmanac = () => {
+  emit('openAlmanac')
+  mobileMenuOpen.value = false
+}
 
 // 点击外部自动关闭下拉浮层
 const handleDocumentClick = (e: MouseEvent) => {
@@ -147,7 +157,7 @@ onUnmounted(() => {
   >
     <div class="max-w-5xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
       
-      <!-- 极简出版标识：纯净呈现品牌名，告别冗余口号 -->
+      <!-- 极简出版标识：纯净呈现品牌名 -->
       <button
         @click="setView('home')"
         class="text-left group cursor-pointer"
@@ -157,21 +167,22 @@ onUnmounted(() => {
         </span>
       </button>
 
-      <!-- 桌面端克制纯中文导航 -->
+      <!-- 桌面端克制纯中文导航：散页 / 记账 -->
       <nav class="hidden md:flex items-center gap-1.5 lg:gap-2">
         <button
           v-for="item in navItems"
           :key="item.key"
           @click="setView(item.key)"
-          class="relative text-sm tracking-wider transition-all duration-200 cursor-pointer py-1.5 px-2.5 lg:px-3 rounded-xs select-none"          :class="currentView === item.key 
-            ? 'text-[var(--ink-primary)] font-medium bg-[var(--bg-subtle)]/75 shadow-2xs after:content-[\'\'] after:absolute after:bottom-0 after:left-2.5 after:right-2.5 after:h-[2px] after:bg-[var(--accent-warm)]' 
+          class="relative text-sm tracking-wider transition-all duration-200 cursor-pointer py-1.5 px-3 lg:px-4 rounded-xs select-none"
+          :class="currentView === item.key 
+            ? 'text-[var(--ink-primary)] font-medium bg-[var(--bg-subtle)]/75 shadow-2xs after:content-[\'\'] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-[2px] after:bg-[var(--accent-warm)]' 
             : 'text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] hover:bg-[var(--bg-subtle)]/40'"
         >
           {{ item.label }}
         </button>
       </nav>
 
-      <!-- 右上角：[搜索] + [＋ 记录] + [设置⌄] + [暗房模式] + 雨声 + GitHub -->
+      <!-- 右上角：[搜索] + [年鉴] + [＋ 记录] + [主理人] + [设置⌄] + [暗房模式] -->
       <div class="hidden md:flex items-center gap-2.5 text-xs font-mono-archive text-[var(--ink-muted)]">
         
         <!-- 全局搜索入口 (支持 Cmd+K) -->
@@ -185,7 +196,18 @@ onUnmounted(() => {
           <kbd class="text-[11px] bg-[var(--bg-subtle)] px-1 rounded-xs border border-[var(--border-subtle)] opacity-70">⌘K</kbd>
         </button>
 
-        <!-- 全局「＋」新增入口 (负责添加东西) -->
+        <!-- 年度生活年鉴入口 -->
+        <button
+          v-if="canShowAlmanac"
+          @click="handleOpenAlmanac"
+          class="flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--border-divider)] bg-[var(--bg-archive)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
+          title="查看年度生活年鉴"
+        >
+          <BookOpen class="w-3.5 h-3.5" />
+          <span class="font-serif-editorial text-[13px]">年鉴</span>
+        </button>
+
+        <!-- 全局「＋」新增入口 -->
         <button
           @click="handleOpenAdd"
           class="flex items-center gap-1 text-xs py-1 px-2.5 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
@@ -203,7 +225,7 @@ onUnmounted(() => {
           <span>主理人</span>
         </div>
 
-        <!-- 设置/工具 ⌄ 二级轻量浮层 (仅管理员：设备配对 / 存储与备份 / 检查更新 / 退出) -->
+        <!-- 设置/工具 ⌄ 二级轻量浮层 -->
         <div v-if="toolOptions.length > 0" class="relative" ref="dropdownRef">
           <button
             @click.stop="isDropdownOpen = !isDropdownOpen"
@@ -216,7 +238,7 @@ onUnmounted(() => {
           <!-- 简洁、精致、克制的二级浮层菜单 -->
           <div
             v-if="isDropdownOpen"
-            class="absolute right-0 top-full mt-2 w-32 bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] py-1.5 z-50 rounded-xs animate-in fade-in duration-150"
+            class="absolute right-0 top-full mt-2 w-36 bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] py-1.5 z-50 rounded-xs animate-in fade-in duration-150"
             @click.stop
           >
             <div class="px-3 pb-1 mb-1 text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/60">
@@ -247,7 +269,7 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- 移动端右上角：搜索 + 暗房 + ＋ 与 菜单按钮 -->
+      <!-- 移动端右上角：搜索 + 年鉴 + 暗房 + ＋ 与 菜单按钮 -->
       <div class="flex items-center gap-1 sm:gap-2 md:hidden">
         <button
           @click="emit('openSearch')"
@@ -255,6 +277,14 @@ onUnmounted(() => {
           title="搜索"
         >
           <Search class="w-4 h-4" />
+        </button>
+        <button
+          v-if="canShowAlmanac"
+          @click="handleOpenAlmanac"
+          class="p-1.5 text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] cursor-pointer"
+          title="年度生活年鉴"
+        >
+          <BookOpen class="w-4 h-4" />
         </button>
         <button
           @click="emit('toggleTheme')"
@@ -287,7 +317,7 @@ onUnmounted(() => {
       v-if="mobileMenuOpen"
       class="md:hidden absolute top-full left-0 right-0 z-50 border-b border-[var(--border-subtle)] bg-[var(--bg-archive)] backdrop-blur-lg px-5 py-6 space-y-6 shadow-xl animate-in slide-in-from-top-2 duration-200"
     >
-      <!-- 快捷新增与身份状态 -->
+      <!-- 快捷新增与年鉴入口 -->
       <div class="space-y-2.5">
         <button
           @click="handleOpenAdd"
@@ -302,14 +332,15 @@ onUnmounted(() => {
       <div class="space-y-2">
         <div class="flex items-center justify-between text-[11px] font-mono-archive tracking-widest text-[var(--ink-muted)] border-b border-[var(--border-subtle)]/70 pb-1.5">
           <span>生活档案章节</span>
-          <span>CH. 01–06</span>
+          <span>CH. 01–02</span>
         </div>
         <div class="grid grid-cols-2 gap-2 text-sm font-serif-editorial">
           <button
             v-for="item in navItems"
             :key="item.key"
             @click="setView(item.key)"
-            class="text-left py-2.5 px-3 rounded-xs border transition-all flex items-center justify-between cursor-pointer"            :class="currentView === item.key 
+            class="text-left py-2.5 px-3 rounded-xs border transition-all flex items-center justify-between cursor-pointer"
+            :class="currentView === item.key 
               ? 'border-[var(--ink-primary)] bg-[var(--bg-subtle)] text-[var(--ink-primary)] font-semibold shadow-2xs' 
               : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)] hover:text-[var(--ink-primary)]'"
           >

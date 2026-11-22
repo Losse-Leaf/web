@@ -4,82 +4,59 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
-  Laptop,
+  CreditCard,
   SlidersHorizontal,
 } from 'lucide-vue-next'
 import {
   fetchTransactions,
   fetchTransactionSummary,
   deleteTransaction,
-  fetchAssetsOverview,
   fetchCreditChannels,
-  deleteGearAsset,
+  getAdminToken,
 } from '../utils/api'
 import type {
   Transaction,
   TransactionSummary,
-  CuratorProfile,
-  AssetsOverview,
   CreditChannel,
-  GearItem,
 } from '../types'
 import { useCategories } from '../composables/useCategories'
 import { askConfirm, showAlert } from '../composables/useConfirm'
 import { getBeijingNow } from '../utils/format'
-import { loadCuratorProfile } from '../utils/profile'
-import AssetsBalanceSheet from './ledger/AssetsBalanceSheet.vue'
 import MonthlyLedgerSection from './ledger/MonthlyLedgerSection.vue'
-import GearCatalogSection from './ledger/GearCatalogSection.vue'
-import GearAssetFormModal from './ledger/GearAssetFormModal.vue'
-import GearSellModal from './ledger/GearSellModal.vue'
 import TransactionEditModal from './ledger/TransactionEditModal.vue'
 
+const WishlistView = defineAsyncComponent(() => import('./WishlistView.vue'))
 const CreditChannelsModal = defineAsyncComponent(() => import('./CreditChannelsModal.vue'))
 
 const props = defineProps<{
-  profile?: CuratorProfile | null
   refreshKey?: number
+  wishesRefreshKey?: number
+  initialTab?: 'ledger' | 'wishes'
 }>()
 
 const emit = defineEmits<{
-  (e: 'openAdd'): void
+  (e: 'openAdd', kind?: 'transaction' | 'wish'): void
   (e: 'transactionDeleted', id: number): void
   (e: 'transactionUpdated', tx: Transaction): void
-  (e: 'gearChanged'): void
+  (e: 'wishResolved'): void
+  (e: 'requestAuth'): void
+  (e: 'tabChange', tab: 'ledger' | 'wishes'): void
 }>()
 
 const { loadCategories, openCategoryManager } = useCategories()
 
+const isAdmin = computed(() => Boolean(getAdminToken()))
 const currentDate = ref(getBeijingNow())
 const transactionsList = ref<Transaction[]>([])
 const summary = ref<TransactionSummary | null>(null)
 const isLoading = ref(false)
-const activeSubTab = ref<'ledger' | 'gear'>('ledger')
+const activeSubTab = ref<'ledger' | 'wishes'>(
+  isAdmin.value ? (props.initialTab || 'ledger') : 'wishes',
+)
 
 const isCreditModalOpen = ref(false)
-const assetsOverview = ref<AssetsOverview | null>(null)
 const creditChannels = ref<CreditChannel[]>([])
-
-const gearFilter = ref<'active' | 'sold' | 'all'>('active')
-const isAddGearModalOpen = ref(false)
-const sellingGear = ref<GearItem | null>(null)
 const editingTx = ref<Transaction | null>(null)
-
-const allGearItems = computed<GearItem[]>(() => {
-  if (assetsOverview.value?.gear_summary?.items) {
-    return assetsOverview.value.gear_summary.items
-  }
-  const profile = props.profile || loadCuratorProfile()
-  return profile.edc_gear || []
-})
-
-const activeGearCount = computed(
-  () => allGearItems.value.filter((g) => g.status !== 'sold').length,
-)
-
-const soldGearCount = computed(
-  () => allGearItems.value.filter((g) => g.status === 'sold').length,
-)
 
 const year = computed(() => currentDate.value.getUTCFullYear())
 const month = computed(() => currentDate.value.getUTCMonth() + 1)
@@ -92,32 +69,39 @@ const nextMonth = () => {
   currentDate.value = new Date(Date.UTC(year.value, month.value, 1))
 }
 
-let dataLoadSeq = 0
-let assetsLoadSeq = 0
+const switchTab = (tab: 'ledger' | 'wishes') => {
+  if (tab === 'ledger' && !isAdmin.value) {
+    emit('requestAuth')
+    return
+  }
+  activeSubTab.value = tab
+  emit('tabChange', tab)
+}
 
-const loadAssetsOverview = async () => {
-  const seq = ++assetsLoadSeq
+let dataLoadSeq = 0
+let channelsLoadSeq = 0
+
+const loadCreditChannels = async () => {
+  if (!isAdmin.value) return
+  const seq = ++channelsLoadSeq
   try {
-    const [overview, channels] = await Promise.all([
-      fetchAssetsOverview().catch(() => null),
-      fetchCreditChannels().catch(() => []),
-    ])
-    if (seq !== assetsLoadSeq) return
-    if (overview) assetsOverview.value = overview
+    const channels = await fetchCreditChannels().catch(() => [])
+    if (seq !== channelsLoadSeq) return
     creditChannels.value = channels
   } catch (err) {
-    console.error('Failed to load assets overview:', err)
+    console.error('Failed to load credit channels:', err)
   }
 }
 
 const loadData = async () => {
+  if (!isAdmin.value) return
   const seq = ++dataLoadSeq
   try {
     isLoading.value = true
     const [txs, sum] = await Promise.all([
       fetchTransactions({ year: year.value, month: month.value }),
       fetchTransactionSummary({ year: year.value, month: month.value }),
-      loadAssetsOverview(),
+      loadCreditChannels(),
     ])
     if (seq !== dataLoadSeq) return
     transactionsList.value = txs
@@ -128,6 +112,18 @@ const loadData = async () => {
     if (seq === dataLoadSeq) isLoading.value = false
   }
 }
+
+watch(
+  () => props.initialTab,
+  (nextTab) => {
+    if (!nextTab) return
+    if (!isAdmin.value) {
+      activeSubTab.value = 'wishes'
+      return
+    }
+    activeSubTab.value = nextTab
+  },
+)
 
 watch([year, month], () => {
   loadData()
@@ -141,32 +137,11 @@ watch(
 )
 
 onMounted(() => {
-  loadCategories()
-  loadData()
-})
-
-const handleGearCreatedOrSold = async () => {
-  emit('gearChanged')
-  await loadData()
-}
-
-const handleRemoveGear = async (item: GearItem) => {
-  if (!item.id) return
-  const ok = await askConfirm({
-    title: '移除设备',
-    message: `确定从固定资产库中移除「${item.name}」？`,
-    confirmText: '移除',
-    danger: true,
-  })
-  if (!ok) return
-  try {
-    await deleteGearAsset(item.id)
-    emit('gearChanged')
-    await loadAssetsOverview()
-  } catch (err: any) {
-    await showAlert({ title: '删除失败', message: err.message || '删除设备失败', danger: true })
+  if (isAdmin.value) {
+    loadCategories()
+    loadData()
   }
-}
+})
 
 const handleTransactionSaved = async (updated: Transaction) => {
   const idx = transactionsList.value.findIndex((t) => t.id === updated.id)
@@ -195,6 +170,13 @@ const removeTx = async (id: number) => {
   emit('transactionDeleted', id)
   await loadData()
 }
+
+const handleWishResolved = async () => {
+  if (isAdmin.value) {
+    await loadData()
+  }
+  emit('wishResolved')
+}
 </script>
 
 <template>
@@ -204,15 +186,25 @@ const removeTx = async (id: number) => {
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex flex-wrap items-baseline gap-3">
           <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
-            资产
+            {{ isAdmin ? '记账' : '心愿单' }}
           </h1>
           <span class="font-mono-archive text-xs tracking-widest text-[var(--ink-muted)]">
-            净资产大盘 · 收支台账 · 固定设备库
+            {{ isAdmin ? '日常流水 · 收支光谱 · 心愿单' : '好物 · 旅程 · 里程碑' }}
           </span>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2.5">
+        <div v-if="isAdmin" class="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
+            @click="isCreditModalOpen = true"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
+          >
+            <CreditCard class="w-3.5 h-3.5" />
+            <span>信贷渠道</span>
+          </button>
+
+          <button
+            type="button"
             @click="openCategoryManager('expense')"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer text-[var(--ink-secondary)] hover:text-[var(--ink-primary)]"
           >
@@ -221,35 +213,26 @@ const removeTx = async (id: number) => {
           </button>
 
           <button
-            @click="emit('openAdd')"
+            type="button"
+            @click="emit('openAdd', activeSubTab === 'wishes' ? 'wish' : 'transaction')"
             class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-mono-archive bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
           >
             <Plus class="w-3.5 h-3.5" />
-            <span>记一笔</span>
+            <span>{{ activeSubTab === 'wishes' ? '许下心愿' : '记一笔' }}</span>
           </button>
         </div>
       </div>
     </header>
 
-    <!-- 1. 个人资产负债总览表 -->
-    <AssetsBalanceSheet
-      :assetsOverview="assetsOverview"
-      :summary="summary"
-      :transactionsList="transactionsList"
-      :allGearItems="allGearItems"
-      :creditChannels="creditChannels"
-      v-model:activeSubTab="activeSubTab"
-      @openCreditModal="isCreditModalOpen = true"
-      @editTransaction="(tx) => (editingTx = tx)"
-      @liquidBalanceSaved="loadAssetsOverview"
-    />
-
-    <!-- 2. 二级子视图切换栏：月度收支台账 / 固定资产设备库 -->
-    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+    <!-- 二级子视图切换栏：日常流水 | 心愿单 -->
+    <div
+      v-if="isAdmin"
+      class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-4"
+    >
       <div class="flex items-center gap-6 text-sm font-serif-editorial">
         <button
           type="button"
-          @click="activeSubTab = 'ledger'"
+          @click="switchTab('ledger')"
           class="pb-1.5 transition-colors cursor-pointer flex items-center gap-2"
           :class="
             activeSubTab === 'ledger'
@@ -257,24 +240,21 @@ const removeTx = async (id: number) => {
               : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
           "
         >
-          <span>月度收支台账</span>
+          <span>日常流水</span>
           <span class="font-mono-archive text-xs text-[var(--ink-muted)]">({{ transactionsList.length }})</span>
         </button>
 
         <button
           type="button"
-          @click="activeSubTab = 'gear'"
+          @click="switchTab('wishes')"
           class="pb-1.5 transition-colors cursor-pointer flex items-center gap-2"
           :class="
-            activeSubTab === 'gear'
+            activeSubTab === 'wishes'
               ? 'text-[var(--ink-primary)] font-medium border-b-2 border-[var(--ink-primary)]'
               : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'
           "
         >
-          <span>固定资产设备库</span>
-          <span class="font-mono-archive text-xs text-[var(--ink-muted)]">
-            (在役 {{ assetsOverview?.gear_summary?.active_count ?? activeGearCount }})
-          </span>
+          <span>心愿单</span>
         </button>
       </div>
 
@@ -299,97 +279,45 @@ const removeTx = async (id: number) => {
           </button>
         </div>
       </div>
-
-      <div v-else class="flex flex-wrap items-center gap-2.5 text-xs font-mono-archive">
-        <div class="inline-flex items-center rounded-xs border border-[var(--border-subtle)] p-0.5 bg-[var(--bg-subtle)]/40">
-          <button
-            type="button"
-            @click="gearFilter = 'active'"
-            class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
-            :class="gearFilter === 'active' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
-          >
-            在役 ({{ activeGearCount }})
-          </button>
-          <button
-            type="button"
-            @click="gearFilter = 'sold'"
-            class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
-            :class="gearFilter === 'sold' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
-          >
-            已转售 ({{ soldGearCount }})
-          </button>
-          <button
-            type="button"
-            @click="gearFilter = 'all'"
-            class="px-2.5 py-1 rounded-xs transition-colors cursor-pointer whitespace-nowrap"
-            :class="gearFilter === 'all' ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium' : 'text-[var(--ink-muted)] hover:text-[var(--ink-primary)]'"
-          >
-            全部
-          </button>
-        </div>
-
-        <button
-          type="button"
-          @click="isAddGearModalOpen = true"
-          class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
-        >
-          <Laptop class="w-3.5 h-3.5" />
-          <span>录入新设备</span>
-        </button>
-      </div>
     </div>
 
     <!-- 视图 A：月度收支概览与流水台账 -->
     <MonthlyLedgerSection
-      v-if="activeSubTab === 'ledger'"
+      v-if="isAdmin && activeSubTab === 'ledger'"
       :year="year"
       :month="month"
       :summary="summary"
       :transactionsList="transactionsList"
       :isLoading="isLoading"
-      @openAdd="emit('openAdd')"
+      @openAdd="emit('openAdd', 'transaction')"
       @editTransaction="(tx) => (editingTx = tx)"
       @deleteTransaction="removeTx"
     />
 
-    <!-- 视图 B：随身与桌面固定资产设备库 -->
-    <GearCatalogSection
+    <!-- 视图 B：内嵌心愿单 -->
+    <WishlistView
       v-else
-      :allGearItems="allGearItems"
-      :gearFilter="gearFilter"
-      @sellGear="(item) => (sellingGear = item)"
-      @removeGear="handleRemoveGear"
+      :embedded="true"
+      :refreshKey="wishesRefreshKey"
+      @wishResolved="handleWishResolved"
+      @requestAuth="emit('requestAuth')"
     />
 
-    <!-- 模态框 A：录入新固定资产设备 -->
-    <GearAssetFormModal
-      :isOpen="isAddGearModalOpen"
-      :creditChannels="creditChannels"
-      @close="isAddGearModalOpen = false"
-      @created="handleGearCreatedOrSold"
-    />
-
-    <!-- 模态框 B：设备转售出二手回血 -->
-    <GearSellModal
-      :gear="sellingGear"
-      @close="sellingGear = null"
-      @sold="handleGearCreatedOrSold"
-    />
-
-    <!-- 模态框 C：修改账目 -->
+    <!-- 修改账目弹窗 -->
     <TransactionEditModal
+      v-if="isAdmin"
       :transaction="editingTx"
       :creditChannels="creditChannels"
       @close="editingTx = null"
       @saved="handleTransactionSaved"
     />
 
-    <!-- 信贷渠道与独立还款日管理抽屉 -->
+    <!-- 信贷渠道与独立还款日管理弹窗 -->
     <CreditChannelsModal
-      v-if="isCreditModalOpen"
+      v-if="isAdmin && isCreditModalOpen"
       :isOpen="isCreditModalOpen"
       @close="isCreditModalOpen = false"
-      @channelsUpdated="loadAssetsOverview"
+      @channelsUpdated="loadCreditChannels"
     />
   </div>
 </template>

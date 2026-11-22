@@ -5,7 +5,6 @@ import {
   Plus,
   Trash2,
   Edit2,
-  MapPin,
   ShieldCheck,
   Calendar,
   Compass,
@@ -20,6 +19,7 @@ const WishResolutionModal = defineAsyncComponent(() => import('./WishResolutionM
 
 const props = defineProps<{
   refreshKey?: number
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -182,10 +182,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left">
+  <div :class="embedded ? 'text-left' : 'max-w-5xl mx-auto px-4 sm:px-8 py-10 sm:py-20 text-left'">
     
-    <!-- 标头与操作 -->
-    <header class="pb-10 border-b border-[var(--border-subtle)] mb-10 space-y-4">
+    <!-- 独立页标头（非内嵌模式） -->
+    <header v-if="!embedded" class="pb-10 border-b border-[var(--border-subtle)] mb-10 space-y-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <h1 class="font-serif-editorial text-4xl sm:text-5xl font-normal text-[var(--ink-primary)]">
@@ -206,9 +206,23 @@ onMounted(() => {
       </div>
 
       <p class="font-serif-editorial text-xs text-[var(--ink-muted)] leading-relaxed">
-        生活的三维期冀：花钱可得的称手好物、需要闲暇与决心的山川行旅、心智进阶的人生里程碑。无截止死线，真实倒映生活向往。
+        生活的三维期冀：花钱可得的称手好物、需要闲暇与决心的远方旅程、心智进阶的人生里程碑。无截止死线，真实倒映生活向往。
       </p>
     </header>
+
+    <!-- 内嵌模式轻量工具行 -->
+    <div v-else class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <p class="font-serif-editorial text-xs text-[var(--ink-muted)] leading-relaxed">
+        生活的三维期冀：好物、旅程与里程碑。无截止死线，真实倒映生活向往。
+      </p>
+      <button
+        @click="openCreateWish"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono-archive border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-primary)] rounded-xs transition-colors cursor-pointer shrink-0"
+      >
+        <Plus class="w-3.5 h-3.5" />
+        <span>{{ isAdmin ? '许下心愿' : '许下心愿 (需登录)' }}</span>
+      </button>
+    </div>
 
     <!-- 统计大盘纸卡 -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 mb-10 font-mono-archive text-xs">
@@ -378,10 +392,6 @@ onMounted(() => {
             <div class="flex items-center gap-2">
               <span class="px-1.5 py-0.5 border border-[var(--border-subtle)] rounded-xs text-[var(--ink-muted)]">
                 {{ getKindLabel(w.kind) }}
-              </span>
-              <span v-if="w.city_name" class="flex items-center gap-1 text-[var(--ink-muted)]">
-                <MapPin class="w-3 h-3" />
-                <span>{{ w.city_name }}</span>
               </span>
               <span v-if="w.spec" class="text-[var(--ink-muted)]">
                 · {{ w.spec }}

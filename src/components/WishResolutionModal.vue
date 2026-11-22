@@ -43,9 +43,7 @@ const entryContent = ref('')
 
 // 联动开关
 const linkTransaction = ref(true)
-const linkGearAsset = ref(false)
 const linkLifeEntry = ref(true)
-const linkFootprint = ref(false)
 
 // 分期付款支持
 const isInstallment = ref(false)
@@ -68,9 +66,7 @@ watch(
       entryContent.value = `圆满达成向往的心愿《${w.title}》，生活又多了一份确切的欣喜。`
 
       linkTransaction.value = true
-      linkGearAsset.value = w.kind === 'item'
       linkLifeEntry.value = true
-      linkFootprint.value = w.kind === 'travel'
 
       isInstallment.value = false
       selectedChannelCode.value = 'huabei'
@@ -100,20 +96,16 @@ watch(resolutionType, (type) => {
     actualCostYuan.value = centsToInputYuan(props.wish.budget)
     actualTitle.value = props.wish.title
     linkTransaction.value = true
-    linkGearAsset.value = props.wish.kind === 'item'
-    // 从「理性拔草」切回达成路径时必须重置感言，否则拔草文案会残留进达成散页/足迹
     entryContent.value = `圆满达成向往的心愿《${props.wish.title}》，生活又多了一份确切的欣喜。`
   } else if (type === 'altered') {
     actualCostYuan.value = centsToInputYuan(props.wish.budget)
     actualTitle.value = ''
     linkTransaction.value = true
-    linkGearAsset.value = props.wish.kind === 'item'
     entryContent.value = `圆满达成向往的心愿《${props.wish.title}》，生活又多了一份确切的欣喜。`
   } else if (type === 'relinquished') {
     actualCostYuan.value = '0.00'
     actualTitle.value = props.wish.title
     linkTransaction.value = false
-    linkGearAsset.value = false
     isInstallment.value = false
     entryContent.value = `经过一段时间的沉淀，放下了对《${props.wish.title}》的执念。克制物欲，省下 100% 预算，回归生活本质。`
   }
@@ -189,9 +181,7 @@ const handleSubmit = async () => {
       actual_title: finalTitle,
       fulfilled_at: getBeijingISOString(fulfilledDate.value),
       create_transaction: linkTransaction.value && costCents > 0,
-      create_gear_asset: linkGearAsset.value && props.wish.kind === 'item',
       create_life_entry: linkLifeEntry.value,
-      create_footprint: linkFootprint.value && props.wish.kind === 'travel',
       entry_content: entryContent.value.trim() || undefined,
       is_installment: isInstallment.value && costCents > 0,
       installment_channel_code: isInstallment.value ? selectedChannelCode.value : undefined,
@@ -394,7 +384,7 @@ useEscapeClose(() => props.isOpen && Boolean(props.wish), handleClose)
           </div>
         </div>
 
-        <!-- 5. 方案 B 多模块联动勾选 -->
+        <!-- 5. 联动记录 -->
         <div class="space-y-2.5">
           <label class="block text-[11px] text-[var(--ink-muted)]">联动记录</label>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
@@ -406,25 +396,9 @@ useEscapeClose(() => props.isOpen && Boolean(props.wish), handleClose)
               <span>记入收支账目</span>
             </label>
 
-            <label
-              v-if="wish.kind === 'item' && resolutionType !== 'relinquished'"
-              class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors"
-            >
-              <input v-model="linkGearAsset" type="checkbox" />
-              <span>沉淀至固定资产库</span>
-            </label>
-
             <label class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors">
               <input v-model="linkLifeEntry" type="checkbox" />
               <span>记入生活散页</span>
-            </label>
-
-            <label
-              v-if="wish.kind === 'travel'"
-              class="flex items-center gap-2 p-2 bg-[var(--bg-archive)] border border-[var(--border-subtle)] rounded-xs cursor-pointer hover:border-[var(--ink-primary)] transition-colors"
-            >
-              <input v-model="linkFootprint" type="checkbox" />
-              <span>点亮山川足迹</span>
             </label>
           </div>
         </div>

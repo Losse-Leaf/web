@@ -2,27 +2,16 @@
 import { ref, computed, watch } from 'vue'
 import { X, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
-import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
-import CityPicker from './CityPicker.vue'
 import PrivacyToggle from './PrivacyToggle.vue'
 import EntryTransactionForm from './entry/EntryTransactionForm.vue'
-import EntryProjectForm from './entry/EntryProjectForm.vue'
 import EntryWishForm from './entry/EntryWishForm.vue'
-import {
-  matchCityFromLocation,
-  getFallbackDefaultCity,
-  resolveDefaultCity,
-  saveLastUsedCity,
-} from '../utils/cities'
 import {
   createLifeEntry,
   createTransaction,
-  createProject,
   createWish,
   fetchEntryById,
   fetchWishes,
-  fetchFootprints,
   fetchCreditChannels,
   getAdminToken,
 } from '../utils/api'
@@ -31,29 +20,23 @@ import {
   centsToInputYuan,
   getBeijingDateTimeString,
   getBeijingISOString,
-  parseOccurredDate,
   parseYuanToCents,
 } from '../utils/format'
-import type { LifeEntry, Transaction, Project, Wish, CreditChannel, Footprint } from '../types'
+import type { LifeEntry, Transaction, Wish, CreditChannel } from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
 
-export type EntryKind = 'life' | 'travel' | 'project' | 'wish' | 'transaction'
+export type EntryKind = 'life' | 'wish' | 'transaction'
 
 const props = defineProps<{
   isOpen: boolean
-  projects?: Project[]
   initialKind?: EntryKind | string
-  initialProjectId?: number | null
-  initialCityCode?: string
-  initialCityName?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'entryCreated', entry: LifeEntry): void
   (e: 'transactionCreated', tx: Transaction): void
-  (e: 'projectCreated', proj: Project): void
   (e: 'wishCreated', wish: Wish): void
   (e: 'requestAuth'): void
 }>()
@@ -61,9 +44,7 @@ const emit = defineEmits<{
 const {
   expenseCategories,
   incomeCategories,
-  gearCategories,
   paymentMethods,
-  projectCategories,
   loadCategories,
 } = useCategories()
 
@@ -75,21 +56,14 @@ const errorMsg = ref<string | null>(null)
 const title = ref('')
 const content = ref('')
 const location = ref('')
-const selectedCityCode = ref('')
-const selectedCityName = ref('')
-const userManuallyChangedCity = ref(false)
 const occurredAt = ref(getBeijingDateTimeString())
-const selectedProjectId = ref<number | null>(null)
-const selectedFootprintId = ref<number | null>(null)
 const isPrivate = ref(false)
 const attachmentIds = ref<number[]>([])
 
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
-const projectFormRef = ref<InstanceType<typeof EntryProjectForm> | null>(null)
 const wishFormRef = ref<InstanceType<typeof EntryWishForm> | null>(null)
 
 const getActiveUploader = () => {
-  if (selectedKind.value === 'project') return projectFormRef.value
   if (selectedKind.value === 'wish') return wishFormRef.value
   return imageUploaderRef.value
 }
@@ -103,10 +77,7 @@ interface EntryDraftPayload {
   title: string
   content: string
   location: string
-  city_code: string
-  city_name: string
   entryType: EntryKind
-  projectId: number | null
 }
 
 const saveDraftToStorage = () => {
@@ -118,10 +89,7 @@ const saveDraftToStorage = () => {
     title: title.value,
     content: content.value,
     location: location.value,
-    city_code: selectedCityCode.value,
-    city_name: selectedCityName.value,
     entryType: selectedKind.value,
-    projectId: selectedProjectId.value,
   }
   try {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
@@ -143,16 +111,6 @@ const restoreDraftFromStorage = (): boolean => {
     title.value = parsed.title || ''
     content.value = parsed.content || ''
     if (parsed.location) location.value = parsed.location
-    if (parsed.city_code) {
-      selectedCityCode.value = parsed.city_code
-      userManuallyChangedCity.value = true
-    }
-    if (parsed.city_name) {
-      selectedCityName.value = parsed.city_name
-    }
-    if (parsed.projectId !== undefined && selectedKind.value === 'project' && !props.initialProjectId) {
-      selectedProjectId.value = parsed.projectId
-    }
     hasRestoredDraft.value = true
     isResettingForm = false
     return true
@@ -194,16 +152,6 @@ const handleModalPaste = (e: ClipboardEvent) => {
   }
 }
 
-// 造物项目模式
-const projectMode = ref<'new' | 'entry'>('new')
-const projTitle = ref('')
-const projSubtitle = ref('')
-const projCategory = ref('开源项目')
-const projStatus = ref('进行中')
-const projDescription = ref('')
-const projStory = ref('')
-const projGithubUrl = ref('')
-
 // 心愿模式状态
 const wishKind = ref<'item' | 'travel' | 'milestone'>('item')
 const wishBudgetYuan = ref('')
@@ -216,13 +164,9 @@ const txType = ref<'expense' | 'income'>('expense')
 const txCategory = ref<string>('餐饮')
 const txPaymentMethod = ref<string>('')
 const txNote = ref<string>('')
-const syncToGear = ref(false)
-const gearCategory = ref('数码器材')
-const gearSpec = ref('')
 
 // 关联数据
 const availableWishes = ref<Wish[]>([])
-const availableFootprints = ref<Footprint[]>([])
 const creditChannels = ref<CreditChannel[]>([])
 const selectedWishId = ref<number | null>(null)
 const isInstallment = ref(false)
@@ -237,61 +181,21 @@ watch(txType, (newType) => {
   }
   if (newType === 'income') {
     selectedWishId.value = null
-    selectedFootprintId.value = null
     isInstallment.value = false
   }
 })
 
 const kindOptions: { key: EntryKind; label: string; desc: string }[] = [
   { key: 'life', label: '日常', desc: '身边小事、随笔思考与定格光影' },
-  { key: 'travel', label: '游历', desc: '山川行迹与漫游记忆，自动点亮或归并足迹图谱' },
-  { key: 'project', label: '造物', desc: '立项新造物或为进行中的项目撰写进展手记' },
   { key: 'wish', label: '心愿', desc: '许下好物、远方旅程或阶段里程碑心愿' },
-  { key: 'transaction', label: '账目', desc: '记录日常收支、旅行花销、信贷分期或固定资产' },
+  { key: 'transaction', label: '账目', desc: '记录日常收支与信贷分期' },
 ]
 
 function normalizeKind(raw?: string): EntryKind {
   if (!raw) return 'life'
-  if (raw === 'travel') return 'travel'
-  if (raw === 'project') return 'project'
   if (raw === 'wish') return 'wish'
   if (raw === 'transaction') return 'transaction'
   return 'life'
-}
-
-const applyDefaultCity = () => {
-  if (props.initialCityCode && props.initialCityName) {
-    userManuallyChangedCity.value = true
-    selectedCityCode.value = props.initialCityCode
-    selectedCityName.value = props.initialCityName
-    if (!location.value.trim()) {
-      location.value = props.initialCityName
-    }
-    return
-  }
-  userManuallyChangedCity.value = false
-  const fallback = getFallbackDefaultCity()
-  if (fallback) {
-    selectedCityCode.value = fallback.code
-    selectedCityName.value = fallback.name
-    if (!location.value.trim()) {
-      location.value = fallback.name
-    }
-  } else {
-    selectedCityCode.value = ''
-    selectedCityName.value = ''
-  }
-
-  resolveDefaultCity().then((resolved) => {
-    if (!userManuallyChangedCity.value && resolved) {
-      const prevName = selectedCityName.value
-      selectedCityCode.value = resolved.code
-      selectedCityName.value = resolved.name
-      if (!location.value.trim() || location.value.trim() === prevName) {
-        location.value = resolved.name
-      }
-    }
-  })
 }
 
 const loadAvailableWishes = async () => {
@@ -300,37 +204,6 @@ const loadAvailableWishes = async () => {
   } catch (err) {
     console.error('Failed to load available wishes:', err)
     availableWishes.value = []
-  }
-}
-
-const loadAvailableFootprints = async () => {
-  try {
-    const list = await fetchFootprints()
-    availableFootprints.value = Array.isArray(list) ? list.slice(0, 30) : []
-  } catch (err) {
-    console.warn('Failed to load available footprints:', err)
-    availableFootprints.value = []
-  }
-}
-
-const formatFootprintOptionLabel = (fp: Footprint) => {
-  const startStr = fp.visited_at ? parseOccurredDate(fp.visited_at).dateKey : ''
-  const endStr = fp.departed_at ? parseOccurredDate(fp.departed_at).dateKey : ''
-  const datePart = endStr && endStr !== startStr ? `${startStr} ~ ${endStr}` : startStr
-  const tripTitle = fp.title || (fp.note ? fp.note.slice(0, 16) : '旅程打卡')
-  return `${fp.city_name} · ${tripTitle} (${datePart})`
-}
-
-const onFootprintSelected = () => {
-  if (!selectedFootprintId.value) return
-  const fp = availableFootprints.value.find((f) => f.id === selectedFootprintId.value)
-  if (fp) {
-    userManuallyChangedCity.value = true
-    selectedCityCode.value = fp.city_code
-    selectedCityName.value = fp.city_name
-    if (!location.value.trim()) {
-      location.value = fp.city_name
-    }
   }
 }
 
@@ -350,29 +223,13 @@ const loadCreditChannelsList = async () => {
 }
 
 watch(
-  [() => props.isOpen, () => props.initialKind, () => props.initialProjectId],
-  ([open, initKind, initProjId]) => {
+  [() => props.isOpen, () => props.initialKind],
+  ([open, initKind]) => {
     if (open) {
       loadCategories()
       loadAvailableWishes()
-      loadAvailableFootprints()
       loadCreditChannelsList()
-      applyDefaultCity()
       selectedKind.value = normalizeKind(initKind)
-      if (initProjId) {
-        selectedKind.value = 'project'
-        projectMode.value = 'entry'
-        selectedProjectId.value = initProjId
-      } else if (props.projects && props.projects.length > 0 && selectedKind.value === 'project') {
-        projectMode.value = 'entry'
-        selectedProjectId.value = props.projects[0].id
-      } else if (props.projects && props.projects.length > 0) {
-        projectMode.value = 'entry'
-        selectedProjectId.value = null
-      } else {
-        projectMode.value = 'new'
-        selectedProjectId.value = null
-      }
       hasRestoredDraft.value = false
       restoreDraftFromStorage()
       errorMsg.value = null
@@ -393,7 +250,7 @@ const scheduleSaveDraft = () => {
 }
 
 watch(
-  [title, content, location, selectedCityCode, selectedCityName, selectedKind, selectedProjectId],
+  [title, content, location, selectedKind],
   () => {
     scheduleSaveDraft()
   },
@@ -415,18 +272,6 @@ const onWishSelected = () => {
   }
 }
 
-watch(selectedWishId, (val) => {
-  if (val && selectedFootprintId.value) {
-    selectedFootprintId.value = null
-  }
-})
-
-watch(selectedFootprintId, (val) => {
-  if (val && selectedWishId.value) {
-    selectedWishId.value = null
-  }
-})
-
 const effectiveRepaymentDay = computed(() => {
   const matched = creditChannels.value.find((c) => c.code === installmentChannel.value)
   return matched && matched.repayment_day > 0 ? matched.repayment_day : 10
@@ -437,33 +282,9 @@ const selectKind = (k: EntryKind) => {
   if (k !== 'transaction') {
     selectedWishId.value = null
   }
-  if (k !== 'travel' && k !== 'transaction') {
-    selectedFootprintId.value = null
-  }
-  if (k === 'project') {
-    projectMode.value = props.projects && props.projects.length > 0 ? 'entry' : 'new'
-    if (!selectedProjectId.value && props.projects && props.projects.length > 0) {
-      selectedProjectId.value = props.projects[0].id
-    }
-  } else if (selectedKind.value === 'project' && !props.initialProjectId) {
-    selectedProjectId.value = null
-  }
   attachmentIds.value = []
   selectedKind.value = k
   errorMsg.value = null
-}
-
-const handleEntryCitySelect = (city: { code: string; name: string }) => {
-  userManuallyChangedCity.value = true
-  const prevName = selectedCityName.value
-  selectedCityCode.value = city.code
-  selectedCityName.value = city.name
-  if (city.name && (!location.value.trim() || location.value.trim() === prevName)) {
-    location.value = city.name
-  }
-  if (city.code && city.name) {
-    saveLastUsedCity(city)
-  }
 }
 
 const resetForm = () => {
@@ -471,22 +292,8 @@ const resetForm = () => {
   selectedKind.value = normalizeKind(props.initialKind)
   title.value = ''
   content.value = ''
-  if (props.initialCityCode && props.initialCityName) {
-    userManuallyChangedCity.value = true
-    selectedCityCode.value = props.initialCityCode
-    selectedCityName.value = props.initialCityName
-    location.value = props.initialCityName
-  } else {
-    location.value = ''
-    selectedCityCode.value = ''
-    selectedCityName.value = ''
-  }
+  location.value = ''
   occurredAt.value = getBeijingDateTimeString()
-  selectedFootprintId.value = null
-  projectMode.value = props.initialProjectId || (props.projects && props.projects.length > 0) ? 'entry' : 'new'
-  selectedProjectId.value =
-    props.initialProjectId ||
-    (selectedKind.value === 'project' && props.projects?.length ? props.projects[0].id : null)
   attachmentIds.value = []
   isPrivate.value = false
   txAmount.value = ''
@@ -494,20 +301,10 @@ const resetForm = () => {
   txCategory.value = expenseCategories.value[0] || '餐饮'
   txPaymentMethod.value = paymentMethods.value[0] || ''
   txNote.value = ''
-  syncToGear.value = false
-  gearCategory.value = gearCategories.value[0] || '数码器材'
-  gearSpec.value = ''
   selectedWishId.value = null
   isInstallment.value = false
   installmentChannel.value = creditChannels.value[0]?.code || 'huabei'
   installmentMonths.value = 12
-  projTitle.value = ''
-  projSubtitle.value = ''
-  projCategory.value = projectCategories.value[0] || '开源项目'
-  projStatus.value = '进行中'
-  projDescription.value = ''
-  projStory.value = ''
-  projGithubUrl.value = ''
   wishKind.value = 'item'
   wishBudgetYuan.value = ''
   wishSpec.value = ''
@@ -580,8 +377,6 @@ const handleSubmit = async () => {
         payment_method: useInstallment ? undefined : txPaymentMethod.value,
         occurred_at: getBeijingISOString(occurredAt.value),
         wish_id: selectedWishId.value || undefined,
-        footprint_id: selectedFootprintId.value || undefined,
-        city_code: selectedCityCode.value || undefined,
         is_installment: useInstallment,
         installment_channel_code: useInstallment ? installmentChannel.value : undefined,
         installment_total_amount: useInstallment ? amountInCents : undefined,
@@ -589,13 +384,6 @@ const handleSubmit = async () => {
         installment_monthly_pay: useInstallment ? installmentPay : undefined,
         installment_remain_months: useInstallment ? installmentMonths.value : undefined,
         repayment_day: useInstallment ? repaymentDay : undefined,
-        link_gear_asset: txType.value === 'expense' && syncToGear.value,
-        gear_category:
-          txType.value === 'expense' && syncToGear.value ? gearCategory.value : undefined,
-        gear_spec:
-          txType.value === 'expense' && syncToGear.value
-            ? gearSpec.value.trim() || undefined
-            : undefined,
       })
 
       emit('transactionCreated', createdTx)
@@ -612,10 +400,6 @@ const handleSubmit = async () => {
   if (selectedKind.value === 'wish') {
     if (!title.value.trim()) {
       errorMsg.value = '请填写心愿名称'
-      return
-    }
-    if (wishKind.value === 'travel' && !selectedCityCode.value) {
-      errorMsg.value = '旅程心愿请选择目的地城市'
       return
     }
     const parsedBudget = parseYuanToCents(wishBudgetYuan.value, {
@@ -635,8 +419,6 @@ const handleSubmit = async () => {
         kind: wishKind.value,
         note: content.value.trim(),
         spec: wishKind.value === 'item' ? wishSpec.value.trim() || undefined : undefined,
-        city_code: wishKind.value === 'travel' ? selectedCityCode.value || undefined : undefined,
-        city_name: wishKind.value === 'travel' ? selectedCityName.value || undefined : undefined,
         budget: parsedBudget.cents,
         target_date: wishTargetDate.value || undefined,
         attachment_ids: attachmentIds.value.length > 0 ? attachmentIds.value : undefined,
@@ -662,123 +444,20 @@ const handleSubmit = async () => {
     return
   }
 
-  // 3. 提交造物 (Project)
-  if (selectedKind.value === 'project') {
-    if (projectMode.value === 'new') {
-      if (!projTitle.value.trim()) {
-        errorMsg.value = '造物项目名称不能为空'
-        return
-      }
-      try {
-        isSubmitting.value = true
-        const createdProj = await createProject({
-          title: projTitle.value.trim(),
-          subtitle: projSubtitle.value.trim(),
-          category: projCategory.value.trim() || '开源项目',
-          status: projStatus.value || '进行中',
-          description: projDescription.value.trim(),
-          story: projStory.value.trim(),
-          github_url: projGithubUrl.value.trim(),
-          is_private: isPrivate.value,
-        })
-
-        let createdEntry: LifeEntry | null = null
-        if (attachmentIds.value.length > 0) {
-          createdEntry = await createLifeEntry({
-            type: 'project',
-            title: projTitle.value.trim(),
-            content:
-              projDescription.value.trim() ||
-              projStory.value.trim() ||
-              `立项开启造物项目「${projTitle.value.trim()}」。`,
-            occurred_at: occurredAt.value,
-            project_id: createdProj.id,
-            attachment_ids: attachmentIds.value,
-            is_private: isPrivate.value,
-          })
-        }
-
-        projectFormRef.value?.markCommitted()
-        clearSavedDraft()
-        emit('projectCreated', createdProj)
-        if (createdEntry) {
-          emit('entryCreated', createdEntry)
-        }
-        forceClose()
-      } catch (err: any) {
-        errorMsg.value = err.message || '创建造物项目失败'
-      } finally {
-        isSubmitting.value = false
-      }
-      return
-    } else {
-      if (!selectedProjectId.value) {
-        errorMsg.value = '请选择关联的造物项目'
-        return
-      }
-      if (!content.value.trim() && attachmentIds.value.length === 0) {
-        errorMsg.value = '请填写造物手记内容或上传照片'
-        return
-      }
-      const targetProj = props.projects?.find((p) => p.id === selectedProjectId.value)
-      const defaultTitle = targetProj ? `${targetProj.title} · 造物手记` : '造物手记'
-      try {
-        isSubmitting.value = true
-        const createdEntry = await createLifeEntry({
-          type: 'project',
-          title: title.value.trim() || defaultTitle,
-          content: content.value.trim() || '记录造物阶段性进展。',
-          occurred_at: occurredAt.value,
-          project_id: selectedProjectId.value,
-          attachment_ids: attachmentIds.value,
-          is_private: isPrivate.value,
-        })
-        projectFormRef.value?.markCommitted()
-        clearSavedDraft()
-        emit('entryCreated', createdEntry)
-        forceClose()
-      } catch (err: any) {
-        errorMsg.value = err.message || '保存造物手记失败'
-      } finally {
-        isSubmitting.value = false
-      }
-      return
-    }
-  }
-
-  // 4. 提交日常 (life) 或 游历 (travel)
+  // 3. 提交日常 (life)
   if (!content.value.trim() && attachmentIds.value.length === 0) {
     errorMsg.value = '请填写记录内容或上传至少一张照片'
     return
   }
 
-  const matchedCity = !selectedCityCode.value ? matchCityFromLocation(location.value) : null
-  const finalCityCode = selectedCityCode.value || matchedCity?.code || undefined
-  const finalCityName = selectedCityName.value || matchedCity?.name || undefined
-  const finalLocation = location.value.trim() || finalCityName || ''
-
-  if (selectedKind.value === 'travel' && !finalCityCode) {
-    errorMsg.value = '游历记录请选择到访城市，以便点亮山川足迹图谱'
-    return
-  }
-
   try {
     isSubmitting.value = true
-    if (finalCityCode && finalCityName) {
-      saveLastUsedCity({ code: finalCityCode, name: finalCityName })
-    }
-
-    const defaultTravelTitle = finalCityName ? `行迹 · ${finalCityName}` : ''
     const created = await createLifeEntry({
-      type: selectedKind.value,
-      title: title.value.trim() || (selectedKind.value === 'travel' ? defaultTravelTitle : ''),
+      type: 'life',
+      title: title.value.trim(),
       content: content.value.trim() || '定格的瞬间。',
       occurred_at: getBeijingISOString(occurredAt.value),
-      location: finalLocation,
-      city_code: finalCityCode,
-      city_name: finalCityName,
-      footprint_id:
-        selectedKind.value === 'travel' ? selectedFootprintId.value || undefined : undefined,
+      location: location.value.trim(),
       attachment_ids: attachmentIds.value,
       is_private: isPrivate.value,
     })
@@ -845,14 +524,14 @@ const handleSubmit = async () => {
         </button>
       </div>
 
-      <!-- 顶部一步式形态切换栏 (日常 / 游历 / 造物 / 心愿 / 账目) -->
-      <div class="grid grid-cols-5 gap-1 sm:gap-1.5 p-1 bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] rounded-xs mb-6">
+      <!-- 顶部一步式形态切换栏 (日常 / 心愿 / 账目) -->
+      <div class="grid grid-cols-3 gap-1.5 p-1 bg-[var(--bg-subtle)]/60 border border-[var(--border-subtle)] rounded-xs mb-6">
         <button
           v-for="opt in kindOptions"
           :key="opt.key"
           type="button"
           @click="selectKind(opt.key)"
-          class="py-1.5 px-0.5 sm:px-2 text-[11px] sm:text-xs font-serif-editorial rounded-xs transition-all cursor-pointer text-center truncate"
+          class="py-1.5 px-2 text-xs font-serif-editorial rounded-xs transition-all cursor-pointer text-center truncate"
           :class="
             selectedKind === opt.key
               ? 'bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-2xs'
@@ -874,46 +553,18 @@ const handleSubmit = async () => {
           v-model:title="title"
           v-model:txPaymentMethod="txPaymentMethod"
           v-model:txNote="txNote"
-          v-model:selectedCityCode="selectedCityCode"
-          v-model:selectedFootprintId="selectedFootprintId"
           v-model:selectedWishId="selectedWishId"
           v-model:isInstallment="isInstallment"
           v-model:installmentChannel="installmentChannel"
           v-model:installmentMonths="installmentMonths"
-          v-model:syncToGear="syncToGear"
-          v-model:gearCategory="gearCategory"
-          v-model:gearSpec="gearSpec"
           v-model:occurredAt="occurredAt"
-          :availableFootprints="availableFootprints"
           :availableWishes="availableWishes"
           :creditChannels="creditChannels"
           :effectiveRepaymentDay="effectiveRepaymentDay"
-          @selectCity="handleEntryCitySelect"
-          @footprintSelected="onFootprintSelected"
           @wishSelected="onWishSelected"
         />
 
-        <!-- 分支 B：造物 -->
-        <EntryProjectForm
-          v-else-if="selectedKind === 'project'"
-          ref="projectFormRef"
-          :projects="projects"
-          v-model:projectMode="projectMode"
-          v-model:selectedProjectId="selectedProjectId"
-          v-model:title="title"
-          v-model:content="content"
-          v-model:occurredAt="occurredAt"
-          v-model:projTitle="projTitle"
-          v-model:projSubtitle="projSubtitle"
-          v-model:projCategory="projCategory"
-          v-model:projStatus="projStatus"
-          v-model:projDescription="projDescription"
-          v-model:projStory="projStory"
-          v-model:projGithubUrl="projGithubUrl"
-          @update:attachmentIds="attachmentIds = $event"
-        />
-
-        <!-- 分支 C：心愿 -->
+        <!-- 分支 B：心愿 -->
         <EntryWishForm
           v-else-if="selectedKind === 'wish'"
           ref="wishFormRef"
@@ -921,57 +572,13 @@ const handleSubmit = async () => {
           v-model:title="title"
           v-model:wishBudgetYuan="wishBudgetYuan"
           v-model:wishSpec="wishSpec"
-          v-model:selectedCityCode="selectedCityCode"
           v-model:wishTargetDate="wishTargetDate"
           v-model:content="content"
-          @selectCity="handleEntryCitySelect"
           @update:attachmentIds="attachmentIds = $event"
         />
 
-        <!-- 分支 D：日常 (life) 与 游历 (travel) -->
+        <!-- 分支 C：日常 (life) -->
         <template v-else>
-          <div v-if="selectedKind === 'travel'" class="p-3.5 rounded-xs border border-[var(--accent-warm)]/40 bg-[var(--bg-subtle)]/40 space-y-3">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-primary)] font-medium">
-                  到访城市 *
-                </label>
-                <CityPicker
-                  v-model="selectedCityCode"
-                  @select="handleEntryCitySelect"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-                  具体地点
-                </label>
-                <input
-                  v-model="location"
-                  type="text"
-                  class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-                />
-              </div>
-            </div>
-
-            <div v-if="availableFootprints.length > 0" class="space-y-1.5 pt-1 border-t border-[var(--border-subtle)]/60">
-              <label class="block text-xs font-mono-archive text-[var(--ink-secondary)]">
-                归属旅程足迹
-              </label>
-              <PaperSelect
-                v-model="selectedFootprintId"
-                size="sm"
-                @change="onFootprintSelected"
-                :options="[
-                  { value: null, label: '-- 自动聚合至同城近期旅程 / 开启新旅程 --' },
-                  ...availableFootprints.map((fp) => ({
-                    value: fp.id,
-                    label: formatFootprintOptionLabel(fp),
-                  })),
-                ]"
-              />
-            </div>
-          </div>
-
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               标题
@@ -1008,26 +615,16 @@ const handleSubmit = async () => {
               />
             </div>
 
-            <div v-if="selectedKind === 'life'" class="space-y-1.5">
+            <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-                所在城市
+                地点
               </label>
-              <CityPicker
-                v-model="selectedCityCode"
-                @select="handleEntryCitySelect"
+              <input
+                v-model="location"
+                type="text"
+                class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />
             </div>
-          </div>
-
-          <div v-if="selectedKind === 'life'" class="space-y-1.5">
-            <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              具体地点
-            </label>
-            <input
-              v-model="location"
-              type="text"
-              class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-            />
           </div>
         </template>
 

@@ -37,7 +37,6 @@ export const DEFAULT_PROFILE: CuratorProfile = {
   bio: '',
   email: '',
   github: '',
-  edc_gear: [],
 }
 
 export function loadCuratorProfile(): CuratorProfile {
@@ -46,14 +45,12 @@ export function loadCuratorProfile(): CuratorProfile {
     if (raw) {
       const parsed = JSON.parse(raw)
       const data = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed
-      const gears = Array.isArray(data.edc_gear) ? data.edc_gear : []
       return {
         ...DEFAULT_PROFILE,
         ...data,
         avatar_url: data.avatar_url || '',
         email: data.email || data.social_links?.email || '',
         github: data.github || data.social_links?.github || '',
-        edc_gear: gears,
       }
     }
   } catch {

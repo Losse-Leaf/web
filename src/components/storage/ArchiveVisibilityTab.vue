@@ -5,11 +5,9 @@ import type { SiteConfig } from '../../types'
 import { updateSiteConfig } from '../../utils/api'
 
 const PUBLIC_MODULE_OPTIONS = [
-  { key: 'entries', label: '时间流（散页）', desc: '公开展示未标记私密的日常、游历与手记' },
-  { key: 'projects', label: '造物与项目', desc: '公开展示未标记私密的项目卡片与故事' },
-  { key: 'footprints', label: '山川足迹', desc: '公开展示未标记私密的行迹与城市/省份抽屉（不含消费金额）' },
+  { key: 'entries', label: '散页（时间流）', desc: '公开展示未标记私密的日常与随笔记录' },
   { key: 'wishes', label: '心愿单', desc: '公开展示未标记私密的心愿状态（不含实际花费与关联账目）' },
-  { key: 'profile', label: '主理人档案', desc: '公开展示主理人简介、信条与随行装备清单（不含装备价格）' },
+  { key: 'profile', label: '主理人资料', desc: '公开展示主理人称谓、坐标与近况题记' },
   { key: 'almanac', label: '年度生活年鉴', desc: '公开展示年度回顾画卷（不含私密记录与财务收支）' },
 ]
 
@@ -67,7 +65,7 @@ const handleSaveVisibility = async () => {
         默认全站私有 · 按模块可选开放
       </div>
       <p class="text-xs text-[var(--ink-secondary)] leading-relaxed">
-        未勾选任何板块时，未配对访客无法访问任何档案内容；即便某个板块对外开放，单条标记为「仅自己可见（私密）」的记录仍对访客完全不可见。记账、资产、信贷渠道、设备管理与分类字典永远仅限主理人可见。
+        未勾选任何板块时，未配对访客无法访问任何档案内容；即便某个板块对外开放，单条标记为「仅自己可见（私密）」的记录仍对访客完全不可见。日常记账、信贷渠道与分类字典永远仅限主理人可见。
       </p>
     </div>
 

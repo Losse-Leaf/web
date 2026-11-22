@@ -3,7 +3,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   X,
   Calendar,
-  Compass,
   Printer,
 } from 'lucide-vue-next'
 import { fetchAnnualAlmanacSummary, getAdminToken } from '../utils/api'
@@ -84,16 +83,14 @@ const formatDate = (dateStr?: string) => {
   return parseOccurredDate(dateStr).dateKey.replace(/-/g, '.')
 }
 
-  // MOB-P1-66：弹窗打开期间锁定背景页面滚动（此前只有灯箱锁了）
-  useBodyScrollLock(() => props.isOpen)
-  // MOB-OPT-P2 (a11y): Escape 键关闭弹窗
-  useEscapeClose(() => props.isOpen, () => emit('close'))
+useBodyScrollLock(() => props.isOpen)
+useEscapeClose(() => props.isOpen, () => emit('close'))
 </script>
 
 <template>
   <div
     v-if="isOpen"
-    role="dialog" aria-modal="true" aria-label="年度黄历"
+    role="dialog" aria-modal="true" aria-label="年度生活年鉴"
     class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[var(--ink-primary)]/50 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="emit('close')"
   >
@@ -147,7 +144,7 @@ const formatDate = (dateStr?: string) => {
         {{ errorMsg }}
       </div>
 
-      <!-- 五幕生活长卷内容区 -->
+      <!-- 四幕生活长卷内容区 -->
       <div v-else-if="summary" class="space-y-16 print:space-y-12">
 
         <!-- 第一幕：岁月卷首 (Prologue) -->
@@ -185,9 +182,9 @@ const formatDate = (dateStr?: string) => {
               </span>
             </div>
             <div>
-              <span class="text-[var(--ink-muted)] block text-[11px]">点亮城市</span>
+              <span class="text-[var(--ink-muted)] block text-[11px]">达成心愿</span>
               <span class="font-serif-editorial text-2xl text-[var(--accent-moss)] font-medium">
-                {{ summary.atlas.total_cities }} <span class="text-xs text-[var(--ink-muted)]">座</span>
+                {{ summary.wishes.fulfilled_count }} <span class="text-xs text-[var(--ink-muted)]">项</span>
               </span>
             </div>
           </div>
@@ -199,65 +196,11 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第二幕：山川行迹 (Atlas) -->
+        <!-- 第二幕：心愿圆满 (Wishes) -->
         <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)] page-break-after print:pb-0 print:border-none">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT II · ATLAS
-            </span>
-            <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
-              山川行迹 · 丈量空间
-            </h2>
-            <p class="font-serif-editorial text-xs text-[var(--ink-muted)]">
-              这一年踏过的山水与城市记忆。
-            </p>
-          </div>
-
-          <div v-if="summary.atlas.cities.length === 0" class="text-xs font-mono-archive text-[var(--ink-muted)] py-6">
-            本年度暂未录入出行足迹。
-          </div>
-
-          <div v-else class="space-y-4">
-            <!-- 城市纸签流 -->
-            <div class="flex flex-wrap items-center gap-2 font-mono-archive text-xs">
-              <span
-                v-for="c in summary.atlas.cities"
-                :key="c.city_code"
-                class="px-2.5 py-1 bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-xs text-[var(--ink-primary)] flex items-center gap-1.5"
-              >
-                <Compass class="w-3 h-3 text-[var(--accent-warm)]" />
-                <span>{{ c.city_name }}</span>
-              </span>
-            </div>
-
-            <!-- 足迹时间线 -->
-            <div class="space-y-2 pt-2">
-              <div
-                v-for="f in summary.atlas.footprints"
-                :key="f.id"
-                class="p-3 bg-[var(--bg-subtle)]/30 border border-[var(--border-subtle)] rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono-archive text-xs"
-              >
-                <div class="flex items-center gap-2">
-                  <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                    {{ f.city_name }}
-                  </span>
-                  <span v-if="f.note" class="text-xs font-serif-editorial text-[var(--ink-secondary)] italic">
-                    · “{{ f.note }}”
-                  </span>
-                </div>
-                <span class="text-[11px] text-[var(--ink-muted)]">
-                  {{ formatDate(f.visited_at) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 第三幕：心愿圆满 (Wishes) -->
-        <section class="space-y-6 pb-12 border-b border-[var(--border-subtle)] page-break-after print:pb-0 print:border-none">
-          <div class="space-y-1">
-            <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT III · WISHES
+              ACT II · WISHES
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               心愿圆满 · 愿景沉淀
@@ -303,14 +246,14 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第四幕：浮光掠影 (Highlights) -->
+        <!-- 第三幕：浮光掠影 (Highlights) -->
         <section
           class="space-y-6 page-break-after print:pb-0 print:border-none"
           :class="isAdmin ? 'pb-12 border-b border-[var(--border-subtle)]' : 'pb-4'"
         >
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT IV · HIGHLIGHTS
+              ACT III · HIGHLIGHTS
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               浮光掠影 · 四季流转
@@ -417,11 +360,11 @@ const formatDate = (dateStr?: string) => {
           </div>
         </section>
 
-        <!-- 第五幕：柴米油盐 (Finances，仅主理人可见 RC-57) -->
+        <!-- 第四幕：柴米油盐 (Finances，仅主理人可见 RC-57) -->
         <section v-if="isAdmin" class="space-y-6 pb-6">
           <div class="space-y-1">
             <span class="text-xs font-mono-archive tracking-widest text-[var(--ink-muted)] uppercase block">
-              ACT V · FINANCES
+              ACT IV · FINANCES
             </span>
             <h2 class="font-serif-editorial text-2xl text-[var(--ink-primary)] font-medium">
               柴米油盐 · 财务平衡

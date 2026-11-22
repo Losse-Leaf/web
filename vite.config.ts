@@ -88,13 +88,6 @@ export default defineConfig({
           if (id.includes('node_modules/vue/') || id.includes('node_modules/@vue/')) {
             return 'vendor-vue'
           }
-          // MOB-P2-77：城市字典单独成 chunk。
-          // 它的所有使用者都是懒加载组件，独立 chunk 可以与首屏**并行下载**，
-          // 不会阻塞首屏渲染（实测：保留独立 chunk 时首屏 entry 127KB，
-          // 字典 34KB 并行拉取；把它内联进 entry 反而变成 157KB 阻塞首屏）。
-          if (id.includes('src/utils/cities')) {
-            return 'atlas-cities-data'
-          }
         },
       },
     },

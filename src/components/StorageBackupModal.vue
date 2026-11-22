@@ -235,7 +235,7 @@ useEscapeClose(() => props.isOpen, () => emit('close'))
             class="px-1.5 py-0.2 rounded-xs text-[11px] font-mono-archive"
             :class="activeTab === 'visibility' ? 'bg-white/20 text-white' : 'bg-[var(--bg-subtle)] text-[var(--ink-muted)]'"
           >
-            {{ publicModules.length }}/6
+            {{ publicModules.length }}/4
           </span>
         </button>
       </div>

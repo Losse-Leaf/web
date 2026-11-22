@@ -2,14 +2,12 @@
 import { ref } from 'vue'
 import ImageUploader from '../ImageUploader.vue'
 import PaperDatePicker from '../PaperDatePicker.vue'
-import CityPicker from '../CityPicker.vue'
 
 defineProps<{
   wishKind: 'item' | 'travel' | 'milestone'
   title: string
   wishBudgetYuan: string
   wishSpec: string
-  selectedCityCode: string
   wishTargetDate: string
   content: string
 }>()
@@ -19,11 +17,9 @@ const emit = defineEmits<{
   (e: 'update:title', val: string): void
   (e: 'update:wishBudgetYuan', val: string): void
   (e: 'update:wishSpec', val: string): void
-  (e: 'update:selectedCityCode', val: string): void
   (e: 'update:wishTargetDate', val: string): void
   (e: 'update:content', val: string): void
   (e: 'update:attachmentIds', ids: number[]): void
-  (e: 'selectCity', city: { code: string; name: string }): void
 }>()
 
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
@@ -95,14 +91,6 @@ defineExpose({
           @input="emit('update:wishSpec', ($event.target as HTMLInputElement).value)"
           type="text"
           class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
-        />
-      </div>
-      <div v-if="wishKind === 'travel'" class="space-y-1.5">
-        <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">目的地城市 *</label>
-        <CityPicker
-          :modelValue="selectedCityCode"
-          @update:modelValue="emit('update:selectedCityCode', $event)"
-          @select="emit('selectCity', $event)"
         />
       </div>
       <div class="space-y-1.5">

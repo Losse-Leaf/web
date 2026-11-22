@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { Search, X, Calendar, ArrowRight, MapPin, Sparkles, FolderGit2, Loader2 } from 'lucide-vue-next'
-import type { LifeEntry, Footprint, Wish, Project } from '../types'
+import { Search, X, Calendar, ArrowRight, Sparkles, Loader2 } from 'lucide-vue-next'
+import type { LifeEntry, Wish } from '../types'
 import { searchGlobalArchive } from '../utils/api'
 import { filterEntriesBySearch } from '../composables/useArchive'
 import { parseOccurredDate, formatMoney } from '../utils/format'
@@ -23,9 +23,7 @@ const debouncedQuery = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 const isSearchingRemote = ref(false)
 const remoteEntries = ref<LifeEntry[]>([])
-const remoteFootprints = ref<Footprint[]>([])
 const remoteWishes = ref<Wish[]>([])
-const remoteProjects = ref<Project[]>([])
 let debounceTimer: number | null = null
 let activeSearchReqId = 0
 
@@ -34,13 +32,10 @@ watch(query, (newQ) => {
   if (debounceTimer) clearTimeout(debounceTimer)
   const trimmed = newQ.trim()
   if (!trimmed) {
-    // 手动删空输入也作废旧请求，避免在途响应把上一条 query 的结果写回
     activeSearchReqId++
     debouncedQuery.value = ''
     remoteEntries.value = []
-    remoteFootprints.value = []
     remoteWishes.value = []
-    remoteProjects.value = []
     isSearchingRemote.value = false
     return
   }
@@ -52,9 +47,7 @@ watch(query, (newQ) => {
       const res = await searchGlobalArchive(trimmed, 30)
       if (reqId === activeSearchReqId) {
         remoteEntries.value = res.entries || []
-        remoteFootprints.value = res.footprints || []
         remoteWishes.value = res.wishes || []
-        remoteProjects.value = res.projects || []
       }
     } catch {
       // 远端检索失败时平滑回退至本地缓存过滤
@@ -70,7 +63,6 @@ onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
 })
 
-// 融合本地即时检索与服务端全量历史归档检索 (RC-23 / FE-05)
 const results = computed<LifeEntry[]>(() => {
   const localMatches = filterEntriesBySearch(props.entries, debouncedQuery.value)
   if (remoteEntries.value.length === 0) return localMatches
@@ -92,36 +84,22 @@ const results = computed<LifeEntry[]>(() => {
 })
 
 const hasAnyResults = computed(() => {
-  return (
-    results.value.length > 0 ||
-    remoteFootprints.value.length > 0 ||
-    remoteWishes.value.length > 0 ||
-    remoteProjects.value.length > 0
-  )
+  return results.value.length > 0 || remoteWishes.value.length > 0
 })
 
-// 键盘导航：按显示顺序拍平四组结果（生活印记 → 山川足迹 → 心愿清单 → 造物项目）
 type FlatResult =
   | { kind: 'entry'; item: LifeEntry }
-  | { kind: 'footprint'; item: Footprint }
   | { kind: 'wish'; item: Wish }
-  | { kind: 'project'; item: Project }
 
 const flatResults = computed<FlatResult[]>(() => [
   ...results.value.map((item) => ({ kind: 'entry' as const, item })),
-  ...remoteFootprints.value.map((item) => ({ kind: 'footprint' as const, item })),
   ...remoteWishes.value.map((item) => ({ kind: 'wish' as const, item })),
-  ...remoteProjects.value.map((item) => ({ kind: 'project' as const, item })),
 ])
 
-// 各组在 flatResults 中的起始偏移，用于把组内局部 index 映射回全局 index
-const footprintOffset = computed(() => results.value.length)
-const wishOffset = computed(() => footprintOffset.value + remoteFootprints.value.length)
-const projectOffset = computed(() => wishOffset.value + remoteWishes.value.length)
+const wishOffset = computed(() => results.value.length)
 
 const activeIndex = ref(0)
 
-// 结果集变化时钳制越界的高亮位置；query 变化 / 清空时在下方 watch 与 clearSearch 中重置
 watch(flatResults, () => {
   const count = flatResults.value.length
   if (activeIndex.value >= count) {
@@ -140,13 +118,8 @@ watch(activeIndex, () => {
 const handleSelect = (result: FlatResult) => {
   if (result.kind === 'entry') {
     emit('selectEntry', result.item)
-  } else if (result.kind === 'footprint') {
-    // 足迹视图不支持按城市聚焦定位，退化为仅切换到足迹页（hash 路由）
-    window.location.hash = 'atlas'
-  } else if (result.kind === 'wish') {
-    window.location.hash = 'wishes'
   } else {
-    window.location.hash = 'projects'
+    window.location.hash = 'wishes'
   }
   emit('close')
 }
@@ -158,9 +131,7 @@ const clearSearch = () => {
   query.value = ''
   debouncedQuery.value = ''
   remoteEntries.value = []
-  remoteFootprints.value = []
   remoteWishes.value = []
-  remoteProjects.value = []
   isSearchingRemote.value = false
 }
 
@@ -262,7 +233,7 @@ useEscapeClose(() => props.isOpen, () => emit('close'))
       <div class="flex-grow min-h-0 overflow-y-auto p-4 space-y-5">
         <div v-if="!query" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)] space-y-2">
           <p>输入关键词开始检索生活档案</p>
-          <p class="text-[11px] opacity-70">支持跨年份全库检索生活记录、山川足迹、心愿清单与造物项目</p>
+          <p class="text-[11px] opacity-70">支持跨年份全库检索生活记录与心愿清单</p>
         </div>
 
         <div v-else-if="!hasAnyResults && !isSearchingRemote" class="py-12 text-center text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -304,7 +275,7 @@ useEscapeClose(() => props.isOpen, () => emit('close'))
               </p>
 
               <div class="flex items-center justify-between pt-1 text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                <span>{{ item.location || item.city_name || '' }}</span>
+                <span>{{ item.location || '' }}</span>
                 <span class="group-hover:translate-x-1 transition-transform text-[var(--ink-primary)] flex items-center gap-1">
                   查看详情 <ArrowRight class="w-3 h-3" />
                 </span>
@@ -313,36 +284,7 @@ useEscapeClose(() => props.isOpen, () => emit('close'))
           </div>
         </div>
 
-        <!-- 2. 山川足迹匹配结果 -->
-        <div v-if="remoteFootprints.length > 0" class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
-          <div class="px-2 text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center gap-1.5">
-            <MapPin class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
-            <span>山川足迹 ({{ remoteFootprints.length }})</span>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2">
-            <div
-              v-for="(fp, idx) in remoteFootprints"
-              :id="`search-result-item-${footprintOffset + idx}`"
-              :key="fp.id"
-              @click="handleSelect({ kind: 'footprint', item: fp })"
-              @mouseenter="activeIndex = footprintOffset + idx"
-              class="p-2.5 rounded-xs border border-[var(--border-subtle)] space-y-1 cursor-pointer hover:bg-[var(--bg-subtle)]/80 transition-colors"
-              :class="activeIndex === footprintOffset + idx ? 'bg-[var(--bg-subtle)]/80' : 'bg-[var(--bg-subtle)]/40'"
-            >
-              <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
-                <span>{{ fp.city_name }} · {{ fp.title || '旅程足迹' }}</span>
-                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                  {{ fp.visited_at ? parseOccurredDate(fp.visited_at).dateKey : '' }}
-                </span>
-              </div>
-              <p v-if="fp.note" class="text-[11px] text-[var(--ink-secondary)] line-clamp-1 font-serif-editorial">
-                {{ fp.note }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. 心愿清单匹配结果 -->
+        <!-- 2. 心愿清单匹配结果 -->
         <div v-if="remoteWishes.length > 0" class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
           <div class="px-2 text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center gap-1.5">
             <Sparkles class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
@@ -366,33 +308,6 @@ useEscapeClose(() => props.isOpen, () => emit('close'))
               </div>
               <p v-if="w.note" class="text-[11px] text-[var(--ink-secondary)] line-clamp-1 font-serif-editorial">
                 {{ w.note }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 4. 造物项目匹配结果 -->
-        <div v-if="remoteProjects.length > 0" class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
-          <div class="px-2 text-[11px] font-mono-archive text-[var(--ink-muted)] flex items-center gap-1.5">
-            <FolderGit2 class="w-3.5 h-3.5 text-[var(--accent-moss)]" />
-            <span>造物项目 ({{ remoteProjects.length }})</span>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2">
-            <div
-              v-for="(proj, idx) in remoteProjects"
-              :id="`search-result-item-${projectOffset + idx}`"
-              :key="proj.id"
-              @click="handleSelect({ kind: 'project', item: proj })"
-              @mouseenter="activeIndex = projectOffset + idx"
-              class="p-2.5 rounded-xs border border-[var(--border-subtle)] space-y-1 cursor-pointer hover:bg-[var(--bg-subtle)]/80 transition-colors"
-              :class="activeIndex === projectOffset + idx ? 'bg-[var(--bg-subtle)]/80' : 'bg-[var(--bg-subtle)]/40'"
-            >
-              <div class="flex items-center justify-between text-xs font-serif-editorial font-medium text-[var(--ink-primary)]">
-                <span class="truncate">{{ proj.title }}</span>
-                <span class="text-[11px] font-mono-archive text-[var(--ink-muted)]">{{ proj.status }}</span>
-              </div>
-              <p v-if="proj.description" class="text-[11px] text-[var(--ink-secondary)] line-clamp-1 font-serif-editorial">
-                {{ proj.description }}
               </p>
             </div>
           </div>

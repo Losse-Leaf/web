@@ -15,7 +15,6 @@ import { useBodyScrollLock } from '../../composables/useBodyScrollLock'
 import { useEscapeClose } from '../../composables/useEscapeClose'
 import PaperSelect from '../PaperSelect.vue'
 import PaperDatePicker from '../PaperDatePicker.vue'
-import CityPicker from '../CityPicker.vue'
 
 const props = defineProps<{
   transaction: Transaction | null
@@ -42,7 +41,6 @@ const editNote = ref('')
 const editPaymentMethod = ref('')
 const editOccurredAt = ref('')
 const editErrorMsg = ref('')
-const editCityCode = ref('')
 const editIsInstallment = ref(false)
 const editInstallmentChannel = ref('huabei')
 const editInstallmentMonths = ref(12)
@@ -63,7 +61,6 @@ watch(
     editOccurredAt.value = tx.occurred_at
       ? `${parseOccurredDate(tx.occurred_at).dateKey}T${parseOccurredDate(tx.occurred_at).time}`
       : ''
-    editCityCode.value = tx.city_code || ''
     editIsInstallment.value = Boolean(tx.is_installment)
     editInstallmentChannel.value = tx.installment_channel_code || 'huabei'
     editInstallmentMonths.value = tx.installment_months || 12
@@ -173,7 +170,6 @@ const saveEdit = async () => {
     wantInstallment && editInstallmentMonths.value > 0
       ? Math.floor(amountCents / editInstallmentMonths.value)
       : undefined
-  const clearCity = !editCityCode.value && Boolean(props.transaction.city_code)
 
   try {
     isSaving.value = true
@@ -185,8 +181,6 @@ const saveEdit = async () => {
       note: editNote.value.trim(),
       payment_method: editPaymentMethod.value.trim() || undefined,
       occurred_at: editOccurredAt.value ? getBeijingISOString(editOccurredAt.value) : undefined,
-      city_code: editCityCode.value || undefined,
-      clear_city: clearCity || undefined,
       is_installment: wantInstallment,
       installment_channel_code: wantInstallment ? editInstallmentChannel.value : undefined,
       installment_total_amount: wantInstallment ? amountCents : undefined,
@@ -342,20 +336,14 @@ const saveEdit = async () => {
           </div>
         </div>
 
-        <!-- 城市坐标与备注 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-[var(--ink-muted)] mb-1">关联城市</label>
-            <CityPicker v-model="editCityCode" />
-          </div>
-          <div>
-            <label class="block text-[var(--ink-muted)] mb-1">备注说明</label>
-            <input
-              v-model="editNote"
-              type="text"
-              class="w-full px-3 py-1.5 text-xs border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
-            />
-          </div>
+        <!-- 备注说明 -->
+        <div>
+          <label class="block text-[var(--ink-muted)] mb-1">备注说明</label>
+          <input
+            v-model="editNote"
+            type="text"
+            class="w-full px-3 py-1.5 text-xs border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none bg-transparent text-[var(--ink-primary)]"
+          />
         </div>
 
         <!-- 分期付款参数校准 -->

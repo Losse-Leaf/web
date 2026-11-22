@@ -9,7 +9,6 @@ import {
   parseYuanToCents,
 } from '../utils/format'
 import type { Wish, Attachment } from '../types'
-import CityPicker from './CityPicker.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import ImageUploader from './ImageUploader.vue'
 import PrivacyToggle from './PrivacyToggle.vue'
@@ -31,8 +30,6 @@ const kind = ref<'item' | 'travel' | 'milestone'>('item')
 const title = ref('')
 const note = ref('')
 const spec = ref('')
-const cityName = ref('')
-const cityCode = ref('')
 const budgetYuan = ref<string | number>('')
 const targetDate = ref('')
 /** 补档：许下日期（可回填为过去），默认今天 */
@@ -45,11 +42,6 @@ const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
-const onCityPicked = (city: { code: string; name: string }) => {
-  cityCode.value = city.code
-  cityName.value = city.name
-}
-
 watch(
   () => props.editingWish,
   (w) => {
@@ -58,8 +50,6 @@ watch(
       title.value = w.title
       note.value = w.note || ''
       spec.value = w.spec || ''
-      cityName.value = w.city_name || ''
-      cityCode.value = w.city_code || ''
       budgetYuan.value = centsToInputYuan(w.budget, true)
       targetDate.value = w.target_date ? parseOccurredDate(w.target_date).dateKey : ''
       plantedAt.value = w.planted_at ? parseOccurredDate(w.planted_at).dateKey : getBeijingDateString()
@@ -71,8 +61,6 @@ watch(
       title.value = ''
       note.value = ''
       spec.value = ''
-      cityName.value = ''
-      cityCode.value = ''
       budgetYuan.value = ''
       targetDate.value = ''
       plantedAt.value = getBeijingDateString()
@@ -125,21 +113,12 @@ const handleSubmit = async () => {
         // 编辑时显式空串才能清空；undefined 会被后端当作“保持原值”。
         note: note.value.trim(),
         spec: kind.value === 'item' ? spec.value.trim() : '',
-        city_name: kind.value === 'travel' ? cityName.value.trim() : '',
-        city_code: kind.value === 'travel' ? cityCode.value.trim() : '',
         budget: budgetCents,
         // 编辑时目标期被清除必须显式发空串（后端 hasKey+空串=清空）；
         // `|| undefined` 会被当作「保持原值」，清除永远无效。创建分支才用 undefined 默认语义。
         target_date: targetDate.value,
         planted_at: plantedAt.value || undefined,
         attachment_ids: attachmentIds.value,
-        // 关键：**显式声明**「本次要解除全部参考图绑定」。
-        // 后端的新契约是「空数组但不带 clear_attachments → 保持原样」，
-        // 因为已发布的老客户端（数组不可选，默认 []）压根不知道可以不传 ——
-        // 于是在没有附件 UI 的 mac 编辑弹窗里改个标题，
-        // 服务端也会把该心愿的照片解绑（跨端更刺眼：
-        // 用 web 传了图，再用 mac 改个字，图片就没了）。
-        // 这里要真正清空图片时必须带上这个信号。
         clear_attachments: attachmentIds.value.length === 0,
         is_private: isPrivate.value,
       })
@@ -150,8 +129,6 @@ const handleSubmit = async () => {
         kind: kind.value,
         note: note.value.trim() || undefined,
         spec: kind.value === 'item' ? spec.value.trim() || undefined : undefined,
-        city_name: kind.value === 'travel' ? cityName.value.trim() || undefined : undefined,
-        city_code: kind.value === 'travel' ? cityCode.value.trim() || undefined : undefined,
         budget: budgetCents,
         target_date: targetDate.value || undefined,
         planted_at: plantedAt.value || undefined,
@@ -265,27 +242,14 @@ const handleSubmit = async () => {
           />
         </div>
 
-        <!-- 维度专属字段：常驻同一 grid，切换维度不改变下方布局 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="transition-opacity" :class="kind === 'item' ? '' : 'opacity-50 pointer-events-none'">
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">规格型号</label>
-            <input
-              v-model="spec"
-              type="text"
-              :disabled="kind !== 'item'"
-              class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)] disabled:opacity-60"
-            />
-          </div>
-
-          <!-- 旅程专属：目标城市 (CityPicker 同时派生 city_code 与 city_name，锁定单源) -->
-          <div class="transition-opacity" :class="kind === 'travel' ? '' : 'opacity-50 pointer-events-none'">
-            <label class="block text-[11px] text-[var(--ink-muted)] mb-1">目的地城市</label>
-            <CityPicker
-              v-model="cityCode"
-              :disabled="kind !== 'travel'"
-              @select="onCityPicked"
-            />
-          </div>
+        <!-- 好物维度专属字段：规格型号 -->
+        <div v-if="kind === 'item'">
+          <label class="block text-[11px] text-[var(--ink-muted)] mb-1">规格型号</label>
+          <input
+            v-model="spec"
+            type="text"
+            class="w-full px-3 py-1.5 bg-[var(--bg-archive)] border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none text-xs text-[var(--ink-primary)]"
+          />
         </div>
 
         <!-- 预算与目标期 -->

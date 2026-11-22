@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import type { LifeEntry, ArchiveCategory } from '../types'
 import { getEntryCategory, entryMatchesCategory } from '../types'
-import { ArrowUpRight, Maximize2 } from 'lucide-vue-next'
+import { Maximize2 } from 'lucide-vue-next'
 import EditorialLightbox from './EditorialLightbox.vue'
 import { formatMoney, parseOccurredDate, renderEditorialContent, getAttachmentThumbUrl } from '../utils/format'
 import { getAdminToken } from '../utils/api'
@@ -128,22 +128,19 @@ const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   lightboxPayload.value = {
     imageUrl: customUrl || getEntryFirstOriginalImage(entry) || getEntryFirstImage(entry),
     title: entry.title || '',
-    meta: entry.city_name || entry.location || '',
+    meta: entry.location || '',
     location: entry.location || '',
     date: formatEntryDate(entry),
   }
   isLightboxOpen.value = true
 }
 
-// 视图过滤分类 (4 大纯化形态 + 器物 + 主理人可见账目投影)
+// 视图过滤分类 (日常 / 心愿 / 主理人可见账目投影)
 const categoryFilters = computed<{ key: ArchiveCategory; label: string }[]>(() => {
   const base: { key: ArchiveCategory; label: string }[] = [
     { key: 'all', label: '全部记录' },
     { key: 'daily', label: '日常' },
-    { key: 'travel', label: '游历' },
-    { key: 'project', label: '造物' },
     { key: 'wish', label: '心愿' },
-    { key: 'gear', label: '器物' },
   ]
   if (isAdmin.value) {
     base.push({ key: 'transaction', label: '账目' })
@@ -168,11 +165,8 @@ const getCategoryName = (entry: LifeEntry) => {
   const map: Record<ArchiveCategory, string> = {
     all: '全部记录',
     daily: '日常',
-    travel: '游历',
-    project: '造物',
     wish: '心愿',
     transaction: '账目',
-    gear: '器物',
   }
   return map[cat] || '日常'
 }
@@ -245,11 +239,7 @@ const getGapDays = (index: number): number => {
         <div class="space-y-1.5 font-serif-editorial pt-1">
           <h3 class="text-lg text-[var(--ink-primary)]">
             {{
-              activeCategory === 'travel'
-                ? '还没有游历足迹记录'
-                : activeCategory === 'project'
-                ? '还没有造物手记'
-                : activeCategory === 'wish'
+              activeCategory === 'wish'
                 ? '还没有心愿印记'
                 : activeCategory === 'transaction'
                 ? '这个月还没有账目流水'
@@ -328,15 +318,15 @@ const getGapDays = (index: number): number => {
             <span
               class="px-1.5 py-0.2 rounded-xs border text-[11px] font-medium transition-colors"
               :class="{
-                'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish' || getEntryCategory(entry) === 'travel' || getEntryCategory(entry) === 'gear',
+                'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish',
                 'border-emerald-700/40 bg-emerald-700/8 text-emerald-700': entry.type === 'transaction' || entry.is_transaction,
-                'border-[var(--border-subtle)] text-[var(--ink-secondary)]': !entry.is_transaction && getEntryCategory(entry) !== 'wish' && getEntryCategory(entry) !== 'travel' && getEntryCategory(entry) !== 'gear',
+                'border-[var(--border-subtle)] text-[var(--ink-secondary)]': !entry.is_transaction && getEntryCategory(entry) !== 'wish',
               }"
             >
               {{ getCategoryName(entry) }}
             </span>
-            <span v-if="entry.city_name || entry.location" class="text-[var(--ink-secondary)]">
-              · {{ entry.city_name || entry.location }}
+            <span v-if="entry.location" class="text-[var(--ink-secondary)]">
+              · {{ entry.location }}
             </span>
             <span
               v-if="entry.is_private"
@@ -378,56 +368,7 @@ const getGapDays = (index: number): number => {
             </span>
           </div>
 
-          <!-- 2. 造物形态 (Project)：手艺与进展手记，关联母项目与仓库直链 -->
-          <div
-            v-else-if="getEntryCategory(entry) === 'project'"
-            class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/30 group-hover:border-[var(--border-divider)] transition-colors max-w-2xl"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
-                造物手记 · {{ entry.project?.title || '长期创造' }}
-              </span>
-              <span v-if="entry.project?.status" class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                {{ entry.project.status }}
-              </span>
-            </div>
-            <h3
-              v-if="entry.title"
-              class="text-xl font-serif-editorial font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors"
-            >
-              {{ entry.title }}
-            </h3>
-            <div
-              v-if="getEntryFirstImage(entry)"
-              class="overflow-hidden rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] max-w-xl"
-              @click.stop="openLightbox(entry)"
-            >
-              <img
-                :src="getEntryFirstImage(entry)"
-                :alt="entry.title"
-                class="w-full max-h-[420px] object-cover editorial-image"
-                loading="lazy"
-               decoding="async">
-            </div>
-            <div
-              class="text-sm sm:text-base text-[var(--ink-secondary)] leading-relaxed font-serif-editorial"
-              v-html="renderEditorialContent(entry.content)"
-            ></div>
-            <div v-if="entry.project?.github_url" class="pt-1">
-              <a
-                :href="entry.project.github_url"
-                target="_blank"
-                rel="noopener noreferrer"
-                @click.stop
-                class="inline-flex items-center gap-1.5 text-xs text-[var(--ink-primary)] hover-underline font-mono-archive"
-              >
-                <span>查看代码与项目仓库</span>
-                <ArrowUpRight class="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
-
-          <!-- 3. 心愿形态 (Wish)：许愿、归册与拔草印记 -->
+          <!-- 2. 心愿形态 (Wish)：许愿、归册与拔草印记 -->
           <div
             v-else-if="getEntryCategory(entry) === 'wish'"
             class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 group-hover:border-[var(--accent-warm)]/60 transition-colors max-w-2xl"
@@ -563,8 +504,8 @@ const getGapDays = (index: number): number => {
                   <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent-warm)]/70"></span>
                   <span>EXP. {{ String(index + 1).padStart(2, '0') }} · {{ getEntryImages(entry).length }} 张相纸装裱</span>
                 </span>
-                <span v-if="entry.city_name || entry.location" class="tracking-wide text-[var(--ink-secondary)]">
-                  {{ entry.city_name || entry.location }}
+                <span v-if="entry.location" class="tracking-wide text-[var(--ink-secondary)]">
+                  {{ entry.location }}
                 </span>
               </div>
             </div>

@@ -109,7 +109,7 @@ const handleDelete = async (item: CategoryOption) => {
             自定义类型与分类管理
           </h3>
           <p class="font-serif-editorial text-xs text-[var(--ink-muted)] mt-1">
-            统一管理收支分类、固定资产器物类型、支付方式与造物项目分类。
+            统一管理支出分类、收入分类与支付方式。
           </p>
         </div>
         <button
@@ -120,7 +120,7 @@ const handleDelete = async (item: CategoryOption) => {
         </button>
       </div>
 
-      <!-- 五大模块切换栏 -->
+      <!-- 三大模块切换栏 -->
       <div class="flex flex-wrap items-center gap-1.5 pb-2 border-b border-[var(--border-subtle)]/60 shrink-0">
         <button
           v-for="meta in CATEGORY_SCOPE_META"

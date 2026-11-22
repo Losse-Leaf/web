@@ -1,37 +1,21 @@
 export type EntryType =
   | 'life'
-  | 'travel'
-  | 'project'
   | 'wish'
   | 'transaction'
-  | 'gear'
 
 export type ArchiveCategory =
   | 'all'
   | 'daily'
-  | 'travel'
-  | 'project'
   | 'wish'
   | 'transaction'
-  | 'gear'
 
 export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
   const t = (entry.type || '').toLowerCase()
   if (t === 'transaction' || entry.is_transaction) {
     return 'transaction'
   }
-  // RC-128 四母体收敛后不再识别旧类型值（thought/collection/code/craft 等一律归位为 life）
-  if (t === 'project' || Boolean(entry.project_id)) {
-    return 'project'
-  }
   if (t === 'wish' || Boolean(entry.wish_id)) {
     return 'wish'
-  }
-  if (t === 'gear' || Boolean(entry.gear_id)) {
-    return 'gear'
-  }
-  if (t === 'travel' || Boolean(entry.city_code)) {
-    return 'travel'
   }
   return 'daily'
 }
@@ -42,17 +26,8 @@ export const entryMatchesCategory = (entry: LifeEntry, category: ArchiveCategory
   if (category === 'transaction') {
     return cat === 'transaction' || entry.type === 'transaction' || Boolean(entry.is_transaction)
   }
-  if (category === 'travel') {
-    return cat === 'travel' || Boolean(entry.city_code)
-  }
-  if (category === 'project') {
-    return cat === 'project' || Boolean(entry.project_id)
-  }
   if (category === 'wish') {
     return cat === 'wish' || Boolean(entry.wish_id)
-  }
-  if (category === 'gear') {
-    return cat === 'gear' || Boolean(entry.gear_id)
   }
   return cat === category
 }
@@ -98,15 +73,8 @@ export interface LifeEntry {
   content: string
   occurred_at?: string
   location?: string
-  city_code?: string
-  city_name?: string
-  project_id?: number
-  project?: Project
   wish_id?: number
   wish?: Wish
-  /** 器物伴生散页（器物 id 为字符串） */
-  gear_id?: string
-  footprint_id?: number
   attachments?: Attachment[]
   is_private?: boolean
 
@@ -132,8 +100,6 @@ export interface Transaction {
   payment_method?: string
   occurred_at: string
   wish_id?: number
-  footprint_id?: number
-  city_code?: string
   is_installment?: boolean
   installment_channel_code?: string
   installment_total_amount?: number
@@ -179,19 +145,6 @@ export interface StorageConfigPayload {
   presign_expire_seconds?: number
 }
 
-export interface Project {
-  id: number
-  title: string
-  subtitle?: string
-  description: string
-  story?: string
-  category: string
-  github_url: string
-  status: string
-  order?: number
-  is_private?: boolean
-}
-
 export interface SiteConfig {
   site_name: string
   site_subtitle?: string
@@ -199,19 +152,6 @@ export interface SiteConfig {
   curator_name?: string
   default_location?: string
   public_modules?: string[]
-}
-
-export interface GearItem {
-  id?: string
-  name: string
-  spec?: string
-  category: string
-  status?: string
-  note?: string
-  price_cents?: number
-  purchase_date?: string
-  sold_price_cents?: number
-  sold_date?: string
 }
 
 export interface UnifiedUploadResult {
@@ -237,7 +177,6 @@ export interface CuratorProfile {
   social_links?: Record<string, string>
   email?: string
   github?: string
-  edc_gear?: GearItem[]
   updated_at?: string
 }
 
@@ -312,10 +251,10 @@ export interface Wish {
   kind: 'item' | 'travel' | 'milestone'
   note?: string
   spec?: string
-  city_code?: string
-  city_name?: string
   budget: number // 分
   actual_cost: number // 分
+  resolution_type?: 'exact' | 'altered' | 'relinquished' | string
+  actual_title?: string
   target_date?: string | null
   /** 许下心愿的时刻（可回填为过去日期以支撑「补档」） */
   planted_at?: string | null
@@ -323,8 +262,6 @@ export interface Wish {
   fulfilled_at?: string | null
   transaction_id?: number
   life_entry_id?: number
-  footprint_id?: number
-  gear_id?: string
   attachments?: Attachment[]
   is_private?: boolean
   created_at?: string
@@ -340,58 +277,7 @@ export interface CreditChannel {
   color?: string
 }
 
-export interface ChannelLiabilitySummary {
-  channel_code: string
-  channel_name: string
-  repayment_day: number
-  color: string
-  total_debt: number          // 分
-  monthly_pay: number         // 分
-  days_until_repayment: number
-  active_count: number
-  installments?: Transaction[]
-}
-
-export interface GearSummary {
-  total_count: number
-  active_count: number
-  active_value: number         // 分
-  sold_count: number
-  sold_recovered_value: number // 分
-  items?: GearItem[]
-}
-
-export interface AssetsOverview {
-  net_worth: number               // 分
-  liquid_balance: number          // 分
-  initial_liquid_balance?: number // 分 (BE-15, RG-20)
-  fixed_assets: number            // 分
-  total_liabilities: number       // 分
-  monthly_liabilities: number     // 分
-  gear_summary: GearSummary
-  channel_liabilities: ChannelLiabilitySummary[]
-}
-
-export interface Footprint {
-  id: number
-  city_code: string
-  city_name: string
-  title?: string
-  visited_at: string
-  departed_at?: string | null
-  note?: string
-  life_entry_id?: number
-  wish_id?: number
-  attachments?: Attachment[]
-  entries_count?: number
-  total_spent?: number
-  transaction_count?: number
-  is_private?: boolean
-  created_at?: string
-  updated_at?: string
-}
-
-export type CategoryScope = 'expense' | 'income' | 'gear' | 'payment' | 'project'
+export type CategoryScope = 'expense' | 'income' | 'payment'
 
 export interface CategoryOption {
   id: number
@@ -408,69 +294,6 @@ export interface CategoriesResponse {
   by_scope: Record<CategoryScope, string[]>
 }
 
-export interface AtlasCitySummary {
-  city_code: string
-  city_name: string
-  visit_count: number
-  first_visited_at: string
-  latest_visited_at: string
-}
-
-export interface FootprintsAtlasResponse {
-  total_footprints: number
-  total_cities: number
-  cities: AtlasCitySummary[]
-}
-
-export interface CityMemoryDrawerData {
-  city_code: string
-  city_name: string
-  visit_stats: {
-    total_visits: number
-    first_visited_at: string
-    latest_visited_at: string
-  }
-  footprints: Footprint[]
-  entries: LifeEntry[]
-  ledger_summary: {
-    total_spent: number
-    transaction_count: number
-    categories: { name: string; amount: number }[]
-  }
-}
-
-export interface ProvinceMemoryDrawerData {
-  adcode?: string
-  province_adcode?: string
-  province_name: string
-  total_cities?: number
-  visit_stats: {
-    city_count?: number
-    total_visits: number
-    first_visited_at: string
-    latest_visited_at: string
-  }
-  visited_cities?: Array<{
-    city_code: string
-    city_name: string
-    visit_count: number
-    latest_visited_at?: string
-  }>
-  cities_summary?: Array<{
-    city_code: string
-    city_name: string
-    visit_count: number
-    latest_visited_at?: string
-  }>
-  footprints: Footprint[]
-  entries: LifeEntry[]
-  ledger_summary: {
-    total_spent: number
-    transaction_count: number
-    categories: { name: string; amount: number }[]
-  }
-}
-
 export interface AnnualAlmanacSummary {
   year: number
   prologue: {
@@ -480,13 +303,7 @@ export interface AnnualAlmanacSummary {
     first_date: string
     last_date: string
     wishes_fulfilled?: number
-    cities_visited?: number
     tx_count?: number
-  }
-  atlas: {
-    total_cities: number
-    cities: { city_code: string; city_name: string }[]
-    footprints: Footprint[]
   }
   wishes: {
     fulfilled_count: number
@@ -528,6 +345,3 @@ export interface BackupItem {
   created_at: string
   storage_type: 'r2' | 'local' | string
 }
-
-
-

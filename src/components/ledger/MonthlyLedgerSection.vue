@@ -207,7 +207,7 @@ const dayGroups = computed(() => {
       <div class="space-y-1 font-serif-editorial">
         <h3 class="text-base text-[var(--ink-primary)]">{{ year }} 年 {{ month }} 月尚无收支流水</h3>
         <p class="text-xs text-[var(--ink-muted)]">
-          从一顿具体的餐食、一件器物或一笔回血开始，记录真实的资产变动。
+          从一顿具体的餐食、一次出行或一笔进账开始，记录真实的日常收支。
         </p>
       </div>
       <button

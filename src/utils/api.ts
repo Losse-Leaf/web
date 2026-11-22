@@ -5,7 +5,6 @@ import type {
   TransactionSummary,
   StorageStatus,
   StorageConfigPayload,
-  Project,
   TrustedDevice,
   PairingTicketResult,
   SiteConfig,
@@ -16,15 +15,9 @@ import type {
   PairStatusResult,
   UnifiedUploadResult,
   Wish,
-  AssetsOverview,
   CreditChannel,
-  Footprint,
-  FootprintsAtlasResponse,
-  CityMemoryDrawerData,
-  ProvinceMemoryDrawerData,
   AnnualAlmanacSummary,
   UpdateCheckResult,
-  GearItem,
   CategoryOption,
   CategoriesResponse,
   CategoryScope,
@@ -494,9 +487,7 @@ export async function searchGlobalArchive(
 ): Promise<{
   query: string
   entries: LifeEntry[]
-  footprints: Footprint[]
   wishes: Wish[]
-  projects: Project[]
 }> {
   const params = new URLSearchParams()
   params.set('q', q)
@@ -504,16 +495,12 @@ export async function searchGlobalArchive(
   const res = await request<{
     query?: string
     entries?: LifeEntry[]
-    footprints?: Footprint[]
     wishes?: Wish[]
-    projects?: Project[]
   }>(`${API_BASE}/search?${params.toString()}`)
   return {
     query: res?.query ?? q,
     entries: Array.isArray(res?.entries) ? res.entries : [],
-    footprints: Array.isArray(res?.footprints) ? res.footprints : [],
     wishes: Array.isArray(res?.wishes) ? res.wishes : [],
-    projects: Array.isArray(res?.projects) ? res.projects : [],
   }
 }
 
@@ -537,11 +524,7 @@ export async function createLifeEntry(
     content: string
     occurred_at?: string
     location?: string
-    city_code?: string
-    city_name?: string
-    project_id?: number | null
     wish_id?: number | null
-    footprint_id?: number | null
     is_private?: boolean
   } & AttachmentBindPayload,
 ): Promise<LifeEntry> {
@@ -565,12 +548,7 @@ export async function updateLifeEntry(
     content?: string
     occurred_at?: string
     location?: string
-    city_code?: string
-    city_name?: string
-    project_id?: number | null
     wish_id?: number | null
-    footprint_id?: number | null
-    clear_city?: boolean
     is_private?: boolean
   } & AttachmentBindPayload,
 ): Promise<LifeEntry> {
@@ -693,8 +671,6 @@ export async function createTransaction(data: {
   payment_method?: string
   occurred_at?: string
   wish_id?: number
-  footprint_id?: number | null
-  city_code?: string
   is_installment?: boolean
   installment_channel_code?: string
   installment_total_amount?: number
@@ -702,9 +678,6 @@ export async function createTransaction(data: {
   installment_monthly_pay?: number
   installment_remain_months?: number
   repayment_day?: number
-  link_gear_asset?: boolean
-  gear_category?: string
-  gear_spec?: string
 }): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions`, {
     method: 'POST',
@@ -744,8 +717,6 @@ export async function createWish(
     kind: 'item' | 'travel' | 'milestone'
     note?: string
     spec?: string
-    city_code?: string
-    city_name?: string
     budget?: number
     target_date?: string
     planted_at?: string
@@ -783,9 +754,7 @@ export async function resolveWish(
     actual_title?: string
     fulfilled_at?: string
     create_transaction?: boolean
-    create_gear_asset?: boolean
     create_life_entry?: boolean
-    create_footprint?: boolean
     entry_content?: string
     is_installment?: boolean
     installment_channel_code?: string
@@ -804,8 +773,6 @@ export async function updateTransaction(
   data: Partial<Transaction> & {
     /** 显式声明「本次要取消分期」（三态契约） */
     clear_installment?: boolean
-    /** 显式清空城市归属（跨端统一契约 A），优先级高于 city_code 字段 */
-    clear_city?: boolean
   },
 ): Promise<Transaction> {
   return request<Transaction>(`${API_BASE}/transactions/${id}`, {
@@ -816,55 +783,6 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: number): Promise<boolean> {
   await request(`${API_BASE}/transactions/${id}`, {
-    method: 'DELETE',
-  })
-  return true
-}
-
-// 4. Projects
-export async function fetchProjects(): Promise<Project[]> {
-  return request<Project[]>(`${API_BASE}/projects?limit=0`)
-}
-
-export async function createProject(data: {
-  title: string
-  subtitle?: string
-  description?: string
-  story?: string
-  category?: string
-  github_url?: string
-  status?: string
-  order?: number
-  is_private?: boolean
-}): Promise<Project> {
-  return request<Project>(`${API_BASE}/projects`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function updateProject(
-  id: number,
-  data: {
-    title?: string
-    subtitle?: string
-    description?: string
-    story?: string
-    category?: string
-    github_url?: string
-    status?: string
-    order?: number
-    is_private?: boolean
-  },
-): Promise<Project> {
-  return request<Project>(`${API_BASE}/projects/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function deleteProject(id: number): Promise<boolean> {
-  await request(`${API_BASE}/projects/${id}`, {
     method: 'DELETE',
   })
   return true
@@ -995,64 +913,7 @@ export async function claimDevice(data: ClaimPayload): Promise<ClaimResult> {
   return res
 }
 
-// 12. 资产管理中枢、固定设备库与信贷渠道
-export async function fetchAssetsOverview(): Promise<AssetsOverview> {
-  return request<AssetsOverview>(`${API_BASE}/assets/overview`)
-}
-
-export async function updateInitialLiquidBalance(
-  initial_liquid_balance: number,
-): Promise<{ initial_liquid_balance: number }> {
-  return request<{ initial_liquid_balance: number }>(`${API_BASE}/assets/liquid-balance`, {
-    method: 'PUT',
-    body: JSON.stringify({ initial_liquid_balance }),
-  })
-}
-
-export async function addGearAsset(data: {
-  name: string
-  category: string
-  spec?: string
-  price_cents?: number
-  purchase_date?: string
-  payment_method?: string
-  note?: string
-  create_transaction?: boolean
-  is_installment?: boolean
-  installment_channel_code?: string
-  installment_total_amount?: number
-  installment_months?: number
-  repayment_day?: number
-}): Promise<GearItem> {
-  return request<GearItem>(`${API_BASE}/assets/gear`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function sellGearAsset(
-  id: string,
-  data: {
-    sold_price_cents: number
-    sold_date?: string
-    note?: string
-  },
-): Promise<GearItem> {
-  return request<GearItem>(`${API_BASE}/assets/gear/${encodeURIComponent(id)}/sell`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function deleteGearAsset(id: string): Promise<{ id: string; deleted: boolean }> {
-  return request<{ id: string; deleted: boolean }>(
-    `${API_BASE}/assets/gear/${encodeURIComponent(id)}`,
-    {
-      method: 'DELETE',
-    },
-  )
-}
-
+// 12. 信贷渠道管理
 export async function fetchCreditChannels(): Promise<CreditChannel[]> {
   return request<CreditChannel[]>(`${API_BASE}/credit-channels`)
 }
@@ -1086,94 +947,15 @@ export async function deleteCreditChannel(id: number): Promise<boolean> {
   return true
 }
 
-// 13. 空间旅游足迹与城市回忆抽屉
-export async function fetchFootprints(params?: {
-  city_code?: string
-  year?: number
-  since?: string
-}): Promise<Footprint[]> {
-  const query = new URLSearchParams()
-  if (params?.city_code) query.set('city_code', params.city_code)
-  if (params?.year) query.set('year', String(params.year))
-  if (params?.since) query.set('since', params.since)
-  const qs = query.toString()
-  return request<Footprint[]>(`${API_BASE}/footprints${qs ? '?' + qs : ''}`)
-}
-
-export async function fetchFootprintsAtlas(): Promise<FootprintsAtlasResponse> {
-  return request<FootprintsAtlasResponse>(`${API_BASE}/footprints/atlas`)
-}
-
-export async function fetchCityMemoryDrawer(cityCode: string): Promise<CityMemoryDrawerData> {
-  return request<CityMemoryDrawerData>(`${API_BASE}/footprints/cities/${cityCode}/drawer`)
-}
-
-export async function fetchProvinceMemoryDrawer(adcode: string): Promise<ProvinceMemoryDrawerData> {
-  return request<ProvinceMemoryDrawerData>(`${API_BASE}/footprints/provinces/${adcode}/drawer`)
-}
-
-export async function createFootprint(
-  data: {
-    city_code: string
-    city_name: string
-    visited_at: string
-    departed_at?: string
-    title?: string
-    note?: string
-    life_entry_id?: number
-    wish_id?: number
-    is_private?: boolean
-  } & AttachmentBindPayload,
-): Promise<Footprint> {
-  return request<Footprint>(`${API_BASE}/footprints`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function updateFootprint(
-  id: number,
-  data: Partial<{
-    city_code: string
-    city_name: string
-    title: string
-    visited_at: string
-    departed_at: string
-    note: string
-    life_entry_id: number | null
-    wish_id: number | null
-    is_private: boolean
-  }> &
-    AttachmentBindPayload,
-): Promise<Footprint> {
-  return request<Footprint>(`${API_BASE}/footprints/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function deleteFootprint(id: number, purge?: boolean): Promise<boolean> {
-  await request(`${API_BASE}/footprints/${id}${purge ? '?purge=true' : ''}`, {
-    method: 'DELETE',
-  })
-  return true
-}
-
 // 14. 年度生活年鉴画卷
 export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlmanacSummary> {
   const raw = await request<any>(`${API_BASE}/almanac/summary?year=${year}`)
 
   const rawPrologue = raw?.prologue || {}
-  const rawAtlas = raw?.atlas || {}
   const rawWishes = raw?.wishes || {}
   const rawHighlights = raw?.highlights || {}
   const rawFinances = raw?.finances || {}
 
-  const cities: { city_code: string; city_name: string }[] = Array.isArray(rawAtlas.cities)
-    ? rawAtlas.cities
-    : []
-
-  const footprints: Footprint[] = Array.isArray(rawAtlas.footprints) ? rawAtlas.footprints : []
   const fulfilledWishes: Wish[] = Array.isArray(rawWishes.wishes) ? rawWishes.wishes : []
   const photos = Array.isArray(rawHighlights.photos) ? rawHighlights.photos : []
 
@@ -1193,13 +975,7 @@ export async function fetchAnnualAlmanacSummary(year: number): Promise<AnnualAlm
       first_date: rawPrologue.first_date || '',
       last_date: rawPrologue.last_date || '',
       wishes_fulfilled: Number(rawPrologue.wishes_fulfilled ?? fulfilledWishes.length),
-      cities_visited: Number(rawPrologue.cities_visited ?? cities.length),
       tx_count: Number(rawPrologue.tx_count ?? 0),
-    },
-    atlas: {
-      total_cities: Number(rawAtlas.total_cities ?? cities.length),
-      cities,
-      footprints,
     },
     wishes: {
       fulfilled_count: Number(rawWishes.fulfilled_count ?? fulfilledWishes.length),

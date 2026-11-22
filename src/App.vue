@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, shallowRef, computed, onMounted, onUnmounted, watch, defineAsyncComponent, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent, h } from 'vue'
 import HeaderNav from './components/HeaderNav.vue'
 import HomeView from './components/HomeView.vue'
 import FooterArchive from './components/FooterArchive.vue'
@@ -7,10 +7,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import WelcomePortal from './components/WelcomePortal.vue'
 
 // ── MOB-OPT-P0: ChunkLoadError 自动重试 + loading/error 兜底 ──────────
-// 弱网下 dynamic import 可能 ChunkLoadError；自动重试 2 次后仍失败则提供刷新按钮。
-// Vite 也会在全局 preload 失败时派发 vite:preloadError，这里一并拦截。
 window.addEventListener('vite:preloadError', (e: Event) => {
-  // 阻止浏览器控制台 unhandled rejection，让 defineAsyncComponent 的 onError 接管
   e.preventDefault()
 })
 
@@ -27,7 +24,6 @@ function retryImport<T>(loader: () => Promise<T>, retries = 2, delay = 1000): ()
     })
 }
 
-// 轻量加载占位：居中脉冲点
 const AsyncLoadingFallback = {
   name: 'AsyncLoadingFallback',
   render() {
@@ -38,7 +34,7 @@ const AsyncLoadingFallback = {
     ])
   },
 }
-// 加载失败占位：提供重试按钮
+
 const AsyncErrorFallback = {
   name: 'AsyncErrorFallback',
   render() {
@@ -66,17 +62,12 @@ function lazyComponent(loader: () => Promise<any>) {
     loader: retryImport(loader),
     loadingComponent: AsyncLoadingFallback,
     errorComponent: AsyncErrorFallback,
-    delay: 120,       // 120ms 后才显示 loading（避免闪烁）
-    timeout: 15_000,  // 15 秒超时
+    delay: 120,
+    timeout: 15_000,
   })
 }
 
-// 异步按需分包加载非首屏重型视图与管理模态框，彻底消除 >500kB 单包警告并加速首屏 (FE-23)
-// MOB-OPT-P0: 统一用 lazyComponent 包装，自带重试 / loading / error 兜底
-const ProjectsView = lazyComponent(() => import('./components/ProjectsView.vue'))
-const WishlistView = lazyComponent(() => import('./components/WishlistView.vue'))
-const TravelAtlasView = lazyComponent(() => import('./components/TravelAtlasView.vue'))
-const AboutView = lazyComponent(() => import('./components/AboutView.vue'))
+// 异步按需分包加载非首屏重型视图与管理模态框
 const TransactionsView = lazyComponent(() => import('./components/TransactionsView.vue'))
 const NewEntryModal = lazyComponent(() => import('./components/NewEntryModal.vue'))
 const EntryDetailModal = lazyComponent(() => import('./components/EntryDetailModal.vue'))
@@ -86,6 +77,9 @@ const DevicePairingModal = lazyComponent(() => import('./components/DevicePairin
 const UpdateCheckModal = lazyComponent(() => import('./components/UpdateCheckModal.vue'))
 const CategoryManagerModal = lazyComponent(() => import('./components/CategoryManagerModal.vue'))
 const SessionExpiredModal = lazyComponent(() => import('./components/SessionExpiredModal.vue'))
+const AlmanacModal = lazyComponent(() => import('./components/AlmanacModal.vue'))
+const ProfileEditModal = lazyComponent(() => import('./components/ProfileEditModal.vue'))
+
 import { getAdminToken, removeAdminToken, refreshSessionState } from './utils/api'
 import { useTheme } from './composables/useTheme'
 import { useArchive } from './composables/useArchive'
@@ -95,18 +89,16 @@ import { useConfirm } from './composables/useConfirm'
 import { openModalCount } from './composables/useBodyScrollLock'
 import type {
   LifeEntry,
-  Project,
   ArchiveCategory,
   Transaction,
   SiteConfig,
   CuratorProfile,
   SystemStatus,
 } from './types'
-import { BookOpen, Heart, MapPin, Compass, User, Plus } from 'lucide-vue-next'
+import { BookOpen, Wallet, Plus } from 'lucide-vue-next'
 import { parseOccurredDate, getBeijingYear } from './utils/format'
 import {
   fetchEntryById,
-  fetchProjects,
   fetchSiteConfig,
   fetchCuratorProfile,
   fetchSystemStatus,
@@ -120,7 +112,6 @@ import {
   logoutAndReload,
 } from './utils/auth'
 
-// 统一主理人档案与本地缓存同步 (RC-24, RC-29, RC-31, RC-32, RC-47, RG-09)
 const syncProfileCache = (profile: CuratorProfile) => {
   curatorProfile.value = profile
   saveCuratorProfile({
@@ -128,41 +119,35 @@ const syncProfileCache = (profile: CuratorProfile) => {
     ...profile,
     email: profile.email || profile.social_links?.email || '',
     github: profile.github || profile.social_links?.github || '',
-    edc_gear: profile.edc_gear || [],
   })
 }
 
-// 1. 基础视图与主题模式
-const currentView = ref<string>('home')
+// 1. 基础视图与主题模式（仅两大顶层视图：散页 home / 记账 transactions）
+const currentView = ref<'home' | 'transactions'>('home')
+const ledgerTab = ref<'ledger' | 'wishes'>('ledger')
 
-/** MOB-P1-107：移动端底部标签栏的 5 个主板块 */
-const mobileNavItems = [
-  { key: 'home', label: '时间流', icon: BookOpen },
-  { key: 'wishes', label: '心愿', icon: Heart },
-  { key: 'atlas', label: '足迹', icon: MapPin },
-  { key: 'projects', label: '项目', icon: Compass },
-  { key: 'about', label: '主理人', icon: User }
-]
+const mobileNavItems = computed(() => {
+  const isAdmin = Boolean(getAdminToken())
+  return [
+    { key: 'home' as const, label: '散页', icon: BookOpen },
+    { key: 'transactions' as const, label: isAdmin ? '记账' : '心愿单', icon: Wallet },
+  ]
+})
+
 const { theme, toggleTheme } = useTheme()
 const siteConfig = ref<SiteConfig | null>(null)
 
 const VIEW_TO_PUBLIC_MODULE: Record<string, string> = {
   home: 'entries',
   life: 'entries',
-  projects: 'projects',
+  transactions: 'wishes',
   wishes: 'wishes',
   wishlist: 'wishes',
-  atlas: 'footprints',
-  footprints: 'footprints',
-  about: 'profile',
 }
 
-const PUBLIC_MODULE_TO_VIEW: Record<string, string> = {
+const PUBLIC_MODULE_TO_VIEW: Record<string, 'home' | 'transactions'> = {
   entries: 'home',
-  projects: 'projects',
-  wishes: 'wishes',
-  footprints: 'atlas',
-  profile: 'about',
+  wishes: 'transactions',
 }
 
 const isViewVisible = (view: string): boolean => {
@@ -173,9 +158,9 @@ const isViewVisible = (view: string): boolean => {
   return (siteConfig.value.public_modules ?? []).includes(mod)
 }
 
-const firstPublicView = (): string => {
+const firstPublicView = (): 'home' | 'transactions' => {
   const mods = siteConfig.value?.public_modules ?? []
-  for (const mod of ['entries', 'projects', 'wishes', 'footprints', 'profile']) {
+  for (const mod of ['entries', 'wishes']) {
     if (mods.includes(mod)) {
       return PUBLIC_MODULE_TO_VIEW[mod] || 'home'
     }
@@ -188,20 +173,18 @@ const isSiteFullyPrivateForVisitor = computed(() => {
 })
 
 const visibleMobileNavItems = computed(() => {
-  if (getAdminToken()) return mobileNavItems
-  return mobileNavItems.filter((item) => isViewVisible(item.key))
+  if (getAdminToken()) return mobileNavItems.value
+  return mobileNavItems.value.filter((item) => isViewVisible(item.key))
 })
+
 const curatorProfile = ref<CuratorProfile | null>(loadCuratorProfile())
 
-// 欢迎扉页 / 档案馆的流转状态 (RC-25, RC-59)
+// 欢迎扉页 / 档案馆的流转状态
 const hasEnteredArchive = ref<boolean>(
   Boolean(getAdminToken()) || hasEnteredArchiveSession(),
 )
 const systemStatus = ref<SystemStatus | null>(null)
 
-// WEB-5：共享请求与短 TTL 缓存。
-// 此前 profile 在 refreshData 与启动批次里各拉一次、system 在 WelcomePortal
-// 与 App 各拉一次；现在同一时刻只有一个 in-flight Promise，30 秒内复用结果。
 const PROFILE_TTL_MS = 30_000
 const SYSTEM_TTL_MS = 30_000
 const DATA_FRESH_MS = 30_000
@@ -210,15 +193,12 @@ let profileInFlight: Promise<CuratorProfile | null> | null = null
 let systemFetchedAt = 0
 let systemInFlight: Promise<SystemStatus | null> | null = null
 let lastDataRefreshAt = 0
-// 上一次整批数据刷新时的登录身份：封面内登录后必须补拉主理人专属数据。
 let lastDataRefreshedAsAdmin = false
 
 const loadProfileShared = (force = false): Promise<CuratorProfile | null> => {
   if (!force && profileFetchedAt && Date.now() - profileFetchedAt < PROFILE_TTL_MS) {
     return Promise.resolve(curatorProfile.value)
   }
-  // force 必须绕过在途请求：否则刚记完一笔账时，复用的仍是记账前发出的
-  // /profile，资产大盘会短暂回退到旧值。
   if (profileInFlight && !force) return profileInFlight
   const request = fetchCuratorProfile()
     .then((profile) => {
@@ -241,7 +221,6 @@ const applySystemStatus = (status: SystemStatus) => {
     document.title = status.site_name
   }
   if (!status.initialized) {
-    // 系统尚未初始化：无条件清空本地残留旧 Token，停留在欢迎扉页首次装帧向导 (RC-59)
     removeAdminToken()
     clearEnteredArchive()
     hasEnteredArchive.value = false
@@ -280,7 +259,6 @@ const {
   entries,
   currentCategory,
   loadRemoteEntries,
-  refreshEntriesForYear,
   addEntry,
   updateEntry,
   removeEntry,
@@ -296,54 +274,30 @@ const {
   txToEntry,
 } = useTransactions()
 
-// 造物项目列表 (真实空态，由后端驱动 RC-38)
-// MOB-OPT-P1: shallowRef 避免递归代理项目列表
-const projects = shallowRef<Project[]>([])
-
 // 模态框显隐控制
 const selectedEntry = ref<LifeEntry | null>(null)
 const isNewEntryOpen = ref(false)
-const newEntryInitialKind = ref<'life' | 'travel' | 'project' | 'wish' | 'transaction' | undefined>(undefined)
-const newEntryInitialProjectId = ref<number | undefined>(undefined)
-const newEntryInitialCityCode = ref('')
-const newEntryInitialCityName = ref('')
+const newEntryInitialKind = ref<'life' | 'wish' | 'transaction' | undefined>(undefined)
 
-const openNewEntry = (
-  kind?: 'life' | 'travel' | 'project' | 'wish' | 'transaction',
-  projectId?: number,
-  city?: { code: string; name: string }
-) => {
+const openNewEntry = (kind?: 'life' | 'wish' | 'transaction') => {
   newEntryInitialKind.value =
     kind ||
     (currentView.value === 'transactions'
-      ? 'transaction'
-      : currentView.value === 'projects'
-        ? 'project'
-        : currentView.value === 'wishes' || currentView.value === 'wishlist'
-          ? 'wish'
-          : currentView.value === 'atlas' || currentView.value === 'footprints'
-            ? 'travel'
-            : undefined)
-  newEntryInitialProjectId.value = projectId
-  newEntryInitialCityCode.value = city?.code || ''
-  newEntryInitialCityName.value = city?.name || ''
+      ? (ledgerTab.value === 'wishes' ? 'wish' : 'transaction')
+      : undefined)
   isNewEntryOpen.value = true
-}
-
-const handleOpenAddWithCity = (city: { code: string; name: string }) => {
-  openNewEntry('travel', undefined, city)
 }
 
 const isStorageBackupOpen = ref(false)
 const storageBackupInitialTab = ref<'backup' | 'storage' | 'visibility'>('backup')
 const isSearchOpen = ref(false)
-
 const isPairingOpen = ref(false)
 const isUpdateCheckOpen = ref(false)
-
 const isSessionHintOpen = ref(false)
+const isAlmanacOpen = ref(false)
+const almanacYear = ref<number>(getBeijingYear())
+const isProfileEditOpen = ref(false)
 
-// 全局模态框计数（openModalCount 统一由 useBodyScrollLock 维护，覆盖所有顶层与子视图弹窗）
 const { confirmRequest } = useConfirm()
 const { loadCategories, isCategoryManagerOpen } = useCategories()
 const anyModalOpen = computed(
@@ -355,19 +309,34 @@ const anyModalOpen = computed(
     isPairingOpen.value ||
     isUpdateCheckOpen.value ||
     isSessionHintOpen.value ||
+    isAlmanacOpen.value ||
+    isProfileEditOpen.value ||
     isCategoryManagerOpen.value ||
     Boolean(confirmRequest.value) ||
     Boolean(selectedEntry.value)
 )
+
 const handleOpenSearch = () => {
   if (anyModalOpen.value) return
   isSearchOpen.value = true
 }
+
+const handleOpenAlmanac = () => {
+  almanacYear.value = getBeijingYear()
+  isAlmanacOpen.value = true
+}
+
+const handleOpenProfile = () => {
+  if (!getAdminToken()) {
+    handleRequestAuth()
+    return
+  }
+  isProfileEditOpen.value = true
+}
+
 const wishesRefreshKey = ref(0)
-const atlasRefreshKey = ref(0)
 const txRefreshKey = ref(0)
 
-// 未授信浏览器无法就地自证身份，统一引导 OIDC 登录或已配对设备扫码授权
 const handleRequestAuth = () => {
   if (getAdminToken()) return
   isSessionHintOpen.value = true
@@ -394,29 +363,77 @@ const allTimelineEntries = computed(() => {
   return combined
 })
 
+const availableAlmanacYears = computed(() => {
+  const currentYear = getBeijingYear()
+  let minYear = currentYear
+  allTimelineEntries.value.forEach((entry) => {
+    const y = parseInt(parseOccurredDate(entry.occurred_at).year, 10)
+    if (!isNaN(y) && y >= 2000 && y <= currentYear) {
+      if (y < minYear) minYear = y
+    }
+  })
+  const list: number[] = []
+  for (let y = currentYear; y >= minYear; y--) {
+    list.push(y)
+  }
+  return list
+})
+
 const handleCategoryChange = (cat: ArchiveCategory) => {
   currentCategory.value = cat
-  if (currentView.value !== 'home' && currentView.value !== 'life') {
+  if (currentView.value !== 'home') {
     currentView.value = 'home'
     window.location.hash = 'home'
   }
 }
 
 const navigateTo = (view: string) => {
-  if (view === 'transactions' && !getAdminToken()) {
-    const target = firstPublicView()
-    currentView.value = target
-    window.location.hash = target
+  if (view === 'wishes' || view === 'wishlist') {
+    if (!isViewVisible('wishes')) {
+      const target = firstPublicView()
+      currentView.value = target
+      if (target === 'transactions' && !getAdminToken()) {
+        ledgerTab.value = 'wishes'
+      }
+      window.location.hash = target === 'transactions' && ledgerTab.value === 'wishes' ? 'wishes' : target
+      return
+    }
+    ledgerTab.value = 'wishes'
+    currentView.value = 'transactions'
+    window.location.hash = 'wishes'
     return
   }
-  if (!isViewVisible(view)) {
-    const target = firstPublicView()
-    currentView.value = target
-    window.location.hash = target
+
+  if (view === 'transactions') {
+    if (!getAdminToken()) {
+      if (isViewVisible('wishes')) {
+        ledgerTab.value = 'wishes'
+        currentView.value = 'transactions'
+        window.location.hash = 'wishes'
+        return
+      }
+      const target = firstPublicView()
+      currentView.value = target
+      window.location.hash = target
+      return
+    }
+    ledgerTab.value = 'ledger'
+    currentView.value = 'transactions'
+    window.location.hash = 'transactions'
     return
   }
-  currentView.value = view
-  window.location.hash = view
+
+  if (!isViewVisible('home')) {
+    const target = firstPublicView()
+    currentView.value = target
+    if (target === 'transactions' && !getAdminToken()) {
+      ledgerTab.value = 'wishes'
+    }
+    window.location.hash = target === 'transactions' && ledgerTab.value === 'wishes' ? 'wishes' : target
+    return
+  }
+  currentView.value = 'home'
+  window.location.hash = 'home'
 }
 
 const openEntryDetail = (entry: LifeEntry) => {
@@ -433,7 +450,10 @@ const openEntryDetail = (entry: LifeEntry) => {
 const closeEntryDetail = () => {
   selectedEntry.value = null
   if (window.location.hash.startsWith('#entry/')) {
-    window.location.hash = currentView.value
+    window.location.hash =
+      currentView.value === 'transactions' && ledgerTab.value === 'wishes'
+        ? 'wishes'
+        : currentView.value
   }
 }
 
@@ -447,21 +467,9 @@ const openStorageBackupModal = (tab: 'backup' | 'storage' | 'visibility' = 'back
 }
 
 const handleEntryCreated = (newEntry: LifeEntry) => {
-  // WEB-7：接口已在弹窗内确认成功，这里只做本地乐观插入。
-  // 不再整库重拉 7 页；分类 / 心愿 / 足迹的刷新信号保留。
   addEntry(newEntry)
   wishesRefreshKey.value++
-  atlasRefreshKey.value++
-  if (
-    currentView.value !== 'home' &&
-    currentView.value !== 'life' &&
-    currentView.value !== 'projects' &&
-    currentView.value !== 'wishes' &&
-    currentView.value !== 'wishlist' &&
-    currentView.value !== 'atlas' &&
-    currentView.value !== 'footprints' &&
-    currentView.value !== 'about'
-  ) {
+  if (currentView.value !== 'home' && currentView.value !== 'transactions') {
     navigateTo('home')
   }
 }
@@ -470,7 +478,6 @@ const handleEntryUpdated = (updated: LifeEntry) => {
   updateEntry(updated)
   selectedEntry.value = updated
   wishesRefreshKey.value++
-  atlasRefreshKey.value++
 }
 
 const handleEntryDeleted = (id: number) => {
@@ -479,16 +486,17 @@ const handleEntryDeleted = (id: number) => {
     selectedEntry.value = null
   }
   if (window.location.hash.startsWith('#entry/')) {
-    window.location.hash = currentView.value
+    window.location.hash =
+      currentView.value === 'transactions' && ledgerTab.value === 'wishes'
+        ? 'wishes'
+        : currentView.value
   }
   wishesRefreshKey.value++
-  atlasRefreshKey.value++
 }
 
 const handleTxCreated = async (tx: Transaction) => {
   addTransaction(tx)
   txRefreshKey.value++
-  // WEB-5：与启动 / 其它入口共享同一个 in-flight Promise，避免重复 /profile。
   await loadProfileShared(true)
 }
 
@@ -502,68 +510,21 @@ const handleTxDeleted = (id: number) => {
   txRefreshKey.value++
 }
 
-const handleGearChanged = async () => {
-  await Promise.allSettled([
-    // 器物在时间流里有伴生散页（添置 / 转手都会改写它），
-    // 不刷新时间流就看不到「添置器物 · xxx」。
-    loadRemoteEntries(),
-    ...(Boolean(getAdminToken()) ? [loadRemoteTransactions()] : []),
-    loadProfileShared(true),
-  ])
-}
-
 const handleRestored = () => {
   window.location.reload()
 }
 
-// WEB-7：造物伴生散页可能跨年；只回源这些年份，不再整库重拉。
-const projectEntryYears = (projectId?: number): string[] => {
-  const years = new Set<string>()
-  if (projectId) {
-    entries.value.forEach((e) => {
-      if (e.project_id === projectId) {
-        years.add(parseOccurredDate(e.occurred_at).year)
-      }
-    })
-  }
-  if (years.size === 0) years.add(String(getBeijingYear()))
-  return Array.from(years).filter(Boolean)
-}
-
-const handleProjectCreated = (newProj: Project) => {
-  projects.value = [newProj, ...projects.value]
-  void refreshEntriesForYear(projectEntryYears(newProj.id))
-}
-
-const handleProjectUpdated = (updated: Project) => {
-  projects.value = projects.value.map((p) => (p.id === updated.id ? updated : p))
-  void refreshEntriesForYear(projectEntryYears(updated.id))
-}
-
-const handleProjectDeleted = (id: number) => {
-  const years = projectEntryYears(id)
-  projects.value = projects.value.filter((p) => p.id !== id)
-  // 关键：造物的伴生散页会随项目一并软删除，否则时间流里会留下
-  // 一条再也点不回项目的孤儿记录。只回源相关年份即可。
-  void refreshEntriesForYear(years)
-}
-
-// WEB-5：欢迎页首屏不再拉 storage / transactions：
-// - storage 只在打开灾备弹窗时由 StorageBackupModal 自己拉；
-// - transactions 是主理人接口，访客会 401，进档案后登录时再补。
 let refreshDataInFlight: Promise<void> | null = null
 let refreshDataAsAdmin: boolean | null = null
 const refreshData = async (): Promise<void> => {
   const adminNow = Boolean(getAdminToken())
-  // 进馆 / 登录回调 / 首次装帧几乎同时触发时只跑一轮，避免重复整库拉取。
   if (refreshDataInFlight) {
     if (refreshDataAsAdmin === adminNow) return refreshDataInFlight
-    // 访客那一轮不会请求 transactions；身份变了必须等它结束再补一轮。
     await refreshDataInFlight
   }
   const run = (async () => {
     wishesRefreshKey.value++
-    atlasRefreshKey.value++
+    txRefreshKey.value++
     const isAdmin = Boolean(getAdminToken())
     const pubMods = siteConfig.value?.public_modules ?? []
     const tasks: Promise<unknown>[] = []
@@ -602,9 +563,6 @@ const handleHashChange = async () => {
       } else {
         try {
           const fetched = await fetchEntryById(id)
-          // 晚到防护：请求期间用户可能已切换 hash / 关闭详情，
-          // 迟到的结果不能再赋给 selectedEntry，否则会凭空弹出「幽灵详情」。
-          // 用全等比对（而非 startsWith）避免 entry/1 误匹配 entry/12。
           if (fetched && window.location.hash.replace('#', '') === `entry/${id}`) {
             selectedEntry.value = fetched
           }
@@ -618,43 +576,54 @@ const handleHashChange = async () => {
 
   if (!hash || hash === 'home' || hash === 'life') {
     const target = isViewVisible('home') ? 'home' : firstPublicView()
+    if (target === 'transactions' && !getAdminToken()) {
+      ledgerTab.value = 'wishes'
+    }
     currentView.value = target
     selectedEntry.value = null
-  } else if (
-    ['transactions', 'projects', 'about', 'wishes', 'wishlist', 'atlas', 'footprints'].includes(hash)
-  ) {
-    if (hash === 'transactions' && !getAdminToken()) {
+  } else if (hash === 'wishes' || hash === 'wishlist') {
+    if (!isViewVisible('wishes')) {
       const target = firstPublicView()
       currentView.value = target
       window.location.hash = target
       selectedEntry.value = null
       return
     }
-    const normalizedHash =
-      hash === 'wishlist' ? 'wishes' : hash === 'footprints' ? 'atlas' : hash
-    if (!isViewVisible(normalizedHash)) {
+    ledgerTab.value = 'wishes'
+    currentView.value = 'transactions'
+    selectedEntry.value = null
+  } else if (hash === 'transactions') {
+    if (!getAdminToken()) {
+      if (isViewVisible('wishes')) {
+        ledgerTab.value = 'wishes'
+        currentView.value = 'transactions'
+        selectedEntry.value = null
+        return
+      }
       const target = firstPublicView()
       currentView.value = target
       window.location.hash = target
       selectedEntry.value = null
       return
     }
-    currentView.value = normalizedHash
+    ledgerTab.value = 'ledger'
+    currentView.value = 'transactions'
+    selectedEntry.value = null
+  } else {
+    // 兼容已下线的旧 hash（#projects / #atlas / #about 等），优雅回落至首屏可见视图
+    const target = isViewVisible('home') ? 'home' : firstPublicView()
+    if (target === 'transactions' && !getAdminToken()) {
+      ledgerTab.value = 'wishes'
+    }
+    currentView.value = target
     selectedEntry.value = null
   }
 }
 
-// 任意请求 401 后 utils/api.ts 会先清除本地凭据并派发 'looseleaf-auth-expired'。
-// 这里统一收口：弹一次 SessionExpiredModal 提示会话失效（复用 isSessionHintOpen，
-// 它是布尔单弹窗，连续多个 401 事件不会叠加弹窗，只会保持打开）。
 const handleAuthExpired = () => {
   isSessionHintOpen.value = true
 }
 
-// WEB-5：启动瀑布改为「一波并行」。
-// 此前是 refreshSessionState → handleHashChange → refreshData → 第二批，
-// 首屏要等四段串行网络；现在 session 探针、分类、全量散页、项目、config、
-// profile、system 同时发出，transactions 只在确认是主理人后才发（访客不 401）。
 onMounted(async () => {
   window.addEventListener('looseleaf-auth-expired', handleAuthExpired)
 
@@ -667,15 +636,12 @@ onMounted(async () => {
   const bootTasks = Promise.allSettled([
     loadCategories(),
     loadRemoteEntries(),
-    fetchProjects(),
     fetchSiteConfig(),
     loadProfileShared(),
     loadSystemStatusShared(),
     transactionsTask,
   ])
 
-  // 路由不能等整批数据：只要会话角色确定就立刻应用初始 hash 并挂上监听，
-  // 否则首屏网络慢时刷新 /#atlas 会一直停在首页，前进/后退也失灵。
   const isSessionAdmin = await sessionTask
   if (isSessionAdmin && systemStatus.value?.initialized !== false) {
     markEnteredArchive()
@@ -685,20 +651,14 @@ onMounted(async () => {
   window.addEventListener('hashchange', handleHashChange)
 
   const results = await bootTasks
-  // 顺序与上面的 bootTasks 一一对应（sessionTask 已单独 await）。
-  const projRes = results[2]
-  const cfgRes = results[3]
+  const cfgRes = results[2]
 
-  if (projRes.status === 'fulfilled' && Array.isArray(projRes.value)) {
-    projects.value = projRes.value
-  }
   if (cfgRes.status === 'fulfilled' && cfgRes.value) {
     const cfg = cfgRes.value
     siteConfig.value = cfg
     document.title = cfg.site_name || '散页 · 个人生活志'
   }
 
-  // Cookie 会话有效但 localStorage 标记缺失时，以会话探针的权威结果标记进馆并进入主理人模式。
   if (isSessionAdmin && systemStatus.value?.initialized !== false) {
     markEnteredArchive()
     hasEnteredArchive.value = true
@@ -722,10 +682,6 @@ onUnmounted(() => {
   window.removeEventListener('hashchange', handleHashChange)
 })
 
-// 认领成功页存活期间抑制「会话/entered 标记 → 自动进馆」：
-// 认领成功瞬间两者必然已写入（claimDevice 已建立会话、handleClaimSubmit 已 markEnteredArchive），
-// 若不抑制，handleBootstrapped 的状态预取一返回 applySystemStatus 就会把扉页顶成展厅，
-// 「建议再配对一台设备作为备份」与「翻开扉页」根本来不及呈现。进馆由成功页按钮驱动。
 let suppressAutoEnter = false
 
 const handleEnterArchive = () => {
@@ -735,9 +691,6 @@ const handleEnterArchive = () => {
   suppressAutoEnter = false
   hasEnteredArchive.value = true
   markEnteredArchive()
-  // 启动批次刚刚拉过数据就直接进馆，避免「点进入」再整库重拉一次。
-  // 但身份变了（例如封面内刚登录主人）必须补拉 transactions ——
-  // 访客启动批次根本不会请求这个主理人接口。
   const adminNow = Boolean(getAdminToken())
   if (
     !lastDataRefreshAt ||
@@ -754,12 +707,7 @@ const handleReturnToWelcome = () => {
 }
 
 const handleBootstrapped = async () => {
-  // 首次认领成功：只做数据预取与状态校正，**不推进馆** ——
-  // 成功页（「建议再配对一台设备作为备份」）必须留在欢迎扉页上，
-  // 进馆交由成功页「翻开扉页」按钮 emit('enter') → handleEnterArchive 驱动。
-  // 抑制 applySystemStatus 的自动进馆，否则预取返回（亚秒级）就会顶掉成功页。
   suppressAutoEnter = true
-  // 先标记新鲜，防止紧随其后的 @enter 再触发一次 refreshData。
   lastDataRefreshAt = Date.now()
   if (systemStatus.value) {
     systemStatus.value = { ...systemStatus.value, initialized: true }
@@ -779,9 +727,12 @@ const handleBootstrapped = async () => {
   void refreshData()
 }
 
-watch(currentView, (newV) => {
+watch([currentView, ledgerTab], ([newV, tab]) => {
   if (!window.location.hash.startsWith('#entry/')) {
-    window.location.hash = newV
+    const targetHash = newV === 'transactions' && tab === 'wishes' ? 'wishes' : newV
+    if (window.location.hash.replace('#', '') !== targetHash) {
+      window.location.hash = targetHash
+    }
   }
 })
 
@@ -794,6 +745,9 @@ watch(() => siteConfig.value?.site_name, (newName) => {
 watch(() => siteConfig.value?.public_modules, () => {
   if (!getAdminToken() && !isViewVisible(currentView.value)) {
     const target = firstPublicView()
+    if (target === 'transactions') {
+      ledgerTab.value = 'wishes'
+    }
     if (target !== currentView.value) {
       currentView.value = target
     }
@@ -802,7 +756,7 @@ watch(() => siteConfig.value?.public_modules, () => {
 </script>
 
 <template>
-  <!-- 1. 独立全屏大屏页面：欢迎扉页 / 迎宾与登入门户 (类似全屏登录页架构，点击后方才进入真正网站) -->
+  <!-- 1. 独立全屏大屏页面：欢迎扉页 / 迎宾与登入门户 -->
   <WelcomePortal
     v-if="!hasEnteredArchive"
     :theme="theme"
@@ -812,12 +766,12 @@ watch(() => siteConfig.value?.public_modules, () => {
     @bootstrapped="handleBootstrapped"
   />
 
-  <!-- 2. 真正的网站展厅本体：点击进入之后才加载并呈现 -->
+  <!-- 2. 真正的网站展厅本体 -->
   <div
     v-else
     class="min-h-screen bg-[var(--bg-archive)] text-[var(--ink-primary)] flex flex-col justify-between selection:bg-[var(--accent-warm)]/15 selection:text-[var(--accent-warm)]"
   >
-    <!-- 原生 SVG 纸张微噪点覆盖层（哑光相纸与实体书质感） -->
+    <!-- 原生 SVG 纸张微噪点覆盖层 -->
     <div class="paper-grain-overlay" aria-hidden="true" />
 
     <!-- 极简出版风顶部导航 -->
@@ -827,6 +781,8 @@ watch(() => siteConfig.value?.public_modules, () => {
       :config="siteConfig"
       @navigate="navigateTo"
       @openAdd="openNewEntry()"
+      @openAlmanac="handleOpenAlmanac"
+      @openProfile="handleOpenProfile"
       @openSearch="handleOpenSearch"
       @openStorageBackup="openStorageBackupModal"
       @openPairing="isPairingOpen = true"
@@ -836,7 +792,6 @@ watch(() => siteConfig.value?.public_modules, () => {
     />
 
     <!-- 主视图区 -->
-    <!-- MOB-P1-107：为移动端底部标签栏留出空间 -->
     <main class="flex-grow pb-16 md:pb-0">
       <div
         v-if="isSiteFullyPrivateForVisitor"
@@ -862,7 +817,7 @@ watch(() => siteConfig.value?.public_modules, () => {
         </div>
       </div>
 
-      <!-- 1. HOME 视图：克制开篇封面 + 最近一年生活刻度热力图 + 近况生活流 -->
+      <!-- 1. 散页视图 (Stream)：开篇封面 + 那年今日 + 生活刻度热力图 + 纵向时间流 -->
       <HomeView
         v-else-if="currentView === 'home'"
         :entries="allTimelineEntries"
@@ -874,69 +829,29 @@ watch(() => siteConfig.value?.public_modules, () => {
         @openAdd="openNewEntry()"
       />
 
-      <!-- 2. TRANSACTIONS 视图：独立资产管理模块 (RG-11, RC-53) -->
+      <!-- 2. 记账视图 (Ledger)：日常流水 + 内嵌心愿单 -->
       <TransactionsView
         v-else-if="currentView === 'transactions'"
         :refreshKey="txRefreshKey"
-        :profile="curatorProfile"
-        @openAdd="openNewEntry('transaction')"
+        :wishesRefreshKey="wishesRefreshKey"
+        :initialTab="ledgerTab"
+        @tabChange="(tab: 'ledger' | 'wishes') => (ledgerTab = tab)"
+        @openAdd="(kind?: 'transaction' | 'wish') => openNewEntry(kind || 'transaction')"
         @transactionDeleted="handleTxDeleted"
         @transactionUpdated="handleTxUpdated"
-        @gearChanged="handleGearChanged"
-      />
-
-      <!-- 3. PROJECTS 视图：作为人生经历的一章 (造物) -->
-      <ProjectsView
-        v-else-if="currentView === 'projects'"
-        :projects="projects"
-        :entries="entries"
-        @projectCreated="handleProjectCreated"
-        @projectUpdated="handleProjectUpdated"
-        @projectDeleted="handleProjectDeleted"
-        @selectEntry="openEntryDetail"
-        @openAddProjectEntry="(projId: number) => openNewEntry('project', projId)"
-        @requestAuth="handleRequestAuth"
-      />
-
-      <!-- 4. WISHLIST 视图：三维心愿单独立展示页与归册仪式 (FE-11) -->
-      <WishlistView
-        v-else-if="currentView === 'wishes' || currentView === 'wishlist'"
-        :refreshKey="wishesRefreshKey"
         @wishResolved="refreshData"
         @requestAuth="handleRequestAuth"
       />
-
-      <!-- 5. ATLAS 视图：山川行迹印谱百宝格与典藏票根 (FE-12, FE-13, RC-98) -->
-      <TravelAtlasView
-        v-else-if="currentView === 'atlas' || currentView === 'footprints'"
-        :refreshKey="atlasRefreshKey"
-        @selectEntry="openEntryDetail"
-        @footprintSaved="loadRemoteEntries"
-        @openAddWithCity="handleOpenAddWithCity"
-        @requestAuth="handleRequestAuth"
-      />
-
-      <!-- 6. ABOUT 视图：主理人个人主页（肖像、自白、年度生活年鉴、时间热力图与器物图鉴） -->
-      <AboutView
-        v-else-if="currentView === 'about'"
-        :profile="curatorProfile"
-        :entries="allTimelineEntries"
-        @profileUpdated="curatorProfile = $event"
-        @gearChanged="handleGearChanged"
-        @requestAuth="handleRequestAuth"
-        @selectEntry="openEntryDetail"
-      />
-
     </main>
 
-    <!-- 极简合规页脚（工信部与公安备案直链） -->
+    <!-- 极简合规页脚 -->
     <FooterArchive
       :config="siteConfig"
       :profile="curatorProfile"
       @openWelcome="handleReturnToWelcome"
     />
 
-    <!-- 全局快捷新增浮动操作按钮 (桌面端 + 移动端右下角) -->
+    <!-- 全局快捷新增浮动操作按钮 -->
     <div class="md:hidden h-0" />
     <aside
       v-if="!anyModalOpen"
@@ -953,12 +868,7 @@ watch(() => siteConfig.value?.public_modules, () => {
       </button>
     </aside>
 
-    <!--
-      MOB-P1-107：移动端底部标签栏。
-      此前移动端只有左上角汉堡菜单 → 每次切换主板块都要「开菜单 → 滚动 → 点」三步；
-      底部标签栏让 5 个主板块一触即达，与 Android 端的底栏策略保持一致。
-      桌面端（md 及以上）仍走顶部导航，不显示此栏。
-    -->
+    <!-- 移动端底部标签栏：散页 / 记账 -->
     <nav
       v-if="!anyModalOpen && visibleMobileNavItems.length > 0"
       class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--bg-archive)]/96 backdrop-blur-md border-t border-[var(--border-subtle)] pb-[env(safe-area-inset-bottom)]"
@@ -992,7 +902,7 @@ watch(() => siteConfig.value?.public_modules, () => {
       @selectEntry="openEntryDetail"
     />
 
-    <!-- 2. 存储设置与全量灾备中枢 (ZIP 灾备 / 对象存储 / 文稿导出) -->
+    <!-- 2. 存储设置与全量灾备中枢 -->
     <StorageBackupModal
       v-if="isStorageBackupOpen"
       :isOpen="isStorageBackupOpen"
@@ -1003,19 +913,14 @@ watch(() => siteConfig.value?.public_modules, () => {
       @requestAuth="handleRequestAuth"
     />
 
-    <!-- 3. 新增生活记录/记账 弹窗 (RG-11) -->
+    <!-- 3. 新增生活记录/心愿/记账 弹窗 -->
     <NewEntryModal
       v-if="isNewEntryOpen"
       :isOpen="isNewEntryOpen"
-      :projects="projects"
       :initialKind="newEntryInitialKind"
-      :initialProjectId="newEntryInitialProjectId"
-      :initialCityCode="newEntryInitialCityCode"
-      :initialCityName="newEntryInitialCityName"
-      @close="isNewEntryOpen = false; newEntryInitialCityCode = ''; newEntryInitialCityName = ''"
+      @close="isNewEntryOpen = false"
       @entryCreated="handleEntryCreated"
       @transactionCreated="handleTxCreated"
-      @projectCreated="handleProjectCreated"
       @wishCreated="refreshData"
       @requestAuth="handleRequestAuth"
     />
@@ -1024,7 +929,6 @@ watch(() => siteConfig.value?.public_modules, () => {
     <EntryDetailModal
       v-if="Boolean(selectedEntry)"
       :entry="selectedEntry"
-      :projects="projects"
       @close="closeEntryDetail"
       @updated="handleEntryUpdated"
       @deleted="handleEntryDeleted"
@@ -1038,20 +942,38 @@ watch(() => siteConfig.value?.public_modules, () => {
       @close="isPairingOpen = false"
     />
 
-    <!-- 7. 系统版本检测 弹窗（管理端专用） -->
+    <!-- 6. 年度生活年鉴画报弹窗 -->
+    <AlmanacModal
+      v-if="isAlmanacOpen"
+      :isOpen="isAlmanacOpen"
+      :initialYear="almanacYear"
+      :availableYears="availableAlmanacYears"
+      @close="isAlmanacOpen = false"
+    />
+
+    <!-- 7. 主理人资料编辑弹窗 -->
+    <ProfileEditModal
+      v-if="isProfileEditOpen && curatorProfile"
+      :isOpen="isProfileEditOpen"
+      :profile="curatorProfile"
+      @close="isProfileEditOpen = false"
+      @updated="curatorProfile = $event"
+    />
+
+    <!-- 8. 系统版本检测 弹窗（管理端专用） -->
     <UpdateCheckModal
       v-if="isUpdateCheckOpen"
       :isOpen="isUpdateCheckOpen"
       @close="isUpdateCheckOpen = false"
     />
 
-    <!-- 8. 全局自定义分类与字典管理 弹窗 -->
+    <!-- 9. 全局自定义分类与字典管理 弹窗 -->
     <CategoryManagerModal v-if="isCategoryManagerOpen" />
 
-    <!-- 10. 全站统一确认 / 提示弹窗 (原生 confirm/alert 收口 FE-21) -->
+    <!-- 10. 全站统一确认 / 提示弹窗 -->
     <ConfirmDialog />
 
-    <!-- 11. 主理人权限引导弹窗（支持 Vesper Auth 单点登录与局域网设备配对） -->
+    <!-- 11. 主理人权限引导弹窗 -->
     <SessionExpiredModal
       v-if="isSessionHintOpen"
       :isOpen="isSessionHintOpen"

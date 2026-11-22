@@ -164,8 +164,8 @@ const archiveChapters = [
   {
     num: '01',
     icon: Compass,
-    title: '时间流与日常印记',
-    desc: '行迹、随笔、微小触动与具体的日常饭食。',
+    title: '散页与日常印记',
+    desc: '随笔、微小触动、生活刻度与具体日常。',
   },
   {
     num: '02',
@@ -176,8 +176,8 @@ const archiveChapters = [
   {
     num: '03',
     icon: Layers,
-    title: '手艺造物与收支光谱',
-    desc: '亲手创造的作品、造物工坊与真实账簿。',
+    title: '收支账簿与心愿单',
+    desc: '日常收支光谱、信贷分期与生活向往。',
   },
 ]
 
@@ -266,7 +266,7 @@ watch(
                 </div>
               </div>
               <div class="font-serif-editorial text-xs tracking-wider text-[var(--ink-muted)]">
-                个人生活志 · 日常 · 资产 · 心愿 · 行迹 · 造物
+                个人生活志 · 日常 · 记账 · 心愿
               </div>
             </div>
 
@@ -470,7 +470,7 @@ watch(
               </div>
 
               <div class="font-serif-editorial text-xs tracking-wider text-[var(--ink-muted)]">
-                个人生活志 · 日常 · 资产 · 心愿 · 行迹 · 造物
+                个人生活志 · 日常 · 记账 · 心愿
               </div>
             </div>
 
@@ -536,7 +536,7 @@ watch(
                 </div>
 
                 <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed">
-                  免密零门槛畅读公开生活档案：翻阅日常时间流、35mm 银盐底片影集、手艺造物、心愿单与城市行迹地图。
+                  免密零门槛畅读公开生活档案：翻阅日常散页、35mm 银盐底片影集、心愿单与年度生活年鉴。
                 </p>
 
                 <button

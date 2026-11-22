@@ -67,8 +67,7 @@ export function filterEntriesBySearch(entriesList: LifeEntry[], query: string): 
     const inTitle = (e.title || '').toLowerCase().includes(q)
     const inContent = (e.content || '').toLowerCase().includes(q)
     const inLocation = (e.location || '').toLowerCase().includes(q)
-    const inCity = (e.city_name || '').toLowerCase().includes(q)
-    return inTitle || inContent || inLocation || inCity
+    return inTitle || inContent || inLocation
   })
 }
 

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { Calendar, ChevronDown, ChevronUp, X } from 'lucide-vue-next'
 import type { LifeEntry, ArchiveCategory, SiteConfig, CuratorProfile } from '../types'
 import LifeStream from './LifeStream.vue'
+import LifeActivityMap from './LifeActivityMap.vue'
 import { fetchOnThisDayEntries } from '../utils/api'
 import { getBeijingDotDate, getBeijingYear, parseOccurredDate } from '../utils/format'
 import { getSiteBrandName, getDisplayCity } from '../utils/profile'
@@ -20,6 +22,8 @@ const emit = defineEmits<{
 }>()
 
 const remoteOnThisDay = ref<LifeEntry[]>([])
+const showHeatmap = ref(true)
+const selectedHeatmapDate = ref<string>('')
 
 const todayDisplay = computed(() => getBeijingDotDate())
 
@@ -54,6 +58,14 @@ const onThisDayEntries = computed<LifeEntry[]>(() => {
   )
 })
 
+const selectedDateEntries = computed(() => {
+  if (!selectedHeatmapDate.value) return []
+  const selectedKey = selectedHeatmapDate.value.replace(/\./g, '-')
+  return props.entries.filter(
+    (entry) => parseOccurredDate(entry.occurred_at).dateKey === selectedKey,
+  )
+})
+
 const formatYearsAgoLabel = (entry: LifeEntry): string => {
   const parsed = parseOccurredDate(entry.occurred_at)
   const yearsAgo = Math.max(1, getBeijingYear() - Number(parsed.year))
@@ -74,11 +86,11 @@ onMounted(async () => {
 // 刊物品牌名（由后端配置单一驱动 RC-40）
 const displaySiteName = computed(() => getSiteBrandName(props.config))
 
-// 刊物副标题（由后端配置单一驱动 RC-40，缺省回落全维度副标）
+// 刊物副标题（由后端配置单一驱动 RC-40）
 const displaySubtitle = computed(() => {
   const raw = props.config?.site_subtitle
   if (!raw) {
-    return '日常 · 资产 · 心愿 · 行迹 · 造物'
+    return '日常 · 记账 · 心愿'
   }
   return raw
 })
@@ -144,8 +156,8 @@ const headerLocation = computed(() => getDisplayCity(props.profile, props.config
         >
           <div class="flex items-center justify-between text-[11px] font-mono-archive text-[var(--ink-muted)]">
             <span class="text-[var(--accent-warm)] font-medium">{{ formatYearsAgoLabel(item) }}</span>
-            <span v-if="item.city_name || item.location" class="truncate max-w-[120px]">
-              {{ item.city_name || item.location }}
+            <span v-if="item.location" class="truncate max-w-[120px]">
+              {{ item.location }}
             </span>
           </div>
           <h4
@@ -157,6 +169,79 @@ const headerLocation = computed(() => getDisplayCity(props.profile, props.config
           <p class="font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] line-clamp-2 leading-relaxed">
             {{ item.content }}
           </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 生活刻度 · 最近一年时间热力图（可折叠） -->
+    <section class="mt-6">
+      <div class="flex items-center justify-between text-xs font-mono-archive text-[var(--ink-muted)] pb-2">
+        <span class="tracking-widest">编年刻度 · 时间热力图</span>
+        <button
+          type="button"
+          @click="showHeatmap = !showHeatmap"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-xs border border-[var(--border-subtle)] hover:border-[var(--ink-primary)] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] transition-colors cursor-pointer"
+        >
+          <span>{{ showHeatmap ? '收起热力图' : '展开热力图' }}</span>
+          <ChevronUp v-if="showHeatmap" class="w-3.5 h-3.5" />
+          <ChevronDown v-else class="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div v-if="showHeatmap" class="space-y-4">
+        <LifeActivityMap
+          :entries="entries"
+          :selectedDate="selectedHeatmapDate"
+          @selectDate="selectedHeatmapDate = $event"
+        />
+
+        <!-- 点选具体日期后展开当日手记速览 -->
+        <div
+          v-if="selectedHeatmapDate"
+          class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/35 space-y-3"
+        >
+          <div class="flex items-center justify-between text-xs font-mono-archive">
+            <div class="flex items-center gap-2 text-[var(--ink-primary)]">
+              <Calendar class="w-3.5 h-3.5 text-[var(--accent-warm)]" />
+              <span>{{ selectedHeatmapDate }} 当日记录 ({{ selectedDateEntries.length }} 条)</span>
+            </div>
+            <button
+              type="button"
+              @click="selectedHeatmapDate = ''"
+              class="inline-flex items-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink-primary)] cursor-pointer"
+            >
+              <X class="w-3.5 h-3.5" />
+              <span>关闭速览</span>
+            </button>
+          </div>
+
+          <div
+            v-if="selectedDateEntries.length === 0"
+            class="text-xs font-serif-editorial text-[var(--ink-muted)] py-2"
+          >
+            该日未留下记录。
+          </div>
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              v-for="item in selectedDateEntries"
+              :key="item.id"
+              type="button"
+              @click="emit('selectEntry', item)"
+              class="p-3 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-archive)] hover:border-[var(--ink-primary)] text-left transition-colors cursor-pointer space-y-1 group"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] truncate">
+                  {{ item.title }}
+                </span>
+                <span class="font-mono-archive text-[11px] text-[var(--ink-muted)] shrink-0">
+                  {{ parseOccurredDate(item.occurred_at).time }}
+                </span>
+              </div>
+              <p v-if="item.content" class="font-serif-editorial text-xs text-[var(--ink-secondary)] line-clamp-1">
+                {{ item.content }}
+              </p>
+            </button>
+          </div>
         </div>
       </div>
     </section>
