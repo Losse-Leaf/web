@@ -37,7 +37,7 @@ const brandName = computed(() => getSiteBrandName(props.config))
             </span>
           </div>
           <p class="text-[11px] text-[var(--ink-secondary)] font-serif-editorial">
-            个人生活志 · 记录日常、打理资产、兑现心愿、丈量山河、实践造物。
+            个人生活志 · 记录日常、打理账目、兑现心愿、定格光影。
           </p>
         </div>
 

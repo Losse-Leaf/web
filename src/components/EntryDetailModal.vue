@@ -6,8 +6,17 @@ import PaperSelect from './PaperSelect.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import EditorialLightbox from './EditorialLightbox.vue'
 import PrivacyToggle from './PrivacyToggle.vue'
+import EntryCategoryPicker from './EntryCategoryPicker.vue'
 import { updateLifeEntry, deleteLifeEntry, getAdminToken } from '../utils/api'
-import type { LifeEntry } from '../types'
+import { getEntryBadgeClass } from '../utils/entryCategoryStyle'
+import {
+  getEntryCategoryAccent,
+  getEntryDisplayCategoryLabel,
+  hasDistinctEntryTitle,
+  normalizeEntryCategory,
+  type EntryGalleryCategory,
+  type LifeEntry,
+} from '../types'
 import {
   parseOccurredDate,
   renderEditorialContent,
@@ -39,6 +48,7 @@ const errorMsg = ref<string | null>(null)
 // 编辑表单字段
 const editTitle = ref('')
 const editType = ref('life')
+const editCategory = ref<EntryGalleryCategory>('')
 const editContent = ref('')
 const editLocation = ref('')
 const editOccurredAt = ref('')
@@ -55,6 +65,8 @@ const startEdit = () => {
   isEditing.value = true
   const rawType = (props.entry.type || 'life').toLowerCase()
   editType.value = rawType === 'wish' ? 'wish' : 'life'
+  editCategory.value =
+    editType.value === 'life' ? normalizeEntryCategory(props.entry.category) : ''
 
   editTitle.value = props.entry.title || ''
   editContent.value = props.entry.content || ''
@@ -93,6 +105,7 @@ const handleSaveEdit = async () => {
     isSubmitting.value = true
     const updated = await updateLifeEntry(props.entry.id, {
       type: editType.value,
+      category: editType.value === 'life' ? editCategory.value : '',
       title: editTitle.value.trim(),
       content: editContent.value.trim(),
       location: editLocation.value.trim(),
@@ -162,14 +175,6 @@ const openImageLightbox = (url: string) => {
   isLightboxOpen.value = true
 }
 
-const getKindLabel = (type: string) => {
-  const map: Record<string, string> = {
-    life: '日常',
-    wish: '心愿',
-  }
-  return map[type] || '日常'
-}
-
 useBodyScrollLock(() => !!props.entry)
 useEscapeClose(() => Boolean(props.entry), handleClose)
 </script>
@@ -179,7 +184,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
     v-if="entry"
     role="dialog"
     aria-modal="true"
-    :aria-label="entry.title || '散页详情'"
+    :aria-label="hasDistinctEntryTitle(entry) ? entry.title : '散页详情'"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/45 backdrop-blur-xs animate-in fade-in duration-200"
     @click.self="handleClose"
   >
@@ -187,14 +192,24 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
       class="bg-[var(--bg-archive)] border border-[var(--border-subtle)] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[88dvh] sm:max-h-[92vh] overflow-y-auto rounded-xs p-4 sm:p-10 text-left relative transition-all pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))]"
     >
       <!-- 顶部关闭与操作工具栏 -->
-      <div class="flex items-center justify-between pb-6 border-b border-[var(--border-subtle)] mb-8">
-        <div class="flex items-center gap-2 font-mono-archive text-xs text-[var(--ink-muted)]">
+      <div class="flex items-center justify-between gap-3 pb-6 border-b border-[var(--border-subtle)] mb-8">
+        <div class="flex flex-wrap items-center gap-2 font-mono-archive text-xs text-[var(--ink-muted)]">
           <span class="text-[var(--ink-primary)] font-medium">
             {{ parseOccurredDate(entry.occurred_at).dotDate }}
           </span>
           <span v-if="parseOccurredDate(entry.occurred_at).time">· {{ parseOccurredDate(entry.occurred_at).time }}</span>
           <span>·</span>
-          <span class="text-[var(--ink-secondary)]">{{ getKindLabel(entry.type) }}</span>
+          <span
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xs border text-[11px] font-medium"
+            :class="getEntryBadgeClass(entry)"
+          >
+            <span
+              aria-hidden="true"
+              class="w-1.5 h-1.5 rounded-full shrink-0"
+              :style="{ backgroundColor: getEntryCategoryAccent(entry) }"
+            ></span>
+            <span>{{ getEntryDisplayCategoryLabel(entry) }}</span>
+          </span>
         </div>
 
         <div class="flex items-center gap-3">
@@ -287,6 +302,11 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
           </div>
         </div>
 
+        <EntryCategoryPicker
+          v-if="editType === 'life'"
+          v-model="editCategory"
+        />
+
         <div class="space-y-1.5">
           <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">正文内容 *</label>
           <textarea
@@ -348,7 +368,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
       <!-- 浏览模式 (Editorial 典雅展示) -->
       <article v-else class="space-y-8 font-serif-editorial">
         <!-- 标题 -->
-        <h1 v-if="entry.title" class="type-page-heading text-[var(--ink-primary)] leading-snug">
+        <h1 v-if="hasDistinctEntryTitle(entry)" class="type-page-heading text-[var(--ink-primary)] leading-snug">
           {{ entry.title }}
         </h1>
 
@@ -414,7 +434,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
                 <div class="aspect-[4/3] overflow-hidden rounded-xs bg-black">
                   <img
                     :src="img.thumb"
-                    :alt="entry.title"
+                    :alt="hasDistinctEntryTitle(entry) ? entry.title : getEntryDisplayCategoryLabel(entry)"
                     class="w-full h-full object-cover group-hover/frame:scale-105 transition-transform duration-300"
                     loading="lazy"
                    decoding="async">
@@ -440,7 +460,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
             >
               <img
                 :src="img.thumb"
-                :alt="entry.title"
+                :alt="hasDistinctEntryTitle(entry) ? entry.title : getEntryDisplayCategoryLabel(entry)"
                 class="w-full max-h-[680px] object-cover editorial-image"
                 loading="lazy"
                decoding="async">
@@ -475,7 +495,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
       <EditorialLightbox
         :isOpen="isLightboxOpen"
         :imageUrl="lightboxUrl"
-        :title="entry.title || ''"
+        :title="hasDistinctEntryTitle(entry) ? entry.title : ''"
         :meta="entry.location || ''"
         :location="entry.location || ''"
         :date="parseOccurredDate(entry.occurred_at).dotDate"

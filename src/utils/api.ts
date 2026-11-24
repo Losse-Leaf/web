@@ -520,6 +520,7 @@ function deriveTitleFromContent(content: string, maxLength = 40): string {
 export async function createLifeEntry(
   data: {
     type: string
+    category?: string
     title?: string
     content: string
     occurred_at?: string
@@ -530,6 +531,7 @@ export async function createLifeEntry(
 ): Promise<LifeEntry> {
   const payload = {
     ...data,
+    category: data.category ?? '',
     title: (data.title ?? '').trim() || deriveTitleFromContent(data.content ?? ''),
   }
   const result = await request<LifeEntry>(`${API_BASE}/entries`, {
@@ -544,6 +546,7 @@ export async function updateLifeEntry(
   id: number,
   data: {
     type?: string
+    category?: string
     title?: string
     content?: string
     occurred_at?: string

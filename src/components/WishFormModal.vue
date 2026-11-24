@@ -307,7 +307,7 @@ const handleSubmit = async () => {
 
         <PrivacyToggle
           v-model="isPrivate"
-          description="开启后仅主理人登录可见，展厅公开时不会展示此心愿"
+          description="开启后仅主理人登录可见，不对外公开展示此心愿"
         />
 
         <!-- 底部提交操作 -->

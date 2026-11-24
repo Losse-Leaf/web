@@ -3,33 +3,163 @@ export type EntryType =
   | 'wish'
   | 'transaction'
 
+/**
+ * 散页原生分类（与后端 commit 0fc123c、Android v2.2.1 及 Vesper Space 四大展区 1:1 对齐）。
+ * 空字符串表示默认「日常」；仅适用于 type === 'life' 的非账目散页。
+ */
+export type EntryGalleryCategory =
+  | ''
+  | 'Photography'
+  | 'Travel'
+  | 'Still Life'
+  | 'Motion'
+
+export interface EntryCategoryOption {
+  code: EntryGalleryCategory
+  label: string
+  accent: string
+}
+
+export const ENTRY_CATEGORY_OPTIONS: readonly EntryCategoryOption[] = [
+  { code: '', label: '日常', accent: 'var(--tag-daily)' },
+  { code: 'Photography', label: '摄影', accent: 'var(--tag-photography)' },
+  { code: 'Travel', label: '旅途', accent: 'var(--tag-travel)' },
+  { code: 'Still Life', label: '静物', accent: 'var(--tag-still-life)' },
+  { code: 'Motion', label: '影像', accent: 'var(--tag-motion)' },
+] as const
+
 export type ArchiveCategory =
   | 'all'
   | 'daily'
   | 'wish'
+  | 'Photography'
+  | 'Travel'
+  | 'Still Life'
+  | 'Motion'
   | 'transaction'
 
+export const normalizeEntryCategory = (raw?: string): EntryGalleryCategory => {
+  const trimmed = (raw || '').trim().toLowerCase()
+  switch (trimmed) {
+    case 'photography':
+    case '摄影':
+      return 'Photography'
+    case 'travel':
+    case '旅途':
+    case '旅行':
+      return 'Travel'
+    case 'still life':
+    case 'still_life':
+    case 'still-life':
+    case 'stilllife':
+    case '静物':
+    case '器物':
+      return 'Still Life'
+    case 'motion':
+    case 'video':
+    case '影像':
+      return 'Motion'
+    case '':
+    case 'daily':
+    case 'life':
+    case '日常':
+    case '日常随笔':
+    default:
+      return ''
+  }
+}
+
+export const isTransactionEntry = (entry: LifeEntry): boolean =>
+  Boolean(entry.is_transaction) || (entry.type || '').toLowerCase() === 'transaction'
+
+export const isWishEntry = (entry: LifeEntry): boolean =>
+  !isTransactionEntry(entry) && ((entry.type || '').toLowerCase() === 'wish' || Boolean(entry.wish_id))
+
+export const isGalleryCategory = (
+  category: ArchiveCategory,
+): category is Exclude<EntryGalleryCategory, ''> =>
+  category === 'Photography' ||
+  category === 'Travel' ||
+  category === 'Still Life' ||
+  category === 'Motion'
+
 export const getEntryCategory = (entry: LifeEntry): ArchiveCategory => {
-  const t = (entry.type || '').toLowerCase()
-  if (t === 'transaction' || entry.is_transaction) {
+  if (isTransactionEntry(entry)) {
     return 'transaction'
   }
-  if (t === 'wish' || Boolean(entry.wish_id)) {
+  if (isWishEntry(entry)) {
     return 'wish'
   }
-  return 'daily'
+  const gallery = normalizeEntryCategory(entry.category)
+  return gallery || 'daily'
+}
+
+export const getEntryDisplayCategoryLabel = (entry: LifeEntry): string => {
+  if (isTransactionEntry(entry)) {
+    return '账目'
+  }
+  if (isWishEntry(entry)) {
+    return '心愿'
+  }
+  const normalized = normalizeEntryCategory(entry.category)
+  const matched = ENTRY_CATEGORY_OPTIONS.find((opt) => opt.code === normalized)
+  return matched ? matched.label : '日常'
+}
+
+export const getEntryCategoryAccent = (entry: LifeEntry): string => {
+  if (isTransactionEntry(entry)) {
+    return 'var(--accent-moss)'
+  }
+  if (isWishEntry(entry)) {
+    return 'var(--accent-warm)'
+  }
+  const normalized = normalizeEntryCategory(entry.category)
+  const matched = ENTRY_CATEGORY_OPTIONS.find((opt) => opt.code === normalized)
+  return matched ? matched.accent : 'var(--tag-daily)'
+}
+
+const LEGACY_PLACEHOLDER_TITLES = new Set(['无题随笔', '无题'])
+const LEGACY_PLACEHOLDER_PREFIXES = ['现场快门 · ', '现场记录 · ']
+
+/**
+ * 判断散页是否拥有值得单独渲染的独立标题（对齐 Android v2.2.1 hasDistinctTitle 规则）。
+ * 空白、历史占位标题或正文首句自动派生标题返回 false，避免卡片与详情页重复渲染同一句话。
+ */
+export const hasDistinctEntryTitle = (entry: LifeEntry): boolean => {
+  const t = (entry.title || '').trim()
+  if (!t) return false
+  if (LEGACY_PLACEHOLDER_TITLES.has(t)) return false
+  if (LEGACY_PLACEHOLDER_PREFIXES.some((prefix) => t.startsWith(prefix))) return false
+  const core = t.replace(/[…\.]+$/, '').trim()
+  if (!core) return false
+  const body = (entry.content || '').trim()
+  if (body && body.startsWith(core)) return false
+  return true
 }
 
 export const entryMatchesCategory = (entry: LifeEntry, category: ArchiveCategory): boolean => {
   if (category === 'all') return true
-  const cat = getEntryCategory(entry)
+  const isTx = isTransactionEntry(entry)
   if (category === 'transaction') {
-    return cat === 'transaction' || entry.type === 'transaction' || Boolean(entry.is_transaction)
+    return isTx
   }
+  if (isTx) return false
+
+  const isWish = isWishEntry(entry)
   if (category === 'wish') {
-    return cat === 'wish' || Boolean(entry.wish_id)
+    return isWish
   }
-  return cat === category
+
+  const t = (entry.type || '').toLowerCase()
+  if (isGalleryCategory(category)) {
+    return !isWish && t === 'life' && normalizeEntryCategory(entry.category) === category
+  }
+
+  if (category === 'daily') {
+    return !isWish
+  }
+
+  return false
 }
 
 export interface Attachment {
@@ -69,6 +199,11 @@ export interface AttachmentBindPayload {
 export interface LifeEntry {
   id: number
   type: EntryType | string
+  /**
+   * 散页原生分类（type === 'life' 且非账目投影时取值为 '' | 'Photography' | 'Travel' | 'Still Life' | 'Motion'）；
+   * 账目投影（is_transaction === true 或 type === 'transaction'）时表示收支分类（如「餐饮」「购物」）。
+   */
+  category?: string
   title: string
   content: string
   occurred_at?: string
@@ -81,7 +216,6 @@ export interface LifeEntry {
   // 记账投影支持
   amount?: number
   tx_type?: 'income' | 'expense'
-  category?: string
   payment_method?: string
   is_transaction?: boolean
   transaction_id?: number

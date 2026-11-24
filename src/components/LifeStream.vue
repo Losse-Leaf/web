@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { LifeEntry, ArchiveCategory } from '../types'
-import { getEntryCategory, entryMatchesCategory } from '../types'
+import {
+  entryMatchesCategory,
+  getEntryCategory,
+  getEntryCategoryAccent,
+  getEntryDisplayCategoryLabel,
+  hasDistinctEntryTitle,
+  isGalleryCategory,
+  isTransactionEntry,
+  isWishEntry,
+} from '../types'
+import { getEntryBadgeClass, getEntryTimelineNodeClass } from '../utils/entryCategoryStyle'
 import { Maximize2 } from 'lucide-vue-next'
 import EditorialLightbox from './EditorialLightbox.vue'
 import { formatMoney, parseOccurredDate, renderEditorialContent, getAttachmentThumbUrl } from '../utils/format'
@@ -127,7 +137,7 @@ const formatMonthHeader = (entry: LifeEntry): string => {
 const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   lightboxPayload.value = {
     imageUrl: customUrl || getEntryFirstOriginalImage(entry) || getEntryFirstImage(entry),
-    title: entry.title || '',
+    title: hasDistinctEntryTitle(entry) ? entry.title : '',
     meta: entry.location || '',
     location: entry.location || '',
     date: formatEntryDate(entry),
@@ -135,11 +145,15 @@ const openLightbox = (entry: LifeEntry, customUrl?: string) => {
   isLightboxOpen.value = true
 }
 
-// 视图过滤分类 (日常 / 心愿 / 主理人可见账目投影)
-const categoryFilters = computed<{ key: ArchiveCategory; label: string }[]>(() => {
-  const base: { key: ArchiveCategory; label: string }[] = [
+// 视图过滤分类 (全部 / 日常 / 四大画廊分类 / 心愿 / 主理人可见账目投影)
+const categoryFilters = computed<{ key: ArchiveCategory; label: string; accent?: string }[]>(() => {
+  const base: { key: ArchiveCategory; label: string; accent?: string }[] = [
     { key: 'all', label: '全部记录' },
     { key: 'daily', label: '日常' },
+    { key: 'Photography', label: '摄影', accent: 'var(--tag-photography)' },
+    { key: 'Travel', label: '旅途', accent: 'var(--tag-travel)' },
+    { key: 'Still Life', label: '静物', accent: 'var(--tag-still-life)' },
+    { key: 'Motion', label: '影像', accent: 'var(--tag-motion)' },
     { key: 'wish', label: '心愿' },
   ]
   if (isAdmin.value) {
@@ -159,17 +173,64 @@ const handleCategoryClick = (cat: ArchiveCategory) => {
   emit('changeCategory', cat)
 }
 
-// 归一化条目显示归属
-const getCategoryName = (entry: LifeEntry) => {
-  const cat = getEntryCategory(entry)
-  const map: Record<ArchiveCategory, string> = {
-    all: '全部记录',
-    daily: '日常',
-    wish: '心愿',
-    transaction: '账目',
-  }
-  return map[cat] || '日常'
+const hasGalleryDot = (entry: LifeEntry): boolean => isGalleryCategory(getEntryCategory(entry))
+
+const isShortPlainNote = (entry: LifeEntry): boolean => {
+  const text = (entry.content || '').trim()
+  if (!text || text.length > 120) return false
+  if (/\r?\n/.test(text)) return false
+  if (/^(?:>\s?|[-*]\s+\[[ xX]\]\s+)/.test(text)) return false
+  if (/\*\*[^*]+\*\*|`[^`]+`/.test(text)) return false
+  return true
 }
+
+const getEntryImageAlt = (entry: LifeEntry): string =>
+  hasDistinctEntryTitle(entry) ? entry.title : getEntryDisplayCategoryLabel(entry)
+
+const emptyStateCopy = computed<{ title: string; desc: string }>(() => {
+  switch (activeCategory.value) {
+    case 'Photography':
+      return {
+        title: '还没有摄影散页',
+        desc: '按下快门的光影与街角瞬间，\n将在此安静显影。',
+      }
+    case 'Travel':
+      return {
+        title: '还没有旅途散页',
+        desc: '山川风物与远行见闻，\n静候下一程启程落笔。',
+      }
+    case 'Still Life':
+      return {
+        title: '还没有静物散页',
+        desc: '案头好物与日常器皿的温度，\n值得留下一帧特写。',
+      }
+    case 'Motion':
+      return {
+        title: '还没有影像散页',
+        desc: '流动的片段与动态画面，\n等待收录进时间轴里。',
+      }
+    case 'wish':
+      return {
+        title: '还没有心愿印记',
+        desc: '写下向往之物或未竟之约，\n让期待有迹可循。',
+      }
+    case 'transaction':
+      return {
+        title: '还没有账目流水',
+        desc: '柴米油盐与日常收支，\n也会成为生活的真实注脚。',
+      }
+    case 'daily':
+      return {
+        title: '还没有日常散页',
+        desc: '从今天开始，\n记录一些你不想忘记的事情。',
+      }
+    default:
+      return {
+        title: '尚待落笔的空白散页',
+        desc: '从今天开始，\n记录一些你不想忘记的事情。',
+      }
+  }
+})
 
 const formatEntryDate = (entry: LifeEntry) => {
   const { month, day } = parseOccurredDate(entry.occurred_at)
@@ -203,19 +264,31 @@ const getGapDays = (index: number): number => {
     <div
       class="flex flex-wrap items-center justify-between gap-4 mb-10 text-xs font-mono-archive text-[var(--ink-muted)] border-b border-[var(--border-subtle)] pb-4"
     >
-      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <span class="text-[var(--ink-secondary)] mr-1">视角：</span>
+      <div
+        role="group"
+        aria-label="散页视角筛选"
+        class="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2"
+      >
+        <span class="text-[var(--ink-secondary)] mr-0.5 shrink-0">视角：</span>
         <button
           v-for="f in categoryFilters"
           :key="f.key"
+          type="button"
+          :aria-pressed="activeCategory === f.key"
           @click="handleCategoryClick(f.key)"
-          class="transition-colors cursor-pointer py-1 hover:text-[var(--ink-primary)]"
+          class="inline-flex items-center gap-1.5 transition-colors cursor-pointer py-1 hover:text-[var(--ink-primary)] shrink-0"
           :class="{
             'text-[var(--ink-primary)] font-semibold border-b border-[var(--ink-primary)]':
               activeCategory === f.key,
           }"
         >
-          {{ f.label }}
+          <span
+            v-if="f.accent"
+            aria-hidden="true"
+            class="w-1.5 h-1.5 rounded-full shrink-0"
+            :style="{ backgroundColor: f.accent }"
+          ></span>
+          <span>{{ f.label }}</span>
         </button>
       </div>
 
@@ -238,17 +311,10 @@ const getGapDays = (index: number): number => {
 
         <div class="space-y-1.5 font-serif-editorial pt-1">
           <h3 class="text-lg text-[var(--ink-primary)]">
-            {{
-              activeCategory === 'wish'
-                ? '还没有心愿印记'
-                : activeCategory === 'transaction'
-                ? '这个月还没有账目流水'
-                : '尚待落笔的空白散页'
-            }}
+            {{ emptyStateCopy.title }}
           </h3>
-          <p class="text-xs text-[var(--ink-muted)] leading-relaxed">
-            从今天开始，<br />
-            记录一些你不想忘记的事情。
+          <p class="text-xs text-[var(--ink-muted)] leading-relaxed whitespace-pre-line">
+            {{ emptyStateCopy.desc }}
           </p>
         </div>
         <button
@@ -300,11 +366,8 @@ const getGapDays = (index: number): number => {
             class="absolute -left-[31px] sm:-left-[47px] top-1.5 flex items-center justify-center"
           >
             <div
-              class="w-2.5 h-2.5 rounded-full bg-[var(--bg-archive)] border-2 border-[var(--ink-secondary)] group-hover:border-[var(--accent-warm)] group-hover:scale-125 transition-all"
-              :class="{
-                'border-[var(--accent-warm)] bg-[var(--accent-warm)]/20': getEntryCategory(entry) === 'wish',
-                'border-emerald-600': entry.type === 'transaction' || entry.is_transaction,
-              }"
+              class="w-2.5 h-2.5 rounded-full bg-[var(--bg-archive)] border-2 group-hover:border-[var(--accent-warm)] group-hover:scale-125 transition-all"
+              :class="getEntryTimelineNodeClass(entry)"
             ></div>
           </div>
 
@@ -316,14 +379,16 @@ const getGapDays = (index: number): number => {
             <span v-if="formatEntryTime(entry)" class="text-[var(--ink-muted)]">{{ formatEntryTime(entry) }}</span>
             <span class="text-[var(--border-divider)] select-none">/</span>
             <span
-              class="px-1.5 py-0.2 rounded-xs border text-[11px] font-medium transition-colors"
-              :class="{
-                'border-[var(--accent-warm)]/40 bg-[var(--accent-warm)]/8 text-[var(--accent-warm)]': getEntryCategory(entry) === 'wish',
-                'border-emerald-700/40 bg-emerald-700/8 text-emerald-700': entry.type === 'transaction' || entry.is_transaction,
-                'border-[var(--border-subtle)] text-[var(--ink-secondary)]': !entry.is_transaction && getEntryCategory(entry) !== 'wish',
-              }"
+              class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-xs border text-[11px] font-medium transition-colors"
+              :class="getEntryBadgeClass(entry)"
             >
-              {{ getCategoryName(entry) }}
+              <span
+                v-if="hasGalleryDot(entry)"
+                aria-hidden="true"
+                class="w-1.5 h-1.5 rounded-full shrink-0"
+                :style="{ backgroundColor: getEntryCategoryAccent(entry) }"
+              ></span>
+              <span>{{ getEntryDisplayCategoryLabel(entry) }}</span>
             </span>
             <span v-if="entry.location" class="text-[var(--ink-secondary)]">
               · {{ entry.location }}
@@ -340,7 +405,7 @@ const getGapDays = (index: number): number => {
 
           <!-- 1. 账目形态 (Transaction)：单行账本微卡片，柴米油盐融入时间流 -->
           <div
-            v-if="entry.type === 'transaction' || entry.is_transaction"
+            v-if="isTransactionEntry(entry)"
             class="inline-flex flex-wrap items-center gap-3 py-2.5 px-4 bg-[var(--bg-subtle)]/60 rounded-xs border border-[var(--border-subtle)] group-hover:border-[var(--border-divider)] transition-colors"
           >
             <span
@@ -370,7 +435,7 @@ const getGapDays = (index: number): number => {
 
           <!-- 2. 心愿形态 (Wish)：许愿、归册与拔草印记 -->
           <div
-            v-else-if="getEntryCategory(entry) === 'wish'"
+            v-else-if="isWishEntry(entry)"
             class="space-y-3 p-4 sm:p-5 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/25 group-hover:border-[var(--accent-warm)]/60 transition-colors max-w-2xl"
           >
             <div class="flex items-center justify-between text-[11px] font-mono-archive tracking-widest text-[var(--accent-warm)]">
@@ -380,7 +445,7 @@ const getGapDays = (index: number): number => {
               </span>
             </div>
             <h3
-              v-if="entry.title"
+              v-if="hasDistinctEntryTitle(entry)"
               class="text-xl font-serif-editorial font-medium text-[var(--ink-primary)] group-hover:text-[var(--accent-warm)] transition-colors"
             >
               {{ entry.title }}
@@ -392,7 +457,7 @@ const getGapDays = (index: number): number => {
             >
               <img
                 :src="getEntryFirstImage(entry)"
-                :alt="entry.title"
+                :alt="getEntryImageAlt(entry)"
                 class="w-full max-h-[420px] object-cover editorial-image"
                 loading="lazy"
                decoding="async">
@@ -403,8 +468,8 @@ const getGapDays = (index: number): number => {
             ></div>
           </div>
 
-          <!-- 4. 无标题短随笔形态 (兼容轻量想法引言展示) -->
-          <div v-else-if="!entry.title && !getEntryFirstImage(entry)" class="space-y-2">
+          <!-- 4. 无独立标题短随笔形态 (兼容轻量想法引言展示) -->
+          <div v-else-if="!hasDistinctEntryTitle(entry) && !getEntryFirstImage(entry) && isShortPlainNote(entry)" class="space-y-2">
             <blockquote
               class="font-serif-editorial text-lg sm:text-xl text-[var(--ink-primary)] leading-relaxed italic border-l-2 border-[var(--ink-muted)]/30 pl-4 py-1 group-hover:border-[var(--accent-warm)] transition-colors"
             >
@@ -412,10 +477,10 @@ const getGapDays = (index: number): number => {
             </blockquote>
           </div>
 
-          <!-- 5. 日常与游历形态 (Daily / Travel)：图文散页与胶片装裱 -->
+          <!-- 5. 日常与画廊分类形态 (Daily / Gallery)：图文散页与胶片装裱 -->
           <div v-else class="space-y-3.5">
             <h3
-              v-if="entry.title"
+              v-if="hasDistinctEntryTitle(entry)"
               class="text-xl sm:text-2xl font-serif-editorial font-medium tracking-tight text-[var(--ink-primary)] leading-snug group-hover:text-[var(--accent-warm)] transition-colors"
             >
               {{ entry.title }}
@@ -435,7 +500,7 @@ const getGapDays = (index: number): number => {
                 <!-- MOB-OPT-P0: 首条记录的封面图是 LCP 候选，给予最高优先级，不延迟加载 -->
               <img
                   :src="getEntryImages(entry)[0].url"
-                  :alt="entry.title"
+                  :alt="getEntryImageAlt(entry)"
                   :width="getEntryImages(entry)[0].width"
                   :height="getEntryImages(entry)[0].height"
                   class="w-full h-auto max-h-[580px] object-contain sm:object-cover rounded-xs editorial-image group-hover/img:scale-[1.008] transition-transform duration-500 mx-auto"
@@ -461,7 +526,7 @@ const getGapDays = (index: number): number => {
                 >
                   <img
                     :src="img.url"
-                    :alt="entry.title"
+                    :alt="getEntryImageAlt(entry)"
                     :width="img.width"
                     :height="img.height"
                     class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"
@@ -486,7 +551,7 @@ const getGapDays = (index: number): number => {
                 >
                   <img
                     :src="img.url"
-                    :alt="entry.title"
+                    :alt="getEntryImageAlt(entry)"
                     :width="img.width"
                     :height="img.height"
                     class="w-full h-full object-cover editorial-image group-hover/single:scale-105 transition-transform duration-300"

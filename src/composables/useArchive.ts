@@ -121,7 +121,7 @@ export function useArchive() {
   // 刷新拉取后端数据 (Stale-While-Revalidate，带竞态防御与请求时序保护 FE-08, FE-10)
   //
   // 关键：必须**分页拉全量**。原先只拉第 1 页 100 条，档案一旦超过 100 条，
-  // 时间流就会被静默截断 —— 而「心愿 / 造物 / 器物」的伴生散页恰好排在时间流末尾，
+  // 时间流就会被静默截断 —— 而「心愿」等伴生散页恰好排在时间流末尾，
   // 用户会看到「刚创建的心愿不在时间流里」。
   //
   // WEB-7：每 4 页一批并发，结果按页序拼装；每页独立 ETag / 独立重试。
@@ -214,7 +214,7 @@ export function useArchive() {
     }
   }
 
-  // WEB-7：单年失效。项目 / 心愿的伴生散页由后端生成，
+  // WEB-7：单年失效。心愿的伴生散页由后端生成，
   // 只回源发生变化的年份，其他年份继续用内存数据。
   const refreshEntriesForYear = async (yearOrYears: string | string[]) => {
     const years = Array.from(

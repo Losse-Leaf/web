@@ -46,7 +46,7 @@ const items = ref<UploadItem[]>(
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 
-// 本次会话上传的附件是否已随条目/心愿/足迹「落库绑定」。
+// 本次会话上传的附件是否已随条目/心愿「落库绑定」。
 // false 时组件卸载（用户取消发布 / 关闭弹窗）会把已完成上传的 object_key
 // 当孤儿文件回传服务端清理；true 后不再清理（附件已绑定，删了会把已发布内容弄坏图）。
 const committed = ref(false)

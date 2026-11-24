@@ -4,6 +4,7 @@ import { X, Check } from 'lucide-vue-next'
 import ImageUploader from './ImageUploader.vue'
 import PaperDatePicker from './PaperDatePicker.vue'
 import PrivacyToggle from './PrivacyToggle.vue'
+import EntryCategoryPicker from './EntryCategoryPicker.vue'
 import EntryTransactionForm from './entry/EntryTransactionForm.vue'
 import EntryWishForm from './entry/EntryWishForm.vue'
 import {
@@ -22,7 +23,14 @@ import {
   getBeijingISOString,
   parseYuanToCents,
 } from '../utils/format'
-import type { LifeEntry, Transaction, Wish, CreditChannel } from '../types'
+import {
+  normalizeEntryCategory,
+  type EntryGalleryCategory,
+  type LifeEntry,
+  type Transaction,
+  type Wish,
+  type CreditChannel,
+} from '../types'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 import { useEscapeClose } from '../composables/useEscapeClose'
 
@@ -53,6 +61,7 @@ const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
 // 基础表单状态
+const entryCategory = ref<EntryGalleryCategory>('')
 const title = ref('')
 const content = ref('')
 const location = ref('')
@@ -78,6 +87,7 @@ interface EntryDraftPayload {
   content: string
   location: string
   entryType: EntryKind
+  category?: EntryGalleryCategory
 }
 
 const saveDraftToStorage = () => {
@@ -90,6 +100,7 @@ const saveDraftToStorage = () => {
     content: content.value,
     location: location.value,
     entryType: selectedKind.value,
+    category: selectedKind.value === 'life' ? entryCategory.value : '',
   }
   try {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
@@ -108,6 +119,7 @@ const restoreDraftFromStorage = (): boolean => {
     if (parsed.entryType && !props.initialKind) {
       selectedKind.value = normalizeKind(parsed.entryType)
     }
+    entryCategory.value = normalizeEntryCategory(parsed.category)
     title.value = parsed.title || ''
     content.value = parsed.content || ''
     if (parsed.location) location.value = parsed.location
@@ -127,6 +139,7 @@ const clearSavedDraft = (resetFields = false) => {
   hasRestoredDraft.value = false
   if (resetFields) {
     isResettingForm = true
+    entryCategory.value = ''
     title.value = ''
     content.value = ''
     isResettingForm = false
@@ -250,7 +263,7 @@ const scheduleSaveDraft = () => {
 }
 
 watch(
-  [title, content, location, selectedKind],
+  [title, content, location, selectedKind, entryCategory],
   () => {
     scheduleSaveDraft()
   },
@@ -290,6 +303,7 @@ const selectKind = (k: EntryKind) => {
 const resetForm = () => {
   isResettingForm = true
   selectedKind.value = normalizeKind(props.initialKind)
+  entryCategory.value = ''
   title.value = ''
   content.value = ''
   location.value = ''
@@ -454,6 +468,7 @@ const handleSubmit = async () => {
     isSubmitting.value = true
     const created = await createLifeEntry({
       type: 'life',
+      category: entryCategory.value,
       title: title.value.trim(),
       content: content.value.trim() || '定格的瞬间。',
       occurred_at: getBeijingISOString(occurredAt.value),
@@ -579,6 +594,8 @@ const handleSubmit = async () => {
 
         <!-- 分支 C：日常 (life) -->
         <template v-else>
+          <EntryCategoryPicker v-model="entryCategory" />
+
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
               标题

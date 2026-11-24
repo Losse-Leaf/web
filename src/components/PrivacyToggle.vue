@@ -9,7 +9,7 @@ withDefaults(
   }>(),
   {
     label: '仅自己可见（私密）',
-    description: '开启后仅主理人登录可见，展厅公开时不会展示此条记录',
+    description: '开启后仅主理人登录可见，不对外公开，也不会自动同步至 Vesper Space',
   },
 )
 
