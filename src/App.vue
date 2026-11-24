@@ -73,7 +73,6 @@ const NewEntryModal = lazyComponent(() => import('./components/NewEntryModal.vue
 const EntryDetailModal = lazyComponent(() => import('./components/EntryDetailModal.vue'))
 const StorageBackupModal = lazyComponent(() => import('./components/StorageBackupModal.vue'))
 const SearchModal = lazyComponent(() => import('./components/SearchModal.vue'))
-const DevicePairingModal = lazyComponent(() => import('./components/DevicePairingModal.vue'))
 const UpdateCheckModal = lazyComponent(() => import('./components/UpdateCheckModal.vue'))
 const CategoryManagerModal = lazyComponent(() => import('./components/CategoryManagerModal.vue'))
 const SessionExpiredModal = lazyComponent(() => import('./components/SessionExpiredModal.vue'))
@@ -291,7 +290,6 @@ const openNewEntry = (kind?: 'life' | 'wish' | 'transaction') => {
 const isStorageBackupOpen = ref(false)
 const storageBackupInitialTab = ref<'backup' | 'storage' | 'visibility'>('backup')
 const isSearchOpen = ref(false)
-const isPairingOpen = ref(false)
 const isUpdateCheckOpen = ref(false)
 const isSessionHintOpen = ref(false)
 const isAlmanacOpen = ref(false)
@@ -306,7 +304,6 @@ const anyModalOpen = computed(
     isSearchOpen.value ||
     isStorageBackupOpen.value ||
     isNewEntryOpen.value ||
-    isPairingOpen.value ||
     isUpdateCheckOpen.value ||
     isSessionHintOpen.value ||
     isAlmanacOpen.value ||
@@ -785,7 +782,6 @@ watch(() => siteConfig.value?.public_modules, () => {
       @openProfile="handleOpenProfile"
       @openSearch="handleOpenSearch"
       @openStorageBackup="openStorageBackupModal"
-      @openPairing="isPairingOpen = true"
       @openUpdateCheck="openUpdateCheckModal"
       @toggleTheme="toggleTheme"
       @logout="handleLogout"
@@ -812,7 +808,7 @@ watch(() => siteConfig.value?.public_modules, () => {
             @click="systemStatus?.oidc_enabled ? redirectToOIDCLogin() : handleRequestAuth()"
             class="min-h-[44px] px-5 py-2.5 rounded-sm bg-[var(--ink-primary)] text-[var(--bg-archive)] text-xs font-mono-archive tracking-widest uppercase hover:opacity-90 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
           >
-            {{ systemStatus?.oidc_enabled ? '通过 Vesper Auth 通行证进入' : '主理人登录' }}
+            {{ systemStatus?.oidc_enabled ? '使用 Vesper Auth 登录' : '主理人登录' }}
           </button>
         </div>
       </div>
@@ -935,14 +931,7 @@ watch(() => siteConfig.value?.public_modules, () => {
       @requestAuth="handleRequestAuth"
     />
 
-    <!-- 5. 设备免密配对与受信任设备管理 弹窗 -->
-    <DevicePairingModal
-      v-if="isPairingOpen"
-      :isOpen="isPairingOpen"
-      @close="isPairingOpen = false"
-    />
-
-    <!-- 6. 年度生活年鉴画报弹窗 -->
+    <!-- 5. 年度生活年鉴画报弹窗 -->
     <AlmanacModal
       v-if="isAlmanacOpen"
       :isOpen="isAlmanacOpen"

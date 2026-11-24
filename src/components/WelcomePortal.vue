@@ -153,8 +153,8 @@ const bootstrapGuides = computed(() => {
     },
     {
       num: '03',
-      title: '建议再配对一台设备作为备份',
-      desc: '认领成功后可随时在「设备管理」为手机或桌面端签发配对二维码。',
+      title: '建议配置 OAuth 2.0 统一登录',
+      desc: '在服务端启用 Vesper Auth (OIDC) 后，所有桌面端与移动端均可直接通过账号登录同步。',
     },
   ]
 })
@@ -335,10 +335,10 @@ watch(
                   <Check class="w-4 h-4 text-[var(--accent-moss)] shrink-0 mt-0.5" />
                   <div class="space-y-1.5">
                     <div class="font-serif-editorial text-sm font-medium text-[var(--ink-primary)]">
-                      已认领为首台受信任设备
+                      主理人会话已激活
                     </div>
                     <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                      建议再配对一台设备作为备份。
+                      你现在可以进入展厅开始记录，也可以随时在服务端配置 OAuth 2.0 登录以同步多端客户端。
                     </p>
                   </div>
                 </div>
@@ -565,13 +565,13 @@ watch(
                 </span>
               </div>
 
-              <!-- 下半区：主人通道 · 通行证直入 / 设备配对 -->
+              <!-- 下半区：主理人账号登录 -->
               <div class="p-6 sm:p-8 pt-7 bg-[var(--bg-archive)]/55 space-y-4">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <KeyRound class="w-4 h-4 text-[var(--accent-warm)]" />
                     <span class="font-serif-editorial text-base sm:text-lg font-medium text-[var(--ink-primary)]">
-                      {{ isOIDCEnabled ? '主人通道 · 通行证钤印' : '主人通道 · 本机会话钤印' }}
+                      {{ isOIDCEnabled ? '主理人登录 · Vesper Auth' : '主理人登录' }}
                     </span>
                   </div>
                   <span
@@ -579,42 +579,42 @@ watch(
                     :class="isCurator ? 'opacity-100' : 'opacity-0 pointer-events-none'"
                   >
                     <Check class="w-3 h-3" />
-                    <span>本机凭证已就绪</span>
+                    <span>已登录</span>
                   </span>
                 </div>
 
-                <!-- 若本机已持有有效会话，一键以主人身份直入或注销 -->
+                <!-- 若当前浏览器已登录，一键以主理人身份直入或退出 -->
                 <div
                   v-if="isCurator"
                   class="p-3.5 rounded-xs border border-[var(--accent-moss)]/35 bg-[var(--accent-moss)]/10 flex items-center justify-between gap-3 text-xs font-mono-archive min-h-[128px]"
                 >
                   <div class="flex items-center gap-2 text-[var(--accent-moss)]">
                     <ShieldCheck class="w-4 h-4 shrink-0" />
-                    <span>当前浏览器已授信为主理人设备</span>
+                    <span>当前已登录主理人账号</span>
                   </div>
                   <div class="flex items-center gap-3 shrink-0">
                     <button
                       @click="handleEnterAsGuest"
                       class="px-3 py-1.5 bg-[var(--ink-primary)] text-[var(--bg-archive)] rounded-xs cursor-pointer hover:opacity-90 transition-opacity"
                     >
-                      主人直入 →
+                      进入展厅 →
                     </button>
                     <button
                       @click="handleLogout"
                       class="text-[var(--ink-muted)] hover:text-red-600 cursor-pointer underline"
                     >
-                      注销
+                      退出登录
                     </button>
                   </div>
                 </div>
 
-                <!-- 未持有会话且启用了 OIDC：通过 Vesper Auth 通行证一键进入 -->
+                <!-- 未登录且启用了 OIDC：使用 Vesper Auth 账号登录 -->
                 <div
                   v-else-if="isOIDCEnabled"
                   class="p-4 rounded-xs border border-[var(--border-subtle)] bg-[var(--bg-subtle)]/40 flex flex-col justify-between gap-3.5 min-h-[128px]"
                 >
                   <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                    通过 Vesper Auth 统一通行证核验主理人身份，自动签发本浏览器受信任会话并进入管理模式。
+                    使用 Vesper Auth 账号完成身份验证，进入完整个人档案与账本管理。
                   </p>
                   <button
                     type="button"
@@ -622,7 +622,7 @@ watch(
                     class="w-full min-h-[44px] py-2.5 px-4 bg-[var(--accent-warm)] text-white text-xs font-mono-archive rounded-xs cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
                   >
                     <KeyRound class="w-3.5 h-3.5" />
-                    <span>通过 Vesper Auth 通行证进入</span>
+                    <span>使用 Vesper Auth 登录</span>
                     <ArrowRight class="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -635,10 +635,10 @@ watch(
                   <KeyRound class="w-4 h-4 text-[var(--accent-warm)] shrink-0 mt-0.5" />
                   <div class="space-y-1">
                     <p class="font-serif-editorial text-xs text-[var(--ink-secondary)] leading-relaxed">
-                      当前浏览器尚未持有主理人 Cookie 会话。离线模式下，浏览器管理会话在首次认领时签发（配对二维码仅供移动端与桌面客户端扫码绑定）。
+                      当前未启用 OAuth 2.0 单点登录，且本浏览器尚未持有主理人会话。
                     </p>
                     <p class="text-[11px] font-mono-archive text-[var(--ink-muted)]">
-                      如需为本浏览器重新签发管理会话，请使用服务端自救参数重开首次认领入口。
+                      如需为本浏览器重新建立管理会话，请在服务端开启 OIDC 配置或通过恢复参数重开首次认领入口。
                     </p>
                   </div>
                 </div>

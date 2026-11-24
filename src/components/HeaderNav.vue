@@ -27,7 +27,6 @@ const emit = defineEmits<{
   (e: 'openProfile'): void
   (e: 'openStorageBackup', tab?: 'backup' | 'storage' | 'visibility'): void
   (e: 'openSearch'): void
-  (e: 'openPairing'): void
   (e: 'openUpdateCheck'): void
   (e: 'toggleTheme'): void
   (e: 'logout'): void
@@ -63,7 +62,7 @@ const navItems = computed(() => {
   return items
 })
 
-// 辅助工具与设置（主理人资料、设备配对、数据备份、存储设置、检查更新仅管理端可见）
+// 辅助工具与设置（主理人资料、数据备份、存储设置、检查更新仅管理端可见）
 const toolOptions = computed(() => {
   const opts: { key: string; label: string; action: () => void }[] = []
   if (isAdmin.value) {
@@ -72,11 +71,6 @@ const toolOptions = computed(() => {
         key: 'profile',
         label: '主理人资料',
         action: () => emit('openProfile'),
-      },
-      {
-        key: 'pair',
-        label: '设备配对',
-        action: () => emit('openPairing'),
       },
       {
         key: 'storage-backup',
@@ -95,7 +89,7 @@ const toolOptions = computed(() => {
       },
       {
         key: 'logout',
-        label: '退出主理人',
+        label: '退出登录',
         action: () => emit('logout'),
       }
     )

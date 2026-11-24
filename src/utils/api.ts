@@ -5,14 +5,11 @@ import type {
   TransactionSummary,
   StorageStatus,
   StorageConfigPayload,
-  TrustedDevice,
-  PairingTicketResult,
   SiteConfig,
   CuratorProfile,
   SystemStatus,
   ClaimPayload,
   ClaimResult,
-  PairStatusResult,
   UnifiedUploadResult,
   Wish,
   CreditChannel,
@@ -789,65 +786,6 @@ export async function deleteTransaction(id: number): Promise<boolean> {
     method: 'DELETE',
   })
   return true
-}
-
-// 5. Device Pairing & Trusted Devices (设备免密配对与管理)
-export async function initPairingTicket(params?: {
-  hub_url?: string
-  device_hint?: string
-}): Promise<PairingTicketResult> {
-  return request<PairingTicketResult>(`${API_BASE}/auth/pair/init`, {
-    method: 'POST',
-    body: JSON.stringify({
-      hub_url: params?.hub_url || (typeof window !== 'undefined' ? window.location.origin : ''),
-      device_hint: params?.device_hint,
-    }),
-  })
-}
-
-export async function pollPairingTicketStatus(ticket: string): Promise<PairStatusResult> {
-  return request<PairStatusResult>(
-    `${API_BASE}/auth/pair/status?ticket=${encodeURIComponent(ticket)}`,
-  )
-}
-
-export async function fetchPairQRCode(
-  hubUrl: string,
-  ticket: string,
-): Promise<{
-  hub_url: string
-  ticket: string
-  qr_payload: string
-  qr_code_data_url: string
-}> {
-  const query = new URLSearchParams({ hub: hubUrl, ticket })
-  return request<{
-    hub_url: string
-    ticket: string
-    qr_payload: string
-    qr_code_data_url: string
-  }>(`${API_BASE}/auth/pair/qr?${query.toString()}`)
-}
-
-export async function fetchTrustedDevices(): Promise<TrustedDevice[]> {
-  return request<TrustedDevice[]>(`${API_BASE}/auth/devices`)
-}
-
-export async function revokeTrustedDevice(id: number): Promise<boolean> {
-  await request(`${API_BASE}/auth/devices/${id}`, {
-    method: 'DELETE',
-  })
-  return true
-}
-
-export async function updateTrustedDeviceName(
-  id: string | number,
-  name: string,
-): Promise<TrustedDevice> {
-  return request<TrustedDevice>(`${API_BASE}/auth/devices/${encodeURIComponent(String(id))}`, {
-    method: 'PUT',
-    body: JSON.stringify({ name }),
-  })
 }
 
 // 7. Site Config (站点配置，全端动态驱动)

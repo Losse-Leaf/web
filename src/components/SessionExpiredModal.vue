@@ -80,10 +80,10 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <h2 id="session-expired-title" class="font-serif-editorial text-lg font-medium text-[var(--ink-primary)]">
-              {{ isOIDCEnabled ? '需要验证主理人通行证' : '需要主理人会话权限' }}
+              {{ isOIDCEnabled ? '请重新登录账号' : '需要主理人会话权限' }}
             </h2>
             <p class="font-serif-editorial text-[11px] text-[var(--ink-muted)]">
-              {{ isOIDCEnabled ? '核验统一通行证以恢复或建立受信任会话' : '当前浏览器未持有有效的主理人会话凭证' }}
+              {{ isOIDCEnabled ? '通过 Vesper Auth 验证身份以恢复登录状态' : '当前浏览器未持有有效的主理人会话凭证' }}
             </p>
           </div>
         </div>
@@ -102,7 +102,7 @@ onBeforeUnmount(() => {
         class="space-y-4 font-serif-editorial text-xs sm:text-sm text-[var(--ink-secondary)] leading-relaxed"
       >
         <p>
-          当前浏览器尚未建立有效的主理人会话，或原会话凭证已过期。点击下方按钮通过 Vesper Auth 完成身份核验，即可直接恢复管理权限。
+          当前浏览器尚未登录或原登录会话已过期。点击下方按钮使用 Vesper Auth 登录即可恢复管理权限。
         </p>
 
         <div class="space-y-2.5 font-mono-archive text-xs pt-1">
@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
             class="w-full min-h-[44px] py-2.5 px-4 bg-[var(--accent-warm)] text-white rounded-xs hover:opacity-90 cursor-pointer font-medium transition-opacity flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-warm)]"
           >
             <KeyRound class="w-3.5 h-3.5" />
-            <span>通过 Vesper Auth 通行证进入</span>
+            <span>使用 Vesper Auth 登录</span>
             <ArrowRight class="w-3.5 h-3.5" />
           </button>
           <button
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
           <p class="flex items-start gap-2">
             <KeyRound class="w-4 h-4 mt-0.5 shrink-0 text-[var(--accent-warm)]" />
             <span>
-              离线模式下，Web 浏览器的管理权限由首次认领签发的受保护 Cookie 会话承载（设备配对二维码仅供移动端与桌面客户端绑定使用）。
+              当前服务端处于离线模式，浏览器管理权限由受保护 Cookie 会话承载。
             </span>
           </p>
           <p class="text-[11px] font-mono-archive text-[var(--ink-muted)] border-t border-[var(--border-subtle)] pt-3">

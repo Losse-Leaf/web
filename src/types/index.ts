@@ -334,16 +334,6 @@ export interface NetworkCandidate {
   is_default?: boolean
 }
 
-export interface PairingTicketResult {
-  ticket: string
-  hub_url?: string
-  expires_at: string
-  expires_in_seconds: number
-  qr_payload: string
-  qr_code_data_url?: string
-  candidates?: NetworkCandidate[]
-}
-
 export interface SystemStatus {
   initialized: boolean
   site_name: string
@@ -366,17 +356,6 @@ export interface ClaimResult {
   paired_at?: string
   device_token: string
   initialized: boolean
-}
-
-export interface PairStatusResult {
-  status: 'pending' | 'paired' | 'expired'
-  initialized: boolean
-  device?: {
-    device_id: string
-    name: string
-    platform: string
-    paired_at: string
-  }
 }
 
 export interface Wish {
