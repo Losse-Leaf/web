@@ -4,6 +4,7 @@ import { Plus, X, RotateCcw } from 'lucide-vue-next'
 import { uploadUnifiedFile, cleanupUploads } from '../utils/api'
 import { showAlert } from '../composables/useConfirm'
 import { compressClientImage } from '../utils/imageCompressor'
+import { extractPhotoExif, reverseGeocodeCoordinates } from '../utils/exifReader'
 import { getAttachmentThumbUrl } from '../utils/format'
 import type { Attachment } from '../types'
 
@@ -13,11 +14,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:attachments', ids: number[]): void
+  (e: 'exifExtracted', meta: { occurredAt?: string; location?: string }): void
 }>()
 
 interface UploadItem {
   id: string
   file?: File
+  signature?: string
   name: string
   size: number
   previewUrl: string
@@ -71,18 +74,43 @@ const notifyChange = () => {
 let fileQueue: Promise<void> = Promise.resolve()
 let destroyed = false
 
+const pendingSignatures = new Set<string>()
+
+const fileSignature = (file: File) => `${file.name}::${file.size}::${file.lastModified}`
+
 const enqueueFile = (file: File) => {
   if (destroyed) return fileQueue
-  fileQueue = fileQueue.then(() => handleFileProcess(file)).catch(() => {})
+  const sig = fileSignature(file)
+  if (pendingSignatures.has(sig) || items.value.some((it) => it.signature === sig)) {
+    return fileQueue
+  }
+  pendingSignatures.add(sig)
+  fileQueue = fileQueue.then(() => handleFileProcess(file, sig)).catch(() => {}).finally(() => {
+    pendingSignatures.delete(sig)
+  })
   return fileQueue
 }
 
-const handleFileProcess = async (file: File) => {
+const handleFileProcess = async (file: File, sig: string) => {
   if (destroyed) return
   // 单文件 50MB 上限，与后端统一中转接口及 docs 契约一致 (FE-16)
   if (file.size > 50 * 1024 * 1024) {
     showAlert({ title: '文件过大', message: `文件 ${file.name} 超过 50MB 上限`, danger: true })
     return
+  }
+
+  // 在端侧 Canvas 压缩之前读取原图 EXIF（压缩会剥离拍摄时间与 GPS 坐标）
+  const exifMeta = await extractPhotoExif(file)
+  if (destroyed) return
+  if (exifMeta.occurredAt) {
+    emit('exifExtracted', { occurredAt: exifMeta.occurredAt })
+  }
+  if (exifMeta.latitude !== undefined && exifMeta.longitude !== undefined) {
+    void reverseGeocodeCoordinates(exifMeta.latitude, exifMeta.longitude).then((locName) => {
+      if (!destroyed && locName) {
+        emit('exifExtracted', { location: locName })
+      }
+    })
   }
 
   // 客户端智能压制（限制 2048px / 82% 质量 JPEG，与 Android 端契约一致）
@@ -96,6 +124,7 @@ const handleFileProcess = async (file: File) => {
   const item = reactive<UploadItem>({
     id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     file: compressedFile,
+    signature: sig,
     name: compressedFile.name,
     size: compressedFile.size,
     previewUrl,

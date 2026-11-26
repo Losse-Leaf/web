@@ -68,6 +68,17 @@ const location = ref('')
 const occurredAt = ref(getBeijingDateTimeString())
 const isPrivate = ref(false)
 const attachmentIds = ref<number[]>([])
+const userEditedTime = ref(false)
+const userEditedLocation = ref(false)
+
+const handleExifExtracted = (meta: { occurredAt?: string; location?: string }) => {
+  if (meta.occurredAt && !userEditedTime.value) {
+    occurredAt.value = meta.occurredAt
+  }
+  if (meta.location && (!userEditedLocation.value || !location.value.trim())) {
+    location.value = meta.location
+  }
+}
 
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
 const wishFormRef = ref<InstanceType<typeof EntryWishForm> | null>(null)
@@ -309,6 +320,8 @@ const resetForm = () => {
   location.value = ''
   occurredAt.value = getBeijingDateTimeString()
   attachmentIds.value = []
+  userEditedTime.value = false
+  userEditedLocation.value = false
   isPrivate.value = false
   txAmount.value = ''
   txType.value = 'expense'
@@ -458,9 +471,9 @@ const handleSubmit = async () => {
     return
   }
 
-  // 3. 提交日常 (life)
-  if (!content.value.trim() && attachmentIds.value.length === 0) {
-    errorMsg.value = '请填写记录内容或上传至少一张照片'
+  // 3. 提交日常 (life)：标题、正文或照片三者至少有一项即可（支持纯图留白）
+  if (!title.value.trim() && !content.value.trim() && attachmentIds.value.length === 0) {
+    errorMsg.value = '请填写记录内容、标题或上传至少一张照片'
     return
   }
 
@@ -470,7 +483,7 @@ const handleSubmit = async () => {
       type: 'life',
       category: entryCategory.value,
       title: title.value.trim(),
-      content: content.value.trim() || '定格的瞬间。',
+      content: content.value.trim(),
       occurred_at: getBeijingISOString(occurredAt.value),
       location: location.value.trim(),
       attachment_ids: attachmentIds.value,
@@ -609,7 +622,7 @@ const handleSubmit = async () => {
 
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
-              记录内容 *
+              记录内容
             </label>
             <textarea
               v-model="content"
@@ -621,14 +634,16 @@ const handleSubmit = async () => {
           <ImageUploader
             ref="imageUploaderRef"
             @update:attachments="attachmentIds = $event"
+            @exifExtracted="handleExifExtracted"
           />
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
               <PaperDatePicker
-                v-model="occurredAt"
+                :modelValue="occurredAt"
                 enableTime
+                @update:modelValue="occurredAt = $event; userEditedTime = true"
               />
             </div>
 
@@ -638,6 +653,7 @@ const handleSubmit = async () => {
               </label>
               <input
                 v-model="location"
+                @input="userEditedLocation = Boolean(location.trim())"
                 type="text"
                 class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
               />

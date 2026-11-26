@@ -54,7 +54,19 @@ const editLocation = ref('')
 const editOccurredAt = ref('')
 const editIsPrivate = ref(false)
 const editAttachmentIds = ref<number[]>([])
+const userEditedTime = ref(false)
+const userEditedLocation = ref(false)
+const editHadPhotosOnStart = ref(false)
 const imageUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
+
+const handleEditExifExtracted = (meta: { occurredAt?: string; location?: string }) => {
+  if (meta.occurredAt && !editHadPhotosOnStart.value && !userEditedTime.value) {
+    editOccurredAt.value = meta.occurredAt
+  }
+  if (meta.location && (!editLocation.value.trim() || !userEditedLocation.value)) {
+    editLocation.value = meta.location
+  }
+}
 
 const startEdit = () => {
   if (!props.entry) return
@@ -73,6 +85,9 @@ const startEdit = () => {
   editLocation.value = props.entry.location || ''
   editIsPrivate.value = Boolean(props.entry.is_private)
   editAttachmentIds.value = (props.entry.attachments || []).map((a) => a.id)
+  editHadPhotosOnStart.value = (props.entry.attachments || []).length > 0
+  userEditedTime.value = false
+  userEditedLocation.value = Boolean(editLocation.value.trim())
 
   editOccurredAt.value = props.entry.occurred_at
     ? `${parseOccurredDate(props.entry.occurred_at).dateKey}T${parseOccurredDate(props.entry.occurred_at).time}`
@@ -91,8 +106,8 @@ const handleClose = () => {
 
 const handleSaveEdit = async () => {
   if (!props.entry) return
-  if (!editContent.value.trim() && editAttachmentIds.value.length === 0) {
-    errorMsg.value = '请填写记录内容或上传至少一张照片'
+  if (!editTitle.value.trim() && !editContent.value.trim() && editAttachmentIds.value.length === 0) {
+    errorMsg.value = '请填写标题、正文或上传至少一张照片'
     return
   }
 
@@ -308,7 +323,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
         />
 
         <div class="space-y-1.5">
-          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">正文内容 *</label>
+          <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">正文内容</label>
           <textarea
             v-model="editContent"
             rows="6"
@@ -321,14 +336,16 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
           ref="imageUploaderRef"
           :initialAttachments="entry.attachments"
           @update:attachments="editAttachmentIds = $event"
+          @exifExtracted="handleEditExifExtracted"
         />
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-1.5">
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">发生时间</label>
             <PaperDatePicker
-              v-model="editOccurredAt"
+              :modelValue="editOccurredAt"
               enableTime
+              @update:modelValue="editOccurredAt = $event; userEditedTime = true"
             />
           </div>
 
@@ -336,6 +353,7 @@ useEscapeClose(() => Boolean(props.entry), handleClose)
             <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">地点</label>
             <input
               v-model="editLocation"
+              @input="userEditedLocation = Boolean(editLocation.trim())"
               type="text"
               class="w-full px-3 py-2 text-xs font-serif-editorial bg-transparent border border-[var(--border-subtle)] focus:border-[var(--ink-primary)] rounded-xs outline-none"
             />
