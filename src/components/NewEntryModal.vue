@@ -199,7 +199,7 @@ const installmentMonths = ref(12)
 
 watch(txType, (newType) => {
   if (newType === 'income' && !incomeCategories.value.includes(txCategory.value)) {
-    txCategory.value = incomeCategories.value[0] || '工资收入'
+    txCategory.value = incomeCategories.value[0] || '工资'
   } else if (newType === 'expense' && !expenseCategories.value.includes(txCategory.value)) {
     txCategory.value = expenseCategories.value[0] || '餐饮'
   }

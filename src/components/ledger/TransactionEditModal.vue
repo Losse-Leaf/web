@@ -73,10 +73,15 @@ const editCategoriesList = computed(() =>
   editType.value === 'income' ? incomeCategories.value : expenseCategories.value,
 )
 
+const hasLegacyEditCategory = computed(() => {
+  const cat = editCategory.value?.trim()
+  return Boolean(cat) && !editCategoriesList.value.includes(cat)
+})
+
 watch(editType, (t) => {
   const list = t === 'income' ? incomeCategories.value : expenseCategories.value
   if (!list.includes(editCategory.value)) {
-    editCategory.value = list[0] || (t === 'income' ? '工资收入' : '餐饮')
+    editCategory.value = list[0] || (t === 'income' ? '工资' : '餐饮')
   }
 })
 
@@ -279,7 +284,7 @@ const saveEdit = async () => {
           </div>
         </div>
 
-        <!-- 分类胶囊选择 -->
+        <!-- 分类胶囊选择（扁平 2 字大类） -->
         <div>
           <div class="flex items-center justify-between mb-1.5">
             <label class="block text-[var(--ink-muted)]">分类</label>
@@ -288,7 +293,7 @@ const saveEdit = async () => {
               @click="openCategoryManager(editType === 'income' ? 'income' : 'expense')"
               class="text-[11px] text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
             >
-              管理分类
+              管理分类与记忆
             </button>
           </div>
           <div class="flex flex-wrap gap-1.5">
@@ -303,6 +308,13 @@ const saveEdit = async () => {
                 : 'border-[var(--border-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-divider)]'"
             >
               {{ cat }}
+            </button>
+            <button
+              v-if="hasLegacyEditCategory"
+              type="button"
+              class="px-2.5 py-1 rounded-xs border border-[var(--ink-primary)] bg-[var(--ink-primary)] text-[var(--bg-archive)] font-medium shadow-xs text-[11px] cursor-pointer"
+            >
+              {{ editCategory }}
             </button>
           </div>
         </div>

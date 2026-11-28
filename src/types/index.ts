@@ -396,8 +396,11 @@ export interface CategoryOption {
   id: number
   scope: CategoryScope
   name: string
+  group_name?: string
+  keywords?: string
   sort_order: number
   is_builtin: boolean
+  usage_count?: number
   created_at?: string
   updated_at?: string
 }
@@ -405,6 +408,18 @@ export interface CategoryOption {
 export interface CategoriesResponse {
   items: CategoryOption[]
   by_scope: Record<CategoryScope, string[]>
+}
+
+export interface CategoryRule {
+  id: number
+  tx_type: 'expense' | 'income'
+  match_key: string
+  display_name: string
+  category: string
+  hit_count: number
+  source: 'learned' | 'manual' | string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface AnnualAlmanacSummary {

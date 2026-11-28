@@ -49,6 +49,11 @@ const currentTxCategories = computed(() =>
   props.txType === 'income' ? incomeCategories.value : expenseCategories.value,
 )
 
+const hasLegacySelectedCategory = computed(() => {
+  const cat = props.txCategory?.trim()
+  return Boolean(cat) && !currentTxCategories.value.includes(cat)
+})
+
 const calculatedMonthlyPay = computed(() => {
   const amtFloat = parseFloat(props.txAmount)
   if (isNaN(amtFloat) || amtFloat <= 0) return '0.00'
@@ -101,7 +106,7 @@ const calculatedMonthlyPay = computed(() => {
       </div>
     </div>
 
-    <!-- 分类标签选择 -->
+    <!-- 分类标签选择（扁平 2 字大类） -->
     <div class="space-y-1.5">
       <div class="flex items-center justify-between">
         <label class="block text-xs font-mono-archive text-[var(--ink-muted)]">
@@ -112,7 +117,7 @@ const calculatedMonthlyPay = computed(() => {
           @click="openCategoryManager(txType === 'income' ? 'income' : 'expense')"
           class="text-[11px] font-mono-archive text-[var(--ink-secondary)] hover:text-[var(--ink-primary)] underline underline-offset-4 cursor-pointer"
         >
-          管理分类
+          管理分类与记忆
         </button>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -122,9 +127,16 @@ const calculatedMonthlyPay = computed(() => {
           type="button"
           @click="emit('update:txCategory', cat)"
           class="px-2.5 py-1 text-xs font-serif-editorial rounded-xs border transition-colors cursor-pointer"
-          :class="txCategory === cat ? 'border-[var(--ink-primary)] font-medium text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)]'"
+          :class="txCategory === cat ? 'border-[var(--ink-primary)] font-medium text-[var(--ink-primary)] bg-[var(--bg-subtle)]' : 'border-[var(--border-subtle)] text-[var(--ink-muted)] hover:border-[var(--border-divider)]'"
         >
           {{ cat }}
+        </button>
+        <button
+          v-if="hasLegacySelectedCategory"
+          type="button"
+          class="px-2.5 py-1 text-xs font-serif-editorial rounded-xs border border-[var(--ink-primary)] font-medium text-[var(--ink-primary)] bg-[var(--bg-subtle)] cursor-pointer"
+        >
+          {{ txCategory }}
         </button>
       </div>
     </div>

@@ -18,6 +18,7 @@ import type {
   CategoryOption,
   CategoriesResponse,
   CategoryScope,
+  CategoryRule,
   BackupItem,
   AttachmentBindPayload,
 } from '../types'
@@ -948,7 +949,7 @@ export async function checkSystemUpdate(force?: boolean): Promise<UpdateCheckRes
   return request<UpdateCheckResult>(`${API_BASE}/system/update-check${force ? '?force=true' : ''}`)
 }
 
-// 16. 全局自定义分类字典 (Custom Categories CRUD)
+// 16. 全局自定义分类字典 (Custom Categories CRUD) & 自动归类规则
 export async function fetchCategories(scope?: CategoryScope): Promise<CategoriesResponse> {
   const qs = scope ? `?scope=${encodeURIComponent(scope)}` : ''
   return request<CategoriesResponse>(`${API_BASE}/categories${qs}`)
@@ -957,6 +958,8 @@ export async function fetchCategories(scope?: CategoryScope): Promise<Categories
 export async function createCategoryOption(data: {
   scope: CategoryScope
   name: string
+  group_name?: string
+  keywords?: string
   sort_order?: number
 }): Promise<CategoryOption> {
   return request<CategoryOption>(`${API_BASE}/categories`, {
@@ -965,8 +968,49 @@ export async function createCategoryOption(data: {
   })
 }
 
-export async function deleteCategoryOption(id: number): Promise<boolean> {
-  await request(`${API_BASE}/categories/${id}`, {
+export async function updateCategoryOption(
+  id: number,
+  data: {
+    name?: string
+    group_name?: string
+    keywords?: string
+    sort_order?: number
+    rename_records?: boolean
+  },
+): Promise<CategoryOption> {
+  return request<CategoryOption>(`${API_BASE}/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteCategoryOption(id: number, migrateTo?: string): Promise<boolean> {
+  const qs = migrateTo ? `?migrate_to=${encodeURIComponent(migrateTo)}` : ''
+  await request(`${API_BASE}/categories/${id}${qs}`, {
+    method: 'DELETE',
+  })
+  return true
+}
+
+export async function fetchCategoryRules(): Promise<CategoryRule[]> {
+  return request<CategoryRule[]>(`${API_BASE}/category-rules`)
+}
+
+export async function upsertCategoryRule(data: {
+  tx_type: 'expense' | 'income'
+  match_key?: string
+  display_name: string
+  category: string
+  source?: 'learned' | 'manual'
+}): Promise<CategoryRule> {
+  return request<CategoryRule>(`${API_BASE}/category-rules`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteCategoryRule(id: number): Promise<boolean> {
+  await request(`${API_BASE}/category-rules/${id}`, {
     method: 'DELETE',
   })
   return true

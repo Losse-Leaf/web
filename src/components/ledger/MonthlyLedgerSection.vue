@@ -25,16 +25,19 @@ const toggleCategoryFilter = (cat: string) => {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
+  // v3 9 项 2 字大类
   餐饮: '#a24f2b',
   交通: '#4a6b82',
   购物: '#8c6d46',
-  数码器材: '#3a5a6b',
+  居家: '#3f5a4a',
+  订阅: '#6d597a',
   娱乐: '#7a5980',
-  住房: '#3f5a4a',
-  学习: '#5c6773',
   医疗: '#b35c5c',
-  旅行度假: '#b57c3c',
+  学习: '#5c6773',
   其他: '#8a857b',
+  // 历史内部/兼容分类兜底色
+  好物购置: '#7f5539',
+  利息手续费: '#6b4e4e',
 }
 
 const FALLBACK_PALETTE = ['#6b7b5c', '#9c6644', '#586f7c', '#7f5539', '#6d597a', '#b56576', '#4a5759']
@@ -72,8 +75,9 @@ interface DayGroup {
 
 const dayGroups = computed(() => {
   const map = new Map<string, Transaction[]>()
-  const listToGroup = selectedCategoryFilter.value
-    ? props.transactionsList.filter((t) => t.category === selectedCategoryFilter.value)
+  const filter = selectedCategoryFilter.value
+  const listToGroup = filter
+    ? props.transactionsList.filter((t) => t.category === filter)
     : props.transactionsList
 
   listToGroup.forEach((tx) => {
@@ -153,6 +157,7 @@ const dayGroups = computed(() => {
           <div
             v-for="item in spectrumItems"
             :key="item.category"
+            @click="toggleCategoryFilter(item.category)"
             :style="{ width: `${item.percentage}%`, backgroundColor: item.color }"
             class="h-full transition-all duration-300 relative group cursor-pointer"
             :title="`${item.category}: ¥${formatMoney(item.amount)} (${item.percentage}%)`"
